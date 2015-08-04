@@ -1,0 +1,174 @@
+<!--
+	JumpStart
+	Version: beta 1.0
+
+	This framework is to make it easier for new developers to get started
+	with the AltspaceSDK.  It creates many commonly required THREE.js objects
+	as global variables for developers to easily access and use as needed.
+
+	You can get your objects spawned into Altspace with just a couple lines.
+
+	Usage:
+	1. Include JumpStart.js in the BODY of your page.
+	2. Define a function called OnJumpStartReady that will automatically be
+		called when your app is ready to start using the 3D scene.
+	3. (OPTIONAL) Define a function called OnTick that will automatically be
+		called immediately preceding the 3D scene being rendered every frame.
+	4. Pre-cache your models with the LoadModels function.  You can pass it
+		one at a time, or multiple models at once.  All of the following
+		calls are valid:
+			LoadModels("models/MyApp/MyModel.obj").then(...);
+			LoadModels("models/MyApp/MyModel01.obj", "models/MyApp/MyModel01.obj").then(...);
+			LoadModels(["models/MyApp/MyModel01.obj", "models/MyApp/MyModel01.obj"]).then(...);
+	5. Loading models is ALWAYS asynchronous.  Your callback function (shown as ... in the examples)
+		will be called as soon as that batch of models is finished loading.
+	6. After your model is cached, you can spawn an instance of it with:
+			var myInstance = SpawnInstance("models/MyApp/MyModel.obj");
+	7. If you want to perform logic on your new instance every tick, you can register
+		an onTick function for the object itself using the following syntax:
+			myInstance.onTick["anyUniqueName"] = function()
+			{
+				// do work on this instance, but don't forget g_DeltaTime!!
+			};
+	8. JumpStart will add many global variables for you to utilize:
+		g_Clock
+			- The render clock.
+		g_DeltaTime
+			- The amount of time that has passed since the last render tick.
+		g_Loader
+			- The object loader.
+		g_Scene
+			- The scene.
+		g_Renderer
+			- The renderer.
+		g_Camera (null if inside of Altspace)
+			- The camera for web mode.
+		g_Enclosure* (spoofed if NOT inside of Altspace)
+			- The enclosure information.  Spoofed enclosures use window height as depth value.
+		g_RayCaster*
+			- Used to cast rays.
+		g_FloorPlane*
+			- An invisible plane used to capture 3D cursor position along the floor.
+		g_CursorEvents*
+			- The Altspace cursor event object.
+		g_CursorPoint*
+			- 3D cursor position.
+		g_CursorOrigin*
+			- The player's face.
+		g_CursorObject*
+			- A scene object to capture clicks.
+		g_WorldOffset
+			- Used so things spawn on the floor, not the center of the enclosure.
+		g_WorldScale (read-only after initialized)
+			- Used to ajust the scale of your app within the enclosure space.
+
+		(*) The globals with asterisks are not yet fully supported by this version of
+			"JumpStart" yet, so you should look at JumpStart.js and modify it as needed.
+
+	TODO:
+		- Clean up code.
+		- Update to the new Altspace object/material loaders.
+		- Add a "onClick" events that can be attached to objects just like the "onTick" events.
+		- Add firebase integration.
+		- Add raycasting features.
+		- Add physics features.
+		- Add collsion detection features.
+		- Add automatic syncing of firebase objects on an interval.
+		- Add client-side prediction on firebase objects.
+
+	Author: Elijah Newman-Gomez
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+		<title>JumpStart</title>
+
+		<script src="../lib/three.js"></script>
+		<script src="../lib/MTLLoader.js"></script>
+		<script src="../lib/OBJMTLLoader.js"></script>
+		<script src="../lib/firebase.js"></script>
+		<script src="../src/AltOBJMTLLoader.js"></script>
+		<script src="../src/sync/FirebaseSync.js"></script>
+		<script src="../src/cursor/CursorEvents.js"></script>
+		<script src="../src/cursor/AltObjectControls.js"></script>
+
+		<style>
+			body {
+				background-color: rgba(0, 0, 0, 0);
+				margin: 0px;
+				overflow: hidden;
+
+				color: #FFFFFF;
+				font-family: Monospace;
+				font-size: 18px;
+				text-align: center;
+			}
+
+			#info {
+				position: absolute;
+				top: 0px;
+				width: 100%;
+				padding: 10px;
+			}
+		</style>
+
+</head>
+<body>
+
+	<!-- Include JumpStart.js in the BODY of your app. -->
+	<script src="JumpStart.js"></script>
+
+	<div id="info"><h1><b>JumpStart</b></h1></div>
+
+<script>
+
+// This function gets called when your app is ready to start.
+function OnJumpStartReady()
+{
+	// Initialize a model (and also a bunch of other stuff since this is our 1st call.)
+//	LoadModels("models/JumpStart/jewel.obj", "models/JumpStart/grass.obj").then(StartMyApp);	// Loading models is always asynchronous.
+	LoadModels("models/JumpStart/jewel.obj").then(StartMyApp);	// Loading models is always asynchronous.
+}
+
+function StartMyApp()
+{
+	// Spawn an instance of your model into the scene
+	var myInstance = SpawnInstance("models/JumpStart/jewel.obj");
+
+	// Let's give it some animation logic to perform each tick.
+	myInstance.onTick["spinBehavior"] = function()
+	{
+		this.rotateY(1.0 * g_DeltaTime);
+	};
+
+	// Oops! We forgot to load the grass model!
+	// Let's load it now, and then spawn it once it's ready.
+	LoadModels("models/JumpStart/grass.obj").then(function()
+	{
+		// Let's spawn another block.
+		var myOtherInstance = SpawnInstance("models/JumpStart/grass.obj");
+
+		// And offset it.
+		var offset = new THREE.Vector3(100.0, 0.0, 0.0);
+		offset.multiplyScalar(g_WorldScale);
+
+		myOtherInstance.position.add(offset);
+
+		// And scale it.
+		var scale = new THREE.Vector3(2.0, 2.0, 2.0);
+		scale.multiplyScalar(g_WorldScale);
+
+		myOtherInstance.scale.copy(scale);
+	});
+}
+
+function OnTick()
+{
+	// Do your own work here using global variables.
+	// All scene objects are in g_Scene.children.
+}
+
+</script>
+
+</body>
+</html>
