@@ -68,7 +68,8 @@
 // This function gets called when your app is ready to start.
 function OnJumpStartReady()
 {
-	// You always must pre-cache models before spawning them.
+	// Initialize a model (and also a bunch of other stuff since this is our 1st call.)
+//	LoadModels("models/JumpStart/jewel.obj", "models/JumpStart/grass.obj").then(StartMyApp);	// Loading models is always asynchronous.
 	LoadModels("models/JumpStart/jewel.obj").then(StartMyApp);	// Loading models is always asynchronous.
 }
 
