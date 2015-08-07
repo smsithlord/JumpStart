@@ -1,18 +1,195 @@
-// Author: Elijah Newman-Gomez
-
-// NOTE:
-//	You only need to modify this file if you are unable to do what you want using
-//	the instructions from index.html.
-
-// THIS FILE IS A WORK IN PROGRESS AND WILL PROBABLY BE CHANGED DRASTICALLY,
-// but since SpawnInstance gives you a native WebGL THREE object, the code
-// that you generate should be pretty forward-compatible w/o extra effort.
+// Declare some globals
+var g_WorldOffset, g_WorldScale, g_ObjectLoader, g_Camera, g_Renderer, g_Scene, g_Clock, g_rayCaster, g_Enclosure, g_DeltaTime;	//g_CursorEvents
 
 // Create global object for us to use.
-var g_JumpStartLoader = new JumpStartLoader();
+var JumpStart = new jumpStart();
 
-function LoadModels()
+// Listen for ready events
+if( !JumpStart.webMode )
 {
+	window.addEventListener("AltContentLoaded", function()
+	{
+		altspace.getEnclosure().then(function(enclosure)
+		{
+			JumpStart.enclosure = enclosure;
+			JumpStart.initiate();
+		});
+	});
+}
+else
+{
+	window.addEventListener( 'DOMContentLoaded', function(){ JumpStart.initiate(); });
+	window.addEventListener( 'resize', function() { JumpStart.onWindowResize(); }, false );
+	document.body.style.backgroundColor = "rgba(0, 0, 0, 1.0)";
+}
+
+function jumpStart()
+{
+	// Certain values are read-only after JumpStart has been initialized
+	this.initialized = false;
+	this.altContentAlreadyLoaded = false;
+	this.modelLoader = new jumpStartModelLoader();
+	this.objectLoader = null;
+	this.camera = null
+	this.renderer = null;
+	this.clock = null;
+	this.rayCaster = null;
+	this.enclosure = null;
+	this.scene = null;
+//	this.cursorEvents = null;
+	this.deltaTime = 0.0;
+
+	this.models = [];
+
+	this.options =
+	{
+		"worldScale": 1.0,
+		"camera":
+		{
+			"lookAtOrigin": true,
+			"position": new THREE.Vector3(100.0, 150.0, 300.0),
+			"translation": new THREE.Vector3(0.0, 50.0, 0.0)
+		}
+	};
+
+	this.worldScale;
+	this.worldOffset = new THREE.Vector3();
+	this.webMode = !window.hasOwnProperty("altspace");
+}
+
+jumpStart.prototype.initiate = function()
+{
+	if( this.altContentAlreadyLoaded )
+		return;
+
+	this.altContentAlreadyLoaded = true;
+
+	this.objectLoader = new THREE.AltOBJMTLLoader();
+	this.scene = new THREE.Scene();
+	this.clock = new THREE.Clock();
+	this.rayCaster = new THREE.Raycaster();
+
+	if ( this.webMode )
+	{
+		this.worldScale = this.options["worldScale"];
+		this.worldOffset = new THREE.Vector3(0.0, 0.0, 0.0);
+
+		this.renderer = new THREE.WebGLRenderer();
+		this.renderer.setClearColor("#AAAAAA");
+		this.renderer.setSize( window.innerWidth, window.innerHeight );
+		document.body.appendChild( this.renderer.domElement );
+
+		var aspect = window.innerWidth / window.innerHeight;
+		this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 2000 );
+
+		this.camera.position.copy(this.options.camera.position);
+
+		if( this.options.camera.lookAtOrigin )
+		{
+			var origin = new THREE.Vector3();
+			origin.copy(this.scene.position);
+			origin.add(this.worldOffset);
+
+			this.camera.lookAt( origin );
+		}
+
+		this.camera.translateX(this.options.camera.translation.x);
+		this.camera.translateY(this.options.camera.translation.y);
+		this.camera.translateZ(this.options.camera.translation.z);
+
+		// OBJMTLLoader always uses PhongMaterial, so we need light in scene.
+		var ambient = new THREE.AmbientLight( 0xffffff );
+		this.scene.add( ambient );
+	}
+	else
+	{
+		this.worldScale *= 500.0 / (this.enclosure.pixelsPerMeter / 1.0) * this.options["worldScale"];
+
+		this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0), 0.0);
+		this.renderer = altspace.getThreeJSRenderer();
+	}
+
+	g_WorldOffset = this.worldOffset;
+	g_WorldScale = this.worldScale;
+	g_ObjectLoader = this.objectLoader;
+	g_Camera = this.camera;
+	g_Renderer = this.renderer;
+	g_Scene = this.scene;
+	g_Clock = this.clock;
+	g_rayCaster = this.rayCaster;
+	g_Enclosure = this.enclosure;
+//	g_CursorEvents = this.cursorEvents;
+	g_DeltaTime = this.deltaTime;
+
+	// We are ready to rock-n-roll!!
+	this.initialized = true;
+
+	if( window.hasOwnProperty("OnReady") )
+		OnReady();
+	else
+		console.log("Your app is ready, but you have no OnReady callback function!");
+}
+
+jumpStart.prototype.run = function()
+{
+	// Start the game loop
+	this.onTick();
+};
+
+jumpStart.prototype.onTick = function()
+{
+	JumpStart.deltaTime = JumpStart.clock.getDelta();
+	g_DeltaTime = JumpStart.deltaTime;
+
+	if( window.hasOwnProperty("OnTick") )
+		OnTick();
+
+	requestAnimationFrame( JumpStart.onTick );
+
+//	if( JumpStart.cursorEvents )
+//		JumpStart.cursorEvents.update();
+
+	var x, y;
+	for( x in JumpStart.scene.children )
+	{
+		if( JumpStart.scene.children[x].hasOwnProperty("onTick") )
+		{
+			for( y in JumpStart.scene.children[x].onTick )
+			{
+				JumpStart.scene.children[x].onTick[y].call(JumpStart.scene.children[x]);
+			}
+		}
+	}
+
+	JumpStart.renderer.render( JumpStart.scene, JumpStart.camera );
+};
+
+jumpStart.prototype.onWindowResize = function()
+{
+	if( !JumpStart.webMode )
+		return;
+
+	JumpStart.camera.aspect = window.innerWidth / window.innerHeight;
+	JumpStart.camera.updateProjectionMatrix();
+	JumpStart.renderer.setSize( window.innerWidth, window.innerHeight );
+};
+
+jumpStart.prototype.setOptions = function(options)
+{
+	if( this.initialized )
+	{
+		console.log("Options cannot be changed after JumpStart has been initialized.");
+		return;
+	}
+
+	var x;
+	for( x in options )
+		this.options[x] = options[x];
+};
+
+jumpStart.prototype.loadModels = function()
+{
+	// Handle various argument types.
 	var models;
 	if( Array.isArray(arguments[0]) )
 		models = arguments[0];
@@ -21,382 +198,63 @@ function LoadModels()
 	else
 		models = arguments;
 
-	g_JumpStartLoader.temporalName = "flux" + Date.now();
+	this.modelLoader.batchName = "batch" + Date.now();
 
-	var i;
-	for( i = 0; i < models.length; i ++ )
+	var x;
+	for( x in models )
 	{
-		var filename = models[i];
-		g_Objects.push({"filename": filename, "temporalName": g_JumpStartLoader.temporalName});
-		g_Loader.load(filename, loadCallbackFactory(filename, g_JumpStartLoader.temporalName));
+		var fileName = models[x];
+		JumpStart.models.push({"fileName": fileName, "batchName": JumpStart.modelLoader.batchName});
+		JumpStart.objectLoader.load(fileName, JumpStart.modelLoader.batchCallbackFactory(fileName, JumpStart.modelLoader.batchName));
 	}
 
 	return {
 		"then": function(callback)
 		{
-			g_JumpStartLoader.callbacks[g_JumpStartLoader.temporalName] = callback;
+			JumpStart.modelLoader.callbacks[JumpStart.modelLoader.batchName] = callback;
 		}
 	};
-}
-
-// METHOD: loadCallbackFactory
-// PURPOSE:
-//	JavaScript closure that allows the filename to be passed to the onModelLoaded method for each loadedObject.
-function loadCallbackFactory(filename, temporalName)
-{
-	return function(loadedObject)
-	{
-		onModelLoaded(filename, loadedObject, temporalName);
-	};
-}
-
-// METHOD: onModelLoaded
-// PURPOSE:
-//	Assocaite the filename with the loadedObject within the g_Objects array & detect when all models are loaded.
-function onModelLoaded(filename, loadedObject, temporalName)
-{
-	var modelsRemain = false;
-
-	var i;
-	for( i = 0; i < g_Objects.length; i++ )
-	{
-		if( g_Objects[i].temporalName !== temporalName )
-			continue;
-
-		if( g_Objects[i].filename === filename )
-			g_Objects[i].object = loadedObject;
-		else if( !g_Objects[i].hasOwnProperty("object") )
-			modelsRemain = true;
-	}
-
-	if( !modelsRemain )
-		onAllModelsLoaded(temporalName);
-}
-
-// METHOD: onAllModelsLoaded
-// PURPOSE:
-//	Just print a console message & trigger the firebaseInit method (for now).
-function onAllModelsLoaded(temporalName)
-{
-	var batchSize = 0;
-	var i;
-	for( i = 0; i < g_Objects.length; i++ )
-	{
-		if( g_Objects[i].temporalName === temporalName )
-			batchSize++;
-	}
-
-	console.log("Loaded " + batchSize + " objects.");
-
-	g_JumpStartLoader.OnModelBatchLoaded(temporalName);
-
-	// Connect to the Firebase to get the current game state
-	//firebaseInit();
-}
-
-function finishInit()
-{
-		var floorSize;
-		if( window.hasOwnProperty("altspace") )
-			floorSize = g_Enclosure.innerWidth;
-		else
-			floorSize = 1000;	//g_StandWidth * g_WorldScale;
-
-		// Create the floor plane
-		g_FloorPlane = new THREE.Mesh( 
-			new THREE.BoxGeometry(floorSize, 0.25, floorSize),
-			new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: true, opacity: 0.0 })
-		);
-
-		g_FloorPlane.translateY(g_WorldOffset.y);
-
-		g_Scene.add(g_FloorPlane);
-
-/*
-		// Create the crosshair
-		g_Crosshair = spawnInstance("models/FourInRow/crosshair.obj");
-
-		if( window.hasOwnProperty("altspace") )
-		{
-			// Scale the crosshair for VR
-			var scale = new THREE.Vector3(0.5, 0.5, 0.5);
-			g_Crosshair.scale.copy( scale );
-		}
-		else
-		{
-			// Scale the crosshair for a web browser
-			var scale = new THREE.Vector3(0.1, 0.1, 0.1);
-			g_Crosshair.scale.copy( scale );
-		}
-*/
-
-/*
-		// If we are inside Altspace
-		if( window.hasOwnProperty("altspace") )
-		{
-			g_Scene.addEventListener( "cursordown", onCursorDown);
-//			g_Scene.addEventListener( "cursorup", onCursorUp);
-			g_Scene.addEventListener( "cursormove", onAltCursorMove);
-
-			// Must specify this listener as the defaultTarget if we want to capture window-level events such as holocursormove
-			var eventParams = {};
-			g_CursorEvents = new CursorEvents(eventParams);
-
-			g_CursorEvents.enableMouseEvents(g_Camera);
-		}
-		else
-		{
-			document.addEventListener( 'mousedown', onCursorDown, false);
-			window.addEventListener("mousemove", onCursorMove);
-		}
-*/
-
-		// Start the game loop
-		onAnimationTick();
-
-		OnJumpStartReady();
-}
-
-// Create a new class to handle multiple asynchronous calls & callbacks stemming from LoadModels method.
-function JumpStartLoader()
-{
-	this.callbacks = {};
-	this.temporalName;
-}
-
-JumpStartLoader.prototype.addCallback = function(name, func)
-{
-	if( typeof this.callbacks[name] !== 'undefined' && this.callbacks[name] )
-		this.removeCallback(name);
-
-	this.callbacks[name] = func;
 };
 
-JumpStartLoader.prototype.removeCallback = function(name)
+jumpStart.prototype.spawnInstance = function(arg)
 {
-	this.callbacks[name] = null;
-};
-
-JumpStartLoader.prototype.OnModelBatchLoaded = function(temporalName)
-{
-	if( this.callbacks.hasOwnProperty(temporalName) )
-	{
-		this.callbacks[temporalName]();
-	}
-};
-
-
-
-
-
-
-// Sometimes the AltContentLoaded event could happen more than once (BUG)
-var g_AltContentAlreadyLoaded = false;
-
-// Define some "important stuff" we'll be using as global variables
-var g_Clock,
-g_DeltaTime,
-g_Loader,
-g_Scene,
-g_Renderer,
-g_Camera,
-g_Enclosure,
-g_RayCaster,
-g_FloorPlane,
-g_CursorEvents,
-g_CursorPoint,
-g_CursorOrigin,
-g_CursorObject,
-g_WorldOffset,
-g_WorldScale;
-
-var g_WorldScale = 1.0;
-
-// Declare all of the models that need to be loaded
-var g_Objects = [];
-
-/*
-if(window.attachEvent) {
-    window.attachEvent('onload', addReadyListeners);
-} else {
-    if(window.onload) {
-        var curronload = window.onload;
-        var newonload = function() {
-            curronload();
-            addReadyListeners();
-        };
-        window.onload = newonload;
-    } else {
-        window.onload = addReadyListeners;
-    }
-}
-*/
-
-//function addReadyListeners()
-//{
-// Listen for the Altspace "ready" event
-if( window.hasOwnProperty("altspace") )
-{
-	window.addEventListener("AltContentLoaded", function()
-	{
-		altspace.getEnclosure().then(function(enclosure)
-		{
-			g_Enclosure = enclosure;
-			InitJumpStart();
-		});
-	});
-}
-else
-{
-	// Otherwise prepare for web mode
-	window.addEventListener( 'DOMContentLoaded', function(){ InitJumpStart(); });
-	window.addEventListener( 'resize', onWindowResize, false );
-	document.body.style.backgroundColor = "rgba(0, 0, 0, 1.0)";
-}
-//};
-
-function InitJumpStart()
-{
-	if( g_AltContentAlreadyLoaded )
-		return;
-
-	g_AltContentAlreadyLoaded = true;
-
-	g_Loader = new THREE.AltOBJMTLLoader();
-	g_Scene = new THREE.Scene();
-	g_Clock = new THREE.Clock();
-	g_RayCaster = new THREE.Raycaster();
-
-	if ( window.hasOwnProperty("altspace") )
-	{
-		g_WorldScale *= 500.0 / (g_Enclosure.pixelsPerMeter / 1.0);
-
-		g_WorldOffset = new THREE.Vector3(0.0, (-g_Enclosure.innerHeight / 2.0), 0.0);
-		g_Renderer = altspace.getThreeJSRenderer();
-	}
+	// Handle various argument types.
+	var options;
+	if( typeof arg === 'string' )
+		options = {"fileName": arg};
 	else
-	{
-		g_WorldOffset = new THREE.Vector3(0.0, 0.0, 0.0);
+		options = arg;
 
-		g_Renderer = new THREE.WebGLRenderer();
-		g_Renderer.setClearColor("#AAAAAA");
-		g_Renderer.setSize( window.innerWidth, window.innerHeight );
-		document.body.appendChild( g_Renderer.domElement );
+	// Make sure the fileName is a cached model.
+	// do work
 
-		var aspect = window.innerWidth / window.innerHeight;
-		g_Camera = new THREE.PerspectiveCamera(45, aspect, 1, 2000 );
-		g_Camera.position.z = 300; // stand back from origin
-		g_Camera.position.y = 150;	// slightly above origin
-		g_Camera.position.x = 100;
-		g_Camera.lookAt( g_Scene.position );
+	if( !options.hasOwnProperty("scale") )
+		options["scale"] = new THREE.Vector3(1.0, 1.0, 1.0);
 
-		g_Camera.translateY(50);
-
-		// OBJMTLLoader always uses PhongMaterial, so we need light in scene.
-		var ambient = new THREE.AmbientLight( 0xffffff );
-		g_Scene.add( ambient );
-	}
-
-	finishInit();
-
-/*
-	// Begin loading all models
-	var i;
-	for( i = 0; i < g_Objects.length; i++ )
-	{
-		var filename = g_Objects[i].filename;
-		g_Loader.load(filename, loadCallbackFactory(filename));
-	}
-*/
-}
-
-// METHOD: onWindowResize
-// PURPOSE:
-//	WEB MODE ONLY - Adjust the scene to match window size.
-function onWindowResize()
-{
-	if( window.hasOwnProperty("altspace") )
-		return;
-
-	g_Camera.aspect = window.innerWidth / window.innerHeight;
-	g_Camera.updateProjectionMatrix();
-	g_Renderer.setSize( window.innerWidth, window.innerHeight );
-}
-
-// METHOD: spawnInstance
-// PURPOSE:
-//	Creates a clone of the asset specified by filename and adds it to the scene at the given offsets.
-//	ONLY the filename argument is required.  All other arguments are optional.
-//	If given an originObject, the offset is relative to that object's position.
-//	If given a key, that means that this object already exists on the Firebase and will be synced automatically.
-//	Use null values (or leave them undefined) for arguments that you wish to use defaults for.
-function SpawnInstance(filename, originObject, offsetPosition, offsetAngles, key, scale, doParent)
-{
-	var goodDoParent = false;
-	if( typeof doParent !== 'undefined' && doParent !== null )
-		goodDoParent = doParent;
-
-	var goodScale = g_WorldScale;
-	if( typeof scale !== 'undefined' && scale )
-		goodScale = scale;
-
-	//var goodOriginObject = g_Scene;
-	var goodOriginObject = null;
-	if( typeof originObject !== 'undefined' && originObject )
-		goodOriginObject = originObject;
-
-	var offset = new THREE.Vector3(0, 0, 0);
-	if( typeof offsetPosition !== 'undefined' && offsetPosition )
-		offset = offsetPosition;
-
-	var angles = new THREE.Vector3(0, 0, 0);
-	if( typeof offsetAngles !== 'undefined' && offsetAngles )
-		angles = offsetAngles;
-
-	// Only models listed in g_Objects can be spawned!!
-	var scale = new THREE.Vector3(goodScale, goodScale, goodScale);
 	var clone;
-	var i;
-	for( i = 0; i < g_Objects.length; i++ )
+	var x;
+	for( x in this.models )
 	{
-		if( g_Objects[i].filename === filename && g_Objects[i].hasOwnProperty("object") )
+		if( this.models[x].fileName === options["fileName"] && this.models[x].hasOwnProperty("object") )
 		{
 			// Clone the model
-			clone = g_Objects[i].object.clone();
+			clone = this.models[x].object.clone();
 
 			// Set the position
-			if( goodOriginObject && !goodDoParent )
-				clone.position.copy(goodOriginObject.position);
-
-			if( !goodOriginObject )
-			{
-				clone.translateX(g_WorldOffset.x);
-				clone.translateY(g_WorldOffset.y);
-				clone.translateZ(g_WorldOffset.z);
-			}
-
-			clone.translateX(offset.x);
-			clone.translateY(offset.y);
-			clone.translateZ(offset.z);
+			clone.position.copy(this.worldOffset);
 
 			// Set the orientation
-			if( goodOriginObject )
-				clone.rotation.copy(goodOriginObject.rotation);
-
-			clone.rotateX(angles.x);
-			clone.rotateY(angles.y);
-			clone.rotateZ(angles.z);
+			clone.rotation.set(0.0, 0.0, 0.0);
 
 			// Scale the object
-			if( !goodDoParent )
-				clone.scale.copy(scale);
+			clone.scale.copy(options.scale.multiplyScalar(this.worldScale));
 
 			// Add the instance to the scene
-			if( !goodDoParent )
-				g_Scene.add(clone);
+			if( !options.hasOwnProperty("parent") || !options["parent"] )
+				this.scene.add(clone);
 			else
-				goodOriginObject.add(clone);
-
+				options["parent"].add(clone);
+/*
 			// Add this object to the synced instance list
 			if( typeof key !== 'undefined' && key !== null )
 			{
@@ -405,7 +263,9 @@ function SpawnInstance(filename, originObject, offsetPosition, offsetAngles, key
 
 				g_FirebaseSync.addObject(clone, key);
 			}
+*/
 
+			// Prepare it to get onTick logic.
 			clone.onTick = {};
 
 			console.log("Spawned an object");
@@ -415,35 +275,75 @@ function SpawnInstance(filename, originObject, offsetPosition, offsetAngles, key
 	}
 
 	return null;
+};
+
+function jumpStartModelLoader()
+{
+	this.callbacks = {};
+	this.batchName = "";
 }
 
-// METHOD: onAnimationTick
-// PURPOSE:
-//	Render the scene and update cursor events.
-function onAnimationTick()
+jumpStartModelLoader.prototype.addCallback = function(name, func)
 {
-	g_DeltaTime = g_Clock.getDelta();
+	if( typeof this.callbacks[name] !== 'undefined' && this.callbacks[name] )
+		this.removeCallback(name);
 
-	if( window.hasOwnProperty("OnTick") )
-		OnTick();
+	this.callbacks[name] = func;
+};
 
-	requestAnimationFrame( onAnimationTick );
+jumpStartModelLoader.prototype.removeCallback = function(name)
+{
+	this.callbacks[name] = null;
+};
 
-	if( g_CursorEvents )
-		g_CursorEvents.update();
+jumpStartModelLoader.prototype.onModelBatchLoaded = function(batchName)
+{
+	if( this.callbacks.hasOwnProperty(batchName) )
+	{
+		this.callbacks[batchName]();
+	}
+};
+
+jumpStartModelLoader.prototype.batchCallbackFactory = function(fileName, batchName)
+{
+	return function(loadedObject)
+	{
+		JumpStart.modelLoader.onModelLoaded(fileName, loadedObject, batchName);
+	};
+}
+
+jumpStartModelLoader.prototype.onModelLoaded = function(fileName, loadedObject, batchName)
+{
+	// Assume we are finished loading models until we know otherwise.
+	var batchFinishedLoading = true;
 
 	var x;
-	var i;
-	for( i = 0; i < g_Scene.children.length; i++ )
+	for( x in JumpStart.models )
 	{
-		if( g_Scene.children[i].hasOwnProperty("onTick") )
-		{
-			for( x in g_Scene.children[i].onTick )
-			{
-				g_Scene.children[i].onTick[x].call(g_Scene.children[i]);
-			}
-		}
+		if( JumpStart.models[x].batchName !== batchName )
+			continue;
+
+		if( JumpStart.models[x].fileName === fileName )
+			JumpStart.models[x].object = loadedObject;
+		else if( !JumpStart.models[x].hasOwnProperty("object") )
+			batchFinishedLoading = false;
 	}
 
-	g_Renderer.render( g_Scene, g_Camera );
+	if( batchFinishedLoading )
+		JumpStart.modelLoader.onAllModelsLoaded(batchName);
+}
+
+jumpStartModelLoader.prototype.onAllModelsLoaded = function(batchName)
+{
+	var batchSize = 0;
+	var x;
+	for( x in JumpStart.models )
+	{
+		if( JumpStart.models[x].batchName === batchName )
+			batchSize++;
+	}
+
+	console.log("Loaded " + batchSize + " models.");
+
+	JumpStart.modelLoader.onModelBatchLoaded(batchName);
 }

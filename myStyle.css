@@ -1,0 +1,11 @@
+body
+{
+	background-color: rgba(0, 0, 0, 0);
+	margin: 0px;
+	overflow: hidden;
+
+	color: #FFFFFF;
+	font-family: Monospace;
+	font-size: 18px;
+	text-align: center;
+}

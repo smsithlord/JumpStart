@@ -1,26 +1,4 @@
-<!--
-	JumpStart
-	Version: beta 1.0
-
-	This framework is to make it easier for new developers to get started
-	with the AltspaceSDK.  It creates many commonly required THREE.js objects
-	as global variables for developers to easily access and use as needed.
-
-	You can get your objects spawned into Altspace with just a couple lines.
-
-	TODO:
-		- Clean up code.
-		- Update to the new Altspace object/material loaders.
-		- Add a "onClick" events that can be attached to objects just like the "onTick" events.
-		- Add firebase integration.
-		- Add raycasting features.
-		- Add physics features.
-		- Add collsion detection features.
-		- Add automatic syncing of firebase objects on an interval.
-		- Add client-side prediction on firebase objects.
-
-	Author: Elijah Newman-Gomez
--->
+<!-- Author: Elijah Newman-Gomez -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,80 +12,82 @@
 		<script src="../src/sync/FirebaseSync.js"></script>
 		<script src="../src/cursor/CursorEvents.js"></script>
 		<script src="../src/cursor/AltObjectControls.js"></script>
-
-		<style>
-			body {
-				background-color: rgba(0, 0, 0, 0);
-				margin: 0px;
-				overflow: hidden;
-
-				color: #FFFFFF;
-				font-family: Monospace;
-				font-size: 18px;
-				text-align: center;
-			}
-
-			#info {
-				position: absolute;
-				top: 0px;
-				width: 100%;
-				padding: 10px;
-			}
-		</style>
-
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
 </head>
 <body>
 
-	<!-- Include JumpStart.js in the BODY of your app. -->
-	<script src="JumpStart.js"></script>
-
-	<div id="info"><h1><b>JumpStart</b></h1></div>
+<!-- APPEND JUMPSTART.JS TO YOUR BODY ELEMENT -->
+<script src="JumpStart.js"></script>
 
 <script>
 
-// This function gets called when your app is ready to start.
-function OnJumpStartReady()
+// (OPTIONAL) CONFIGURE JUMPSTART
+var myOptions =
 {
-	// You always must pre-cache models before spawning them.
-	LoadModels("models/JumpStart/jewel.obj").then(StartMyApp);	// Loading models is always asynchronous.
+	"worldScale": 1.0,
+	"camera":
+	{
+		"lookAtOrigin": true,
+		"position": new THREE.Vector3(100.0, 150.0, 300.0),
+		"translation": new THREE.Vector3(0.0, 50.0, 0.0)
+	}
+//	"firebaseRootUrl": "", "firebaseAppId": ""
+};
+JumpStart.setOptions(myOptions);
+
+
+// DEFINE JUMPSTART'S TWO CALLBACKS
+
+// PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
+function OnReady()
+{
+	// do work
+	// ...
+
+	var myModels = ["models/JumpStart/jewel.obj", "models/JumpStart/grass.obj"];
+	JumpStart.loadModels(myModels).then(StartMyApp);
+
+	// Begin render ticks
+	//JumpStart.run();
 }
+
+// PURPOSE: Gets called every time the scene is about to be rendered.
+function OnTick()
+{
+	// do work
+}
+
+</script>
+
+
+<script>
+
+// ALL YOUR NON-JUMPSTART CODE GOES HERE
 
 function StartMyApp()
 {
-	// Spawn an instance of your model into the scene
-	var myInstance = SpawnInstance("models/JumpStart/jewel.obj");
+	// JEWEL BLOCK
+	var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
 
-	// Let's give it some animation logic to perform each tick.
-	myInstance.onTick["spinBehavior"] = function()
+	// Let's give the jewel some animation logic to perform each tick.
+	myInstance.onTick["mySpinBehavior"] = function()
 	{
 		this.rotateY(1.0 * g_DeltaTime);
 	};
 
-	// Oops! We forgot to load the grass model!
-	// Let's load it now, and then spawn it once it's ready.
-	LoadModels("models/JumpStart/grass.obj").then(function()
-	{
-		// Let's spawn another block.
-		var myOtherInstance = SpawnInstance("models/JumpStart/grass.obj");
+	// GRASS BLOCK
+	var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
 
-		// And offset it.
-		var offset = new THREE.Vector3(100.0, 0.0, 0.0);
-		offset.multiplyScalar(g_WorldScale);
+	var offset = new THREE.Vector3(100.0, 0.0, 0.0);
+	offset.multiplyScalar(g_WorldScale);
+	myOtherInstance.position.add(offset);
 
-		myOtherInstance.position.add(offset);
+	var scale = new THREE.Vector3(2.0, 2.0, 2.0);
+	scale.multiplyScalar(g_WorldScale);
+	myOtherInstance.scale.copy(scale);
 
-		// And scale it.
-		var scale = new THREE.Vector3(2.0, 2.0, 2.0);
-		scale.multiplyScalar(g_WorldScale);
-
-		myOtherInstance.scale.copy(scale);
-	});
-}
-
-function OnTick()
-{
-	// Do your own work here using global variables.
-	// All scene objects are in g_Scene.children.
+	// START SIMULATION
+	JumpStart.run();
 }
 
 </script>
