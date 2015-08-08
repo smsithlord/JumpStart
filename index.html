@@ -16,6 +16,8 @@
 </head>
 <body>
 
+<div id="info">JumpStart</div>
+
 <!-- APPEND JUMPSTART.JS TO YOUR BODY ELEMENT -->
 <script src="JumpStart.js"></script>
 
@@ -25,13 +27,19 @@
 var myOptions =
 {
 	"worldScale": 1.0,
+	"scaleWithEnclosure": true,
 	"camera":
 	{
 		"lookAtOrigin": true,
 		"position": new THREE.Vector3(100.0, 150.0, 300.0),
 		"translation": new THREE.Vector3(0.0, 50.0, 0.0)
+	},
+	"firebase":
+	{
+		"rootUrl": "https://jump-start.firebaseio.com/",
+		"appId": "JumpStart",
+		"params": { "TRACE": false }
 	}
-//	"firebaseRootUrl": "", "firebaseAppId": ""
 };
 JumpStart.setOptions(myOptions);
 
