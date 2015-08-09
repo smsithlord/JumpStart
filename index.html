@@ -5,15 +5,13 @@
 		<title>JumpStart</title>
 
 		<script src="../lib/three.js"></script>
-		<script src="../lib/MTLLoader.js"></script>
-		<script src="../lib/OBJMTLLoader.js"></script>
 		<script src="../lib/firebase.js"></script>
 		<script src="../src/AltOBJMTLLoader.js"></script>
 		<script src="../lib/OBJMTLLoader.js"></script>
 		<script src="../lib/MTLLoader.js"></script>
 		<script src="../src/sync/FirebaseSync.js"></script>
-		<script src="../src/cursor/CursorEvents.js"></script>
-		<script src="../src/cursor/AltObjectControls.js"></script>
+		<!-- <script src="../src/cursor/CursorEvents.js"></script> -->
+		<!-- <script src="../src/cursor/AltObjectControls.js"></script> -->
 		<link rel="stylesheet" type="text/css" href="myStyle.css">
 </head>
 <body>
@@ -36,8 +34,8 @@ var myOptions =
 	{
 		"cursorDown": true,
 		"cursorUp": true,
-		"cursorOver": true,
-		"cursorOff": true,
+		"cursorEnter": true,
+		"cursorLeave": true,
 		"cursorMove": false
 	},
 	"camera":
@@ -108,15 +106,23 @@ function StartMyApp()
 	};
 
 	// Do something when it's hovered over.
-	myInstance.JumpStart.onCursorOver["myCursorOverBehavior"] = function()
+	myInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
 	{
-		var myColor = new THREE.Color(1, 1, 0);
+		/*
+		var crap = "<h2>";
+		for( var x in this.userData.tintColor )
+			crap += x + "<br />";
+
+		document.getElementById("info").innerHTML = crap;
+		*/
+
+		var myColor = new THREE.Color(1.0, 1.0, 0);
 		this.JumpStart.setTint(myColor);
 	};
 
-	myInstance.JumpStart.onCursorOff["myCursorOffBehavior"] = function()
+	myInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
 	{
-		var myColor = new THREE.Color(1, 1, 1);
+		var myColor = new THREE.Color(1.0, 1.0, 1.0);
 		this.JumpStart.setTint(myColor);
 	};
 
@@ -137,13 +143,13 @@ function StartMyApp()
 //	myOtherInstance.JumpStart.blocksLOS = false;
 
 	// Do something when it's hovered over.
-	myOtherInstance.JumpStart.onCursorOver["myCursorOverBehavior"] = function()
+	myOtherInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
 	{
 		var myColor = new THREE.Color(0, 1, 1);
 		this.JumpStart.setTint(myColor);
 	};
 
-	myOtherInstance.JumpStart.onCursorOff["myCursorOffBehavior"] = function()
+	myOtherInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
 	{
 		var myColor = new THREE.Color(1, 1, 1);
 		this.JumpStart.setTint(myColor);

@@ -1,5 +1,5 @@
 // Declare some globals
-var g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_cursorEvents;
+var g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime;
 
 // Extend the window object.
 window.JumpStart = new jumpStart();
@@ -51,10 +51,10 @@ function jumpStart()
 	this.enclosure = null;
 	this.localUser = null;
 	this.scene = null;
-	this.cursorEvents = null;
 	this.clickedObject = null;
 	this.hoveredObject = null;
 	this.deltaTime = 0.0;
+	this.crosshair = null;
 
 	this.models = [];
 
@@ -67,8 +67,8 @@ function jumpStart()
 		{
 			"cursorDown": true,
 			"cursorUp": true,
-			"cursorOver": true,
-			"cursorOff": true,
+			"cursorEnter": true,
+			"cursorLeave": true,
 			"cursorMove": true
 		},
 		"camera":
@@ -232,50 +232,137 @@ jumpStart.prototype.processCursorMove = function()
 	// FIXME: TWO OPTIONS
 	// A. Build a list of every eligible scene object THEN raycast.
 	// B. Raycast, then filter for eligible objects.
+	// Currently using option B cuz its like 3am right now...
 
 	var intersects = this.rayCaster.intersectObjects(this.scene.children, true);
 
 	function unhoverObject(sceneObject)
 	{
 		var y;
-		for( y in sceneObject.JumpStart.onCursorOff )
-			sceneObject.JumpStart.onCursorOff[y].call(sceneObject);
+		for( y in sceneObject.JumpStart.onCursorLeave )
+			sceneObject.JumpStart.onCursorLeave[y].call(sceneObject);
 	}
 
-	var foundHoveredObject = false;
+	var cursorHit = null;
 	var oldHoveredObject = this.hoveredObject;
 	var x, sceneObject, futureHoverObject, y;
 	for( x in intersects )
 	{
-		sceneObject = intersects[x].object.parent;
-		if( !sceneObject.hasOwnProperty("JumpStart") || !sceneObject.JumpStart.blocksLOS )
-			continue;
-
-		if( (this.options.enabledCursorEvents.cursorOver &&
-			Object.keys(sceneObject.JumpStart.onCursorOver).length !== 0) ||
-			(this.options.enabledCursorEvents.cursorOff) &&
-			Object.keys(sceneObject.JumpStart.onCursorOff).length !== 0)
+		if( intersects[x].object.hasOwnProperty("isCursorPlane") )
 		{
-			foundHoveredObject = true;
+			// Make sure it's a INWARD surface
+			var samplePoint = new THREE.Vector3();
+			samplePoint.copy(intersects[x].point);
+			samplePoint.add(intersects[x].face.normal);
 
-			if( this.hoveredObject && this.hoveredObject !== sceneObject )
+			var distA = samplePoint.distanceTo(this.scene.position);
+
+			var mirroredNormal = new THREE.Vector3();
+			mirroredNormal.copy(intersects[x].face.normal).multiplyScalar(-1.0);
+
+			samplePoint.copy(intersects[x].point);
+			samplePoint.add(mirroredNormal);
+
+			var distB = samplePoint.distanceTo(this.scene.position);
+
+			if( distA < distB )
 			{
-				unhoverObject(this.hoveredObject);
-				this.hoveredObject = null;
+				if( this.hoveredObject )
+				{
+					unhoverObject(this.hoveredObject);
+					this.hoveredObject = null;
+				}
+
+				cursorHit = intersects[x];
+				break;
 			}
+		}
+		else
+		{
+			sceneObject = intersects[x].object.parent;
 
-			// Now set this new object as hovered
-			for( y in sceneObject.JumpStart.onCursorOver )
-				sceneObject.JumpStart.onCursorOver[y].call(sceneObject);
+			if( sceneObject.hasOwnProperty("JumpStart") && sceneObject.JumpStart.blocksLOS )
+			{
+				if( (this.options.enabledCursorEvents.cursorEnter &&
+					Object.keys(sceneObject.JumpStart.onCursorEnter).length !== 0) ||
+					(this.options.enabledCursorEvents.cursorLeave) &&
+					Object.keys(sceneObject.JumpStart.onCursorLeave).length !== 0)
+				{
+					if( this.hoveredObject && this.hoveredObject !== sceneObject )
+					{
+						unhoverObject(this.hoveredObject);
+						this.hoveredObject = null;
+					}
 
-			this.hoveredObject = sceneObject;
+					// Now set this new object as hovered
+					for( y in sceneObject.JumpStart.onCursorEnter )
+						sceneObject.JumpStart.onCursorEnter[y].call(sceneObject);
+
+					this.hoveredObject = sceneObject;
+					cursorHit = intersects[x];
+					break;
+				}
+			}
 		}
 	}
 
-	if( !foundHoveredObject && this.hoveredObject )
+	if( !cursorHit && this.hoveredObject )
 	{
 		unhoverObject(this.hoveredObject);
 		this.hoveredObject = null;
+	}
+	else if( this.crosshair && cursorHit )
+	{
+		this.crosshair.position.copy(cursorHit.point);
+
+		var normalMatrix = new THREE.Matrix3().getNormalMatrix( cursorHit.object.matrixWorld );
+		var worldNormal = cursorHit.face.normal.clone().applyMatrix3( normalMatrix ).normalize();
+		worldNormal.add(cursorHit.point);
+
+		this.crosshair.lookAt(worldNormal);
+//return;
+		// Get the face normal in object space
+//		var vec = cursorHit.face.normal.clone();
+
+//		quaternion = new THREE.Quaternion().setFromAxisAngle( axisOfRotation, angleOfRotation );
+
+//		var up = new THREE.Vector3( 1, 0, 0 );
+//		var up = new THREE.Vector3();
+
+		//var up = new THREE.Vector3().set();
+//		up.copy(cursorHit.position);
+//		up.add(cursorHit.object.geometry.vertices[cursorHit.face.a]);
+//		up.normalize();
+//		console.log(geo);
+
+		// Determine an axis to rotate around
+		/*
+		if( vec.y == 1 || vec.y == -1 )
+		{
+			var axis = new THREE.Vector3( 0, 1, 0 );
+		}
+		else
+		{
+			*/
+//			var axis = new THREE.Vector3().crossVectors( up, vec );
+		//}
+
+		// determine the amount to rotate
+//		var radians = Math.acos( vec.dot( up ) );
+
+		// create a rotation matrix that implements that rotation
+//		var mat = new THREE.Matrix4().makeRotationAxis( axis, radians );
+
+		// apply the rotation to the cone
+//		this.crosshair.rotation.setFromRotationMatrix( mat );
+
+		if( cursorHit.face.hasOwnProperty('centroid') )
+		{
+document.getElementById("info").innerHTML = "<h1>" + cursorHit.face.centroid;
+		// set the position of the cone in front of the face centroid in object space
+		// cone height is 100, so offset the position by half of that
+			this.crosshair.position = cursorHit.face.centroid.clone().addSelf( cursorHit.face.normal.clone().multiplyScalar(50) );
+		}
 	}
 
 };
@@ -357,6 +444,8 @@ jumpStart.prototype.initiate = function()
 	}
 	else
 	{
+		this.scene.addEventListener( "cursormove", function(e) { JumpStart.onCursorMove(e); });
+
 		if( this.options.scaleWithEnclosure )
 			this.worldScale = 500.0 / (this.enclosure.pixelsPerMeter / 1.0) * this.options["worldScale"];
 		else
@@ -368,10 +457,64 @@ jumpStart.prototype.initiate = function()
 			this.renderer = altspace.getThreeJSRenderer();
 		else
 			this.renderer = altspace.getThreeJSRenderer({version:'0.2.0'});
-
-		g_CursorEvents = new CursorEvents(g_Scene);
-		g_CursorEvents.enableMouseEvents(g_Camera);
 	}
+
+	// Create some invisible planes for raycasting.
+	var bottomPlane = new THREE.Mesh(
+		//new THREE.PlaneGeometry( this.enclosure.innderWidth, this.enclosure.innerDepth),
+		new THREE.BoxGeometry(this.enclosure.innerWidth, 0.25, this.enclosure.innerDepth),
+		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+	);
+	bottomPlane.isCursorPlane = true;
+
+	if( !this.webMode )
+		bottomPlane.position.y = -(this.enclosure.innerHeight / 2.0) - 0.25;
+
+	this.scene.add(bottomPlane);
+
+	var topPlane = new THREE.Mesh(
+		//new THREE.PlaneGeometry( this.enclosure.innderWidth, this.enclosure.innerDepth),
+		new THREE.BoxGeometry(this.enclosure.innerWidth, 0.25, this.enclosure.innerDepth),
+		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+	);
+	topPlane.isCursorPlane = true;
+
+	if( !this.webMode )
+		topPlane.position.y = this.enclosure.innerHeight / 2.0;
+
+	this.scene.add(topPlane);
+
+	var northPlane = new THREE.Mesh(
+		new THREE.BoxGeometry(this.enclosure.innerWidth, this.enclosure.innerHeight, 0.25),
+		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+	);
+	northPlane.isCursorPlane = true;
+	northPlane.position.z = -(this.enclosure.innerDepth / 2.0) - 0.25;
+	this.scene.add(northPlane);
+
+	var southPlane = new THREE.Mesh(
+		new THREE.BoxGeometry(this.enclosure.innerWidth, this.enclosure.innerHeight, 0.25),
+		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+	);
+	southPlane.isCursorPlane = true;
+	southPlane.position.z = this.enclosure.innerDepth / 2.0;
+	this.scene.add(southPlane);
+
+	var westPlane = new THREE.Mesh(
+		new THREE.BoxGeometry(0.25, this.enclosure.innerHeight, this.enclosure.innerDepth),
+		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+	);
+	westPlane.isCursorPlane = true;
+	westPlane.position.x = -(this.enclosure.innerDepth / 2.0) - 0.25;
+	this.scene.add(westPlane);
+
+	var eastPlane = new THREE.Mesh(
+		new THREE.BoxGeometry(0.25, this.enclosure.innerHeight, this.enclosure.innerDepth),
+		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+	);
+	eastPlane.isCursorPlane = true;
+	eastPlane.position.x = this.enclosure.innerDepth / 2.0;
+	this.scene.add(eastPlane);
 
 	g_localUser = this.localUser;
 	g_worldOffset = this.worldOffset;
@@ -383,16 +526,32 @@ jumpStart.prototype.initiate = function()
 	g_clock = this.clock;
 	g_rayCaster = this.rayCaster;
 	g_enclosure = this.enclosure;
-	g_cursorEvents = this.cursorEvents;
 	g_deltaTime = this.deltaTime;
 
 	// We are ready to rock-n-roll!!
 	this.initialized = true;
 
-	if( window.hasOwnProperty("OnReady") )
-		OnReady();
-	else
-		console.log("Your app is ready, but you have no OnReady callback function!");
+	// Load our crosshair
+	this.loadModels("models/JumpStart/crosshair.obj").then(function()
+	{
+		// Spawn it in
+		var crosshair = JumpStart.spawnInstance("models/JumpStart/crosshair.obj");
+		crosshair.scale.multiplyScalar(1.0);
+
+		JumpStart.crosshair = crosshair;
+
+		if( !JumpStart.webMode )
+		{
+			crosshair.addEventListener("cursordown", function(e) { JumpStart.onCursorDown(e); });
+			crosshair.addEventListener("cursorup", function(e) { JumpStart.onCursorUp(e); });
+		}
+
+		// Now we're ready for game logic
+		if( window.hasOwnProperty("OnReady") )
+			OnReady();
+		else
+			console.log("Your app is ready, but you have no OnReady callback function!");
+	});
 }
 
 jumpStart.prototype.run = function()
@@ -424,6 +583,63 @@ jumpStart.prototype.onTick = function()
 		if( !sceneObject.hasOwnProperty("JumpStart") )
 			continue;
 
+		/* FOR LISTENERS ATTACHED DIRECTLY TO SCENE OBJECTS. REQUIRED IF NO CROSSHAIR!!
+		if( !this.webMode )
+		{
+			if( !(sceneObject.JumpStart.hasCursorEffects & 0x1) &&
+				Object.keys(sceneObject.JumpStart.onCursorUp).length !== 0)
+			{
+				sceneObject.addEventListener('cursorup', function()
+				{
+					var y;
+					for( y in this.JumpStart.onCursorUp )
+						this.JumpStart.onCursorUp[y].call(this);
+				});
+
+				sceneObject.JumpStart.hasCursorEffects |= 0x1;
+			}
+
+			if( !(sceneObject.JumpStart.hasCursorEffects & 0x4) &&
+				Object.keys(sceneObject.JumpStart.onCursorDown).length !== 0)
+			{
+				sceneObject.addEventListener('cursordown', function()
+				{
+					var y;
+					for( y in this.JumpStart.onCursorDown )
+						this.JumpStart.onCursorDown[y].call(this);
+				});
+
+				sceneObject.JumpStart.hasCursorEffects |= 0x4;
+			}
+
+			if( !(sceneObject.JumpStart.hasCursorEffects & 0x8) &&
+				Object.keys(sceneObject.JumpStart.onCursorEnter).length !== 0)
+			{
+				sceneObject.addEventListener('cursorenter', function()
+				{
+					var y;
+					for( y in this.JumpStart.onCursorEnter )
+						this.JumpStart.onCursorEnter[y].call(this);
+				});
+
+				sceneObject.JumpStart.hasCursorEffects |= 0x8;
+			}
+
+			if( !(sceneObject.JumpStart.hasCursorEffects & 0x10) &&
+				Object.keys(sceneObject.JumpStart.onCursorLeave).length !== 0)
+			{
+				sceneObject.addEventListener('cursorleave', function()
+				{
+					var y;
+					for( y in this.JumpStart.onCursorLeave )
+						this.JumpStart.onCursorLeave[y].call(this);
+				});
+
+				sceneObject.JumpStart.hasCursorEffects |= 0x10;
+			}
+		}
+		*/
+
 		if( sceneObject.JumpStart.hasOwnProperty("onTick") )
 		{
 			for( y in sceneObject.JumpStart.onTick )
@@ -432,9 +648,6 @@ jumpStart.prototype.onTick = function()
 			}
 		}
 	}
-
-	if( this.cursorEvents )
-		this.cursorEvents.update();
 
 	this.renderer.render( this.scene, this.camera );
 };
@@ -477,7 +690,7 @@ jumpStart.prototype.setOptions = function(options)
 	}
 
 	// Determine if we must raycast every cursor move:
-	if( this.options.enabledCursorEvents.cursorOver || this.options.enabledCursorEvents.cursorOff )
+	if( this.options.enabledCursorEvents.cursorEnter || this.options.enabledCursorEvents.cursorLeave )
 		this.options.enabledCursorEvents.cursorMove = true;
 };
 
@@ -605,10 +818,11 @@ jumpStart.prototype.prepInstance = function()
 		"onTick": {},
 		"onCursorDown": {},
 		"onCursorUp": {},
-		"onCursorOver": {},
-		"onCursorOff": {},
+		"onCursorEnter": {},
+		"onCursorLeave": {},
 		"blocksLOS": true,
 		"tintColor": new THREE.Color(),
+		"hasCursorEffects": 0x0,
 		"setTint": function(tintColor)
 		{
 			if( JumpStart.webMode )
@@ -621,6 +835,17 @@ jumpStart.prototype.prepInstance = function()
 					if( mesh.material && mesh.material instanceof THREE.MeshPhongMaterial )
 						mesh.material.ambient = tintColor;
 				}
+			}
+			else
+			{
+				var altspaceTintColor = {"r": tintColor.r * 0.5, "g": tintColor.g * 0.5, "b": tintColor.b * 0.5};
+
+				this.userData.tintColor = altspaceTintColor;
+
+				this.traverse(function(child)
+				{
+					this.userData.tintColor = altspaceTintColor;
+				}.bind(this));
 			}
 		}.bind(this)
 	};
