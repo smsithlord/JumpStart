@@ -41,13 +41,14 @@ var myOptions =
 	"camera":
 	{
 		"lookAtOrigin": true,
-		"position": new THREE.Vector3(100.0, 150.0, 300.0),
-		"translation": new THREE.Vector3(0.0, 50.0, 0.0)
+		"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+		//"position": new THREE.Vector3(1.0, 1.0, 2.0),
+		"translation": new THREE.Vector3(40.0, 30.0, 180.0)
 	},
 	"firebase":
 	{
-//		"rootUrl": "https://jump-start.firebaseio.com/",
-//		"appId": "JumpStart",
+		"rootUrl": "https://jump-start.firebaseio.com/",
+		"appId": "JumpStart",
 		"params": { "TRACE": false }
 	}
 };
@@ -57,14 +58,16 @@ JumpStart.setOptions(myOptions);
 // DEFINE JUMPSTART'S TWO CALLBACKS
 
 // PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
-function OnReady()
+function OnPrecache()
 {
-	// do work
-	// ...
-
-	// We probably don't want to START SIMULATION until our models are pre-cached...
+	// Precache anything that your app needs.
 	var myModels = ["models/JumpStart/jewel.obj", "models/JumpStart/grass.obj"];
-	JumpStart.loadModels(myModels).then(StartMyApp);
+	JumpStart.loadModels(myModels).then(function() {
+
+		// Finally call JumpStart.doneCaching() to signify you are done.
+		// Your OnReady global function wll be called next.
+		JumpStart.doneCashing();
+	});
 }
 
 // PURPOSE: Gets called every time the scene is about to be rendered.
@@ -79,81 +82,88 @@ function OnTick()
 <script>
 
 // ALL YOUR NON-JUMPSTART CODE GOES HERE
-
-function StartMyApp()
+// TODO: Make calling the JumpStart.run() command OPTIONAL!! (swap it for a JumpStart.preventDefault())
+function OnReady()
 {
-
-
-
-	// JEWEL BLOCK
-	var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
-
-	// Do something each render tick.
-	myInstance.JumpStart.onTick["mySpinBehavior"] = function()
+	// The first user
+	if( g_localUser.firstUser )
 	{
-		this.rotateY(1.0 * g_DeltaTime);
-	};
+		// JEWEL BLOCK
+		var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
 
-	// Do something when it's clicked.
-	myInstance.JumpStart.onCursorDown["myCursorDownBehavior"] = function()
-	{
-		this.scale.multiplyScalar(2.0);
-	};
+		// Do something each render tick.
+		myInstance.JumpStart.onTick["mySpinBehavior"] = function()
+		{
+			this.rotateY(1.0 * g_deltaTime);
+		};
 
-	myInstance.JumpStart.onCursorUp["myCursorUpBehavior"] = function()
-	{
-		this.scale.multiplyScalar(0.5);
-	};
+		// Do something when it's clicked.
+		myInstance.JumpStart.onCursorDown["myCursorDownBehavior"] = function()
+		{
+			this.scale.multiplyScalar(2.0);
+		};
 
-	// Do something when it's hovered over.
-	myInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
-	{
-		/*
-		var crap = "<h2>";
-		for( var x in this.userData.tintColor )
-			crap += x + "<br />";
+		myInstance.JumpStart.onCursorUp["myCursorUpBehavior"] = function()
+		{
+			this.scale.multiplyScalar(0.5);
+		};
 
-		document.getElementById("info").innerHTML = crap;
-		*/
+		// Do something when it's hovered over.
+		myInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
+		{
+			/*
+			var crap = "<h2>";
+			for( var x in this.userData.tintColor )
+				crap += x + "<br />";
 
-		var myColor = new THREE.Color(1.0, 1.0, 0);
-		this.JumpStart.setTint(myColor);
-	};
+			document.getElementById("info").innerHTML = crap;
+			*/
 
-	myInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
-	{
-		var myColor = new THREE.Color(1.0, 1.0, 1.0);
-		this.JumpStart.setTint(myColor);
-	};
+			var myColor = new THREE.Color(1.0, 1.0, 0);
+			this.JumpStart.setTint(myColor);
+		};
+
+		myInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
+		{
+			var myColor = new THREE.Color(1.0, 1.0, 1.0);
+			this.JumpStart.setTint(myColor);
+		};
+
+		// We are a networked object!!
+		JumpStart.addSyncedObject(myInstance);
 
 
 
-	// GRASS BLOCK
-	var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
+		// GRASS BLOCK
+		var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
 
-	var offset = new THREE.Vector3(100.0, 0.0, 0.0);
-	offset.multiplyScalar(g_worldScale);
-	myOtherInstance.position.add(offset);
+		var offset = new THREE.Vector3(100.0, 0.0, 0.0);
+		offset.multiplyScalar(g_worldScale);
+		myOtherInstance.position.add(offset);
 
-	var scale = new THREE.Vector3(2.0, 2.0, 2.0);
-	scale.multiplyScalar(g_worldScale);
-	myOtherInstance.scale.copy(scale);
+		var scale = new THREE.Vector3(2.0, 2.0, 2.0);
+		scale.multiplyScalar(g_worldScale);
+		myOtherInstance.scale.copy(scale);
 
-	// Must block line-of-sight to be hoverable!!
-//	myOtherInstance.JumpStart.blocksLOS = false;
+		// Must block line-of-sight to be hoverable!!
+		//myOtherInstance.JumpStart.blocksLOS = false;
 
-	// Do something when it's hovered over.
-	myOtherInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
-	{
-		var myColor = new THREE.Color(0, 1, 1);
-		this.JumpStart.setTint(myColor);
-	};
+		// Do something when it's hovered over.
+		myOtherInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
+		{
+			var myColor = new THREE.Color(0, 1, 1);
+			this.JumpStart.setTint(myColor);
+		};
 
-	myOtherInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
-	{
-		var myColor = new THREE.Color(1, 1, 1);
-		this.JumpStart.setTint(myColor);
-	};
+		myOtherInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
+		{
+			var myColor = new THREE.Color(1, 1, 1);
+			this.JumpStart.setTint(myColor);
+		};
+
+		// We are a networked object!!
+		JumpStart.addSyncedObject(myOtherInstance);
+	}
 
 
 

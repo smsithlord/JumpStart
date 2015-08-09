@@ -25,7 +25,9 @@ else
 {
 	window.addEventListener( 'DOMContentLoaded', function()
 	{
-		JumpStart.connectToFirebase();
+//		setTimeout(function() {
+			JumpStart.connectToFirebase();
+//		}, 1000);
 	});
 
 	window.addEventListener( 'resize', function() { JumpStart.onWindowResize(); }, false );
@@ -55,6 +57,10 @@ function jumpStart()
 	this.hoveredObject = null;
 	this.deltaTime = 0.0;
 	this.crosshair = null;
+	this.firebaseSync = null;
+	this.syncedInstances = {};
+	this.pendingObjects = {};
+	this.numSyncedInstances = 0;
 
 	this.models = [];
 
@@ -100,7 +106,7 @@ jumpStart.prototype.connectToFirebase = function()
 	else
 	{
 		this.firebaseSync = new FirebaseSync(this.options.firebase.rootUrl, this.options.firebase.appId, this.options.firebase.params);
-		this.firebaseSync.connect(JumpStart.onFirebaseConnect(), JumpStart.onFirebaseAddObject(), JumpStart.onFirebaseRemoveObject());
+		this.firebaseSync.connect(JumpStart.onFirebaseConnect(), function(key, syncData) { JumpStart.onFirebaseAddObject(key, syncData); }, JumpStart.onFirebaseRemoveObject());
 	}
 };
 
@@ -108,19 +114,49 @@ jumpStart.prototype.onFirebaseConnect = function()
 {
 	console.log("Connected to firebase.");
 
-	// Wait for synced Firebase objects to be received (OBSOLETE??)
-	// Also wait for the page to refresh if it needs to?
-	setTimeout(function() { JumpStart.initiate(); }, 1000);
+	// Finish initiating the game world...
+//	setTimeout(function() {
+		this.initiate();
+//	}, 100);
 };
 
-jumpStart.prototype.onFirebaseAddObject = function()
+jumpStart.prototype.onFirebaseAddObject = function(key, syncData)
 {
+	// FIXME: Need to implement a g_InitialSynced!!!
 	console.log("firebase object added");
+
+	if( !this.syncedInstances.hasOwnProperty(key) && !this.pendingObjects.hasOwnProperty(key) )
+	{
+		this.pendingObjects[key] = syncData;
+
+		console.log("Network Object Pending (" + key + "):");
+		console.log(syncData);
+	}
 };
 
 jumpStart.prototype.onFirebaseRemoveObject = function()
 {
 	console.log("firebase object removed");
+};
+
+jumpStart.prototype.addSyncedObject = function(sceneObject, syncData)
+{
+	var syncData = {
+		"modelFile": sceneObect.jumpStart.modelFile,
+		"owner": g_LocalUserName,
+		"velocity": new THREE.Vector3(0, 0, 0),
+		"freefallRot": new THREE.Vector3(0, 0, 0),
+		"atRestOrientation": new THREE.Vector3(0, (Math.PI / 2.0), 0),
+		"isPhysics": true,
+		"matched": false,
+		"physicsState": 1,
+		"isLiveToken": true
+	};
+
+	MakePhysics(g_LiveToken);
+	g_LiveToken.freefallRot.set(0, 0, 0);
+
+	addSyncedObject(g_LiveToken, syncData);
 };
 
 jumpStart.prototype.onMouseDown = function()
@@ -250,22 +286,29 @@ jumpStart.prototype.processCursorMove = function()
 	{
 		if( intersects[x].object.hasOwnProperty("isCursorPlane") )
 		{
-			// Make sure it's a INWARD surface
-			var samplePoint = new THREE.Vector3();
-			samplePoint.copy(intersects[x].point);
-			samplePoint.add(intersects[x].face.normal);
+			var goodPoint = true;
+//			if( !this.webMode && false )
+//			{
+				// Make sure it's a INWARD surface
+				var samplePoint = new THREE.Vector3();
+				samplePoint.copy(intersects[x].point);
+				samplePoint.add(intersects[x].face.normal);
 
-			var distA = samplePoint.distanceTo(this.scene.position);
+				var distA = samplePoint.distanceTo(this.scene.position);
 
-			var mirroredNormal = new THREE.Vector3();
-			mirroredNormal.copy(intersects[x].face.normal).multiplyScalar(-1.0);
+				var mirroredNormal = new THREE.Vector3();
+				mirroredNormal.copy(intersects[x].face.normal).multiplyScalar(-1.0);
 
-			samplePoint.copy(intersects[x].point);
-			samplePoint.add(mirroredNormal);
+				samplePoint.copy(intersects[x].point);
+				samplePoint.add(mirroredNormal);
 
-			var distB = samplePoint.distanceTo(this.scene.position);
+				var distB = samplePoint.distanceTo(this.scene.position);
 
-			if( distA < distB )
+				if( distA > distB )
+					goodPoint = false;
+//			}
+
+			if( goodPoint )
 			{
 				if( this.hoveredObject )
 				{
@@ -320,42 +363,8 @@ jumpStart.prototype.processCursorMove = function()
 		worldNormal.add(cursorHit.point);
 
 		this.crosshair.lookAt(worldNormal);
-//return;
-		// Get the face normal in object space
-//		var vec = cursorHit.face.normal.clone();
 
-//		quaternion = new THREE.Quaternion().setFromAxisAngle( axisOfRotation, angleOfRotation );
-
-//		var up = new THREE.Vector3( 1, 0, 0 );
-//		var up = new THREE.Vector3();
-
-		//var up = new THREE.Vector3().set();
-//		up.copy(cursorHit.position);
-//		up.add(cursorHit.object.geometry.vertices[cursorHit.face.a]);
-//		up.normalize();
-//		console.log(geo);
-
-		// Determine an axis to rotate around
-		/*
-		if( vec.y == 1 || vec.y == -1 )
-		{
-			var axis = new THREE.Vector3( 0, 1, 0 );
-		}
-		else
-		{
-			*/
-//			var axis = new THREE.Vector3().crossVectors( up, vec );
-		//}
-
-		// determine the amount to rotate
-//		var radians = Math.acos( vec.dot( up ) );
-
-		// create a rotation matrix that implements that rotation
-//		var mat = new THREE.Matrix4().makeRotationAxis( axis, radians );
-
-		// apply the rotation to the cone
-//		this.crosshair.rotation.setFromRotationMatrix( mat );
-
+/*
 		if( cursorHit.face.hasOwnProperty('centroid') )
 		{
 document.getElementById("info").innerHTML = "<h1>" + cursorHit.face.centroid;
@@ -363,6 +372,7 @@ document.getElementById("info").innerHTML = "<h1>" + cursorHit.face.centroid;
 		// cone height is 100, so offset the position by half of that
 			this.crosshair.position = cursorHit.face.centroid.clone().addSelf( cursorHit.face.normal.clone().multiplyScalar(50) );
 		}
+		*/
 	}
 
 };
@@ -376,7 +386,8 @@ jumpStart.prototype.initiate = function()
 
 	if( this.webMode )
 	{
-		this.enclosure = { "innerWidth": window.innerWidth, "innerHeight": window.innerHeight, "innerDepth": window.innerWidth };
+		//this.enclosure = { "innerWidth": window.innerWidth / 3.0, "innerHeight": window.innerHeight / 3.0, "innerDepth": window.innerWidth / 3.0 };
+		this.enclosure = { "innerWidth": Math.round(1024 / 2.5), "innerHeight": Math.round(1024 / 2.5), "innerDepth": Math.round(1024 / 2.5) };
 		this.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser" };
 
 		if( this.options.debugMode )
@@ -409,11 +420,13 @@ jumpStart.prototype.initiate = function()
 
 	this.localUser.lookOrigin = new THREE.Vector3();
 	this.localUser.lookDirection = new THREE.Vector3();
+	this.localUser.firstUser = true;
+
+	this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0), 0.0);
 
 	if ( this.webMode )
 	{
 		this.worldScale = this.options["worldScale"];
-		this.worldOffset = new THREE.Vector3(0.0, 0.0, 0.0);
 
 		this.renderer = new THREE.WebGLRenderer();
 		this.renderer.setClearColor("#AAAAAA");
@@ -424,6 +437,7 @@ jumpStart.prototype.initiate = function()
 		this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 2000 );
 
 		this.camera.position.copy(this.options.camera.position);
+		this.camera.position.add(this.worldOffset);
 
 		if( this.options.camera.lookAtOrigin )
 		{
@@ -451,8 +465,6 @@ jumpStart.prototype.initiate = function()
 		else
 			this.worldScale = this.options["worldScale"];
 
-		this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0), 0.0);
-
 		if( this.options.legacyLoader )
 			this.renderer = altspace.getThreeJSRenderer();
 		else
@@ -463,30 +475,25 @@ jumpStart.prototype.initiate = function()
 	var bottomPlane = new THREE.Mesh(
 		//new THREE.PlaneGeometry( this.enclosure.innderWidth, this.enclosure.innerDepth),
 		new THREE.BoxGeometry(this.enclosure.innerWidth, 0.25, this.enclosure.innerDepth),
-		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+		new THREE.MeshBasicMaterial( { color: "#9400d3", transparent: false, opacity: 0.5 })
 	);
 	bottomPlane.isCursorPlane = true;
-
-	if( !this.webMode )
-		bottomPlane.position.y = -(this.enclosure.innerHeight / 2.0) - 0.25;
-
+	bottomPlane.position.y = -(this.enclosure.innerHeight / 2.0) - 0.25;
 	this.scene.add(bottomPlane);
 
 	var topPlane = new THREE.Mesh(
 		//new THREE.PlaneGeometry( this.enclosure.innderWidth, this.enclosure.innerDepth),
 		new THREE.BoxGeometry(this.enclosure.innerWidth, 0.25, this.enclosure.innerDepth),
-		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+		new THREE.MeshBasicMaterial( { color: "#ffd700", transparent: false, opacity: 0.5 })
 	);
 	topPlane.isCursorPlane = true;
-
-	if( !this.webMode )
-		topPlane.position.y = this.enclosure.innerHeight / 2.0;
+	topPlane.position.y = this.enclosure.innerHeight / 2.0;
 
 	this.scene.add(topPlane);
 
 	var northPlane = new THREE.Mesh(
 		new THREE.BoxGeometry(this.enclosure.innerWidth, this.enclosure.innerHeight, 0.25),
-		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+		new THREE.MeshBasicMaterial( { color: "#00bfff", transparent: false, opacity: 0.5 })
 	);
 	northPlane.isCursorPlane = true;
 	northPlane.position.z = -(this.enclosure.innerDepth / 2.0) - 0.25;
@@ -494,7 +501,7 @@ jumpStart.prototype.initiate = function()
 
 	var southPlane = new THREE.Mesh(
 		new THREE.BoxGeometry(this.enclosure.innerWidth, this.enclosure.innerHeight, 0.25),
-		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+		new THREE.MeshBasicMaterial( { color: "#00bfff", transparent: false, opacity: 0.5 })
 	);
 	southPlane.isCursorPlane = true;
 	southPlane.position.z = this.enclosure.innerDepth / 2.0;
@@ -502,7 +509,7 @@ jumpStart.prototype.initiate = function()
 
 	var westPlane = new THREE.Mesh(
 		new THREE.BoxGeometry(0.25, this.enclosure.innerHeight, this.enclosure.innerDepth),
-		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+		new THREE.MeshBasicMaterial( { color: "#1e90ff", transparent: false, opacity: 0.5 })
 	);
 	westPlane.isCursorPlane = true;
 	westPlane.position.x = -(this.enclosure.innerDepth / 2.0) - 0.25;
@@ -510,7 +517,7 @@ jumpStart.prototype.initiate = function()
 
 	var eastPlane = new THREE.Mesh(
 		new THREE.BoxGeometry(0.25, this.enclosure.innerHeight, this.enclosure.innerDepth),
-		new THREE.MeshBasicMaterial( { color: "#0000ff", transparent: false, opacity: 0.5 })
+		new THREE.MeshBasicMaterial( { color: "#1e90ff", transparent: false, opacity: 0.5 })
 	);
 	eastPlane.isCursorPlane = true;
 	eastPlane.position.x = this.enclosure.innerDepth / 2.0;
@@ -538,6 +545,15 @@ jumpStart.prototype.initiate = function()
 		var crosshair = JumpStart.spawnInstance("models/JumpStart/crosshair.obj");
 		crosshair.scale.multiplyScalar(1.0);
 
+		crosshair.JumpStart.onTick["spinMe"] = function()
+		{
+			if( !this.hasOwnProperty('spinAmount') || this.spinAmount >= Math.PI * 2.0 )
+				this.spinAmount = 0.0;
+
+			this.spinAmount += 1.0 * g_deltaTime;
+			this.rotateZ(this.spinAmount);
+		};
+
 		JumpStart.crosshair = crosshair;
 
 		if( !JumpStart.webMode )
@@ -546,13 +562,73 @@ jumpStart.prototype.initiate = function()
 			crosshair.addEventListener("cursorup", function(e) { JumpStart.onCursorUp(e); });
 		}
 
-		// Now we're ready for game logic
-		if( window.hasOwnProperty("OnReady") )
-			OnReady();
+		function prepReady()
+		{
+			if( window.hasOwnProperty("OnReady") )
+				OnReady();
+			else
+				console.log("Your app is ready, but you have no OnReady callback function!");
+		}
+
+		function prepPrecache()
+		{
+			if( window.hasOwnProperty("OnPrecache") )
+				OnPrecache();
+			else
+				prepReady();
+		}
+
+		// Wait for us to get our room key
+		if( JumpStart.options.firebase.rootUrl !== "" && JumpStart.options.firebase.appId !== "" )
+		{
+			var myHandle = setInterval(function()
+			{
+				if( JumpStart.firebaseSync.roomKey === null )
+					return;
+
+				var membersRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey).child('members');
+				membersRef.once("value", function(snapshot) {
+					var members = snapshot.val();
+
+					var count = 0;
+					var x;
+					for( x in members )
+						count++;
+
+					if( count > 1 )
+						JumpStart.localUser.firstUser = false;
+
+					// Now we're ready for game logic
+					prepPrecache();
+				});
+
+				clearInterval(myHandle);
+			}, 100);
+		}
 		else
-			console.log("Your app is ready, but you have no OnReady callback function!");
+			prepPrecache();
 	});
 }
+
+jumpStart.prototype.doneCashing = function()
+{
+	// Spawn any synced objects that already exist on the server...
+	// DO WORK FIXME
+
+	var key, syncData;
+	for( key in this.pendingObjects )
+	{
+		syncData = this.pendingObjects[key];
+		
+		var instance = this.spawnInstance(syncData.modelFile, {'key': key});
+//		instance.position.x += 100.0 * Math.random();
+	}
+
+	if( window.hasOwnProperty("OnReady") )
+		OnReady();
+	else
+		console.log("Your app is ready, but you have no OnReady callback function!");
+};
 
 jumpStart.prototype.run = function()
 {
@@ -566,7 +642,7 @@ jumpStart.prototype.onTick = function()
 		return;
 
 	this.deltaTime = this.clock.getDelta();
-	g_DeltaTime = this.deltaTime;
+	g_deltaTime = this.deltaTime;
 
 	this.processCursorMove();
 
@@ -730,7 +806,7 @@ jumpStart.prototype.loadModels = function()
 jumpStart.prototype.addSyncedObject = function(sceneObject, syncData, key)
 {
 	var syncData = {
-		"model": sceneObject.model,
+		"modelFile": sceneObject.model,
 		"owner": g_LocalUserName,
 		"velocity": new THREE.Vector3(0, 0, 0),
 		"freefallRot": new THREE.Vector3(0, 0, 0),
@@ -748,26 +824,43 @@ jumpStart.prototype.addSyncedObject = function(sceneObject, syncData, key)
 };
 */
 
-jumpStart.prototype.spawnInstance = function(arg)
+jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 {
-	// Handle various argument types.
-	var options;
-	if( typeof arg === 'string' )
-		options = {"fileName": arg};
-	else
-		options = arg;
+	console.log("spawn something bra!");
+
+	var options = {
+		"parent": null,
+		"key": "",
+		"syncData": null
+	};
+
+	if( typeof userOptions !== 'undefined' )
+	{
+		//options = arguments;
+
+		// Merg user args
+		var x;
+		for( x in userOptions )
+		{
+			// Only handle options that exist.
+			if( !options.hasOwnProperty(x) )
+				continue;
+
+			options[x] = userOptions[x];
+		}
+
+		console.log(userOptions);
+	}
 
 	// Make sure the fileName is a cached model.
 	// do work
-
-	if( !options.hasOwnProperty("scale") )
-		options["scale"] = new THREE.Vector3(1.0, 1.0, 1.0);
+	var scale = new THREE.Vector3(1.0, 1.0, 1.0);
 
 	var clone;
 	var x;
 	for( x in this.models )
 	{
-		if( this.models[x].fileName === options["fileName"] && this.models[x].hasOwnProperty("object") )
+		if( this.models[x].fileName === fileName && this.models[x].hasOwnProperty("object") )
 		{
 			// Clone the model
 			clone = this.models[x].object.clone();
@@ -779,25 +872,24 @@ jumpStart.prototype.spawnInstance = function(arg)
 			clone.rotation.set(0.0, 0.0, 0.0);
 
 			// Scale the object
-			clone.scale.copy(options.scale.multiplyScalar(this.worldScale));
+			clone.scale.copy(scale.multiplyScalar(this.worldScale));
 
 			// Add the instance to the scene
-			if( !options.hasOwnProperty("parent") || !options["parent"] )
+			if( !options.parent )
 				this.scene.add(clone);
 			else
-				options["parent"].add(clone);
-/*
+				options.parent.add(clone);
+
+			this.prepInstance.call(clone, fileName);
+
 			// Add this object to the synced instance list
-			if( typeof key !== 'undefined' && key !== null )
+			if( options.key !== "" )
 			{
-				g_SyncedInstances[key] = clone;
-				g_NumSyncedInstances++;
+				this.syncedInstances[options.key] = clone;
+				this.numSyncedInstances++;
 
-				g_FirebaseSync.addObject(clone, key);
+				this.firebaseSync.addObject(clone, options.key);
 			}
-*/
-
-			this.prepInstance.call(clone);
 			
 			console.log("Spawned an object");
 
@@ -808,9 +900,11 @@ jumpStart.prototype.spawnInstance = function(arg)
 	return null;
 };
 
-jumpStart.prototype.prepInstance = function()
+jumpStart.prototype.prepInstance = function(modelFile)
 {
 	var sceneObject = this;
+
+	// TODO: Sync event handlers if dev desires (object name = callback function name)
 
 	// Prepare it to get callback logic.
 	sceneObject.JumpStart =
@@ -823,6 +917,7 @@ jumpStart.prototype.prepInstance = function()
 		"blocksLOS": true,
 		"tintColor": new THREE.Color(),
 		"hasCursorEffects": 0x0,
+		"modelFile": modelFile,
 		"setTint": function(tintColor)
 		{
 			if( JumpStart.webMode )
@@ -849,6 +944,53 @@ jumpStart.prototype.prepInstance = function()
 			}
 		}.bind(this)
 	};
+};
+
+jumpStart.prototype.addSyncedObject = function(sceneObject, userSyncData)
+{
+	if( !this.firebaseSync )
+		return;
+
+	// Any property of sceneObject.JumpStart that can change AND that we want synced needs to be in syncData.
+	var syncData = {
+		"modelFile": sceneObject.JumpStart.modelFile,
+	};
+
+	// Now merg in any values we were passed by the user as well (1 level deep)
+	// WARNING: User variable names are sharing space with JumpStart variable names in sceneObject.JumpStart.userData.syncData!!
+	// FIXME: Fix this ASAP (if at all) because this will affect user code on the frontend of the API!!
+	if( typeof userSyncData !== 'undefined' )
+	{
+		var x, y;
+		for( x in userSyncData )
+		{
+			// Only handle options that exist.
+			if( !syncData.hasOwnProperty(x) )
+				continue;
+
+			if( typeof userSyncData[x] !== 'object' )
+				syncData[x] = userSyncData[x];
+			else
+			{
+				for( y in userSyncData[x] )
+				{
+					syncData[x][y] = userSyncData[x][y];
+				}
+			}
+		}
+	}
+
+	sceneObject.userData.syncData = syncData;
+
+	// Add this unique object to the Firebase
+	var key = this.firebaseSync.senderId + "-" + Date.now();
+	this.firebaseSync.addObject(sceneObject, key);
+
+	// Store this key with this object locally
+	this.syncedInstances[key] = sceneObject;
+	this.numSyncedInstances++;
+
+	console.log("Added synced object with key " + key);
 };
 
 function jumpStartModelLoader()
