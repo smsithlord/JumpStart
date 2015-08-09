@@ -9,6 +9,8 @@
 		<script src="../lib/OBJMTLLoader.js"></script>
 		<script src="../lib/firebase.js"></script>
 		<script src="../src/AltOBJMTLLoader.js"></script>
+		<script src="../lib/OBJMTLLoader.js"></script>
+		<script src="../lib/MTLLoader.js"></script>
 		<script src="../src/sync/FirebaseSync.js"></script>
 		<script src="../src/cursor/CursorEvents.js"></script>
 		<script src="../src/cursor/AltObjectControls.js"></script>
@@ -26,8 +28,18 @@
 // (OPTIONAL) CONFIGURE JUMPSTART
 var myOptions =
 {
+	"debugMode": true,
+	"legacyLoader": true,
 	"worldScale": 1.0,
 	"scaleWithEnclosure": true,
+	"enabledCursorEvents":
+	{
+		"cursorDown": true,
+		"cursorUp": true,
+		"cursorOver": true,
+		"cursorOff": true,
+		"cursorMove": false
+	},
 	"camera":
 	{
 		"lookAtOrigin": true,
@@ -36,8 +48,8 @@ var myOptions =
 	},
 	"firebase":
 	{
-		"rootUrl": "https://jump-start.firebaseio.com/",
-		"appId": "JumpStart",
+//		"rootUrl": "https://jump-start.firebaseio.com/",
+//		"appId": "JumpStart",
 		"params": { "TRACE": false }
 	}
 };
@@ -52,11 +64,9 @@ function OnReady()
 	// do work
 	// ...
 
+	// We probably don't want to START SIMULATION until our models are pre-cached...
 	var myModels = ["models/JumpStart/jewel.obj", "models/JumpStart/grass.obj"];
 	JumpStart.loadModels(myModels).then(StartMyApp);
-
-	// Begin render ticks
-	//JumpStart.run();
 }
 
 // PURPOSE: Gets called every time the scene is about to be rendered.
@@ -74,25 +84,72 @@ function OnTick()
 
 function StartMyApp()
 {
+
+
+
 	// JEWEL BLOCK
 	var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
 
-	// Let's give the jewel some animation logic to perform each tick.
-	myInstance.onTick["mySpinBehavior"] = function()
+	// Do something each render tick.
+	myInstance.JumpStart.onTick["mySpinBehavior"] = function()
 	{
 		this.rotateY(1.0 * g_DeltaTime);
 	};
+
+	// Do something when it's clicked.
+	myInstance.JumpStart.onCursorDown["myCursorDownBehavior"] = function()
+	{
+		this.scale.multiplyScalar(2.0);
+	};
+
+	myInstance.JumpStart.onCursorUp["myCursorUpBehavior"] = function()
+	{
+		this.scale.multiplyScalar(0.5);
+	};
+
+	// Do something when it's hovered over.
+	myInstance.JumpStart.onCursorOver["myCursorOverBehavior"] = function()
+	{
+		var myColor = new THREE.Color(1, 1, 0);
+		this.JumpStart.setTint(myColor);
+	};
+
+	myInstance.JumpStart.onCursorOff["myCursorOffBehavior"] = function()
+	{
+		var myColor = new THREE.Color(1, 1, 1);
+		this.JumpStart.setTint(myColor);
+	};
+
+
 
 	// GRASS BLOCK
 	var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
 
 	var offset = new THREE.Vector3(100.0, 0.0, 0.0);
-	offset.multiplyScalar(g_WorldScale);
+	offset.multiplyScalar(g_worldScale);
 	myOtherInstance.position.add(offset);
 
 	var scale = new THREE.Vector3(2.0, 2.0, 2.0);
-	scale.multiplyScalar(g_WorldScale);
+	scale.multiplyScalar(g_worldScale);
 	myOtherInstance.scale.copy(scale);
+
+	// Must block line-of-sight to be hoverable!!
+//	myOtherInstance.JumpStart.blocksLOS = false;
+
+	// Do something when it's hovered over.
+	myOtherInstance.JumpStart.onCursorOver["myCursorOverBehavior"] = function()
+	{
+		var myColor = new THREE.Color(0, 1, 1);
+		this.JumpStart.setTint(myColor);
+	};
+
+	myOtherInstance.JumpStart.onCursorOff["myCursorOffBehavior"] = function()
+	{
+		var myColor = new THREE.Color(1, 1, 1);
+		this.JumpStart.setTint(myColor);
+	};
+
+
 
 	// START SIMULATION
 	JumpStart.run();

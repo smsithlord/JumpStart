@@ -1,8 +1,8 @@
 // Declare some globals
-var g_LocalUser, g_WorldOffset, g_WorldScale, g_ObjectLoader, g_Camera, g_Renderer, g_Scene, g_Clock, g_rayCaster, g_Enclosure, g_DeltaTime;	//g_CursorEvents
+var g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_cursorEvents;
 
-// Create global object for us to use.
-var JumpStart = new jumpStart();
+// Extend the window object.
+window.JumpStart = new jumpStart();
 
 // Listen for ready events
 if( !JumpStart.webMode )
@@ -25,19 +25,13 @@ else
 {
 	window.addEventListener( 'DOMContentLoaded', function()
 	{
-		JumpStart.enclosure = { "innerWidth": window.innerWidth, "innerHeight": window.innerHeight, "innerDepth": window.innerWidth };
-		JumpStart.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser" };
-
-		while( JumpStart.localUser.displayName === "WebUser" || JumpStart.localUser.displayName === "" )
-			JumpStart.localUser.displayName = prompt("Enter a player name:", "");
-
-		if( !JumpStart.localUser.displayName || JumpStart.localUser.displayName === "WebUser" || JumpStart.localUser.displayName === "" )
-			window.history.back();
-
 		JumpStart.connectToFirebase();
 	});
 
 	window.addEventListener( 'resize', function() { JumpStart.onWindowResize(); }, false );
+	window.addEventListener( 'mousemove', function(e) { JumpStart.onMouseMove(e); }, false);
+	window.addEventListener( 'mousedown', function(e) { JumpStart.onMouseDown(e); }, false);
+	window.addEventListener( 'mouseup', function(e) { JumpStart.onMouseUp(e); }, false);
 	document.body.style.backgroundColor = "rgba(0, 0, 0, 1.0)";
 }
 
@@ -52,18 +46,31 @@ function jumpStart()
 	this.renderer = null;
 	this.clock = null;
 	this.rayCaster = null;
+	this.cursorRay = null;
+	this.futureCursorRay = null;
 	this.enclosure = null;
 	this.localUser = null;
 	this.scene = null;
-//	this.cursorEvents = null;
+	this.cursorEvents = null;
+	this.clickedObject = null;
+	this.hoveredObject = null;
 	this.deltaTime = 0.0;
 
 	this.models = [];
 
 	this.options =
 	{
+		"legacyLoader": false,
 		"worldScale": 1.0,
 		"scaleWithEnclosure": false,
+		"enabledCursorEvents":
+		{
+			"cursorDown": true,
+			"cursorUp": true,
+			"cursorOver": true,
+			"cursorOff": true,
+			"cursorMove": true
+		},
 		"camera":
 		{
 			"lookAtOrigin": true,
@@ -75,7 +82,8 @@ function jumpStart()
 			"rootUrl": "",
 			"appId": "",
 			"params": { "TRACE": false}
-		}
+		},
+		"debugMode": true
 	};
 
 	this.worldScale;
@@ -101,10 +109,8 @@ jumpStart.prototype.onFirebaseConnect = function()
 	console.log("Connected to firebase.");
 
 	// Wait for synced Firebase objects to be received (OBSOLETE??)
-	setTimeout(function()
-	{
-		JumpStart.initiate();
-	}, 1000);
+	// Also wait for the page to refresh if it needs to?
+	setTimeout(function() { JumpStart.initiate(); }, 1000);
 };
 
 jumpStart.prototype.onFirebaseAddObject = function()
@@ -117,6 +123,163 @@ jumpStart.prototype.onFirebaseRemoveObject = function()
 	console.log("firebase object removed");
 };
 
+jumpStart.prototype.onMouseDown = function()
+{
+	this.onCursorDown();
+};
+
+jumpStart.prototype.onCursorDown = function()
+{
+	if( this.clickedObject )
+		this.onCursorUp();
+
+	// FIXME: Add options for how non-JumpStart objects interact with raycasting and mouse events.
+	var intersects = this.rayCaster.intersectObjects(this.scene.children, true);
+
+	var sceneObject;
+	var x, y;
+	for( x in intersects )
+	{
+		sceneObject = intersects[x].object.parent;
+		if( !sceneObject.hasOwnProperty("JumpStart") )
+			continue;
+
+		if( (Object.keys(sceneObject.JumpStart.onCursorDown).length !== 0) )
+		{
+			// Remember what object is clicked.
+			this.clickedObject = sceneObject;
+
+			for( y in sceneObject.JumpStart.onCursorDown )
+				sceneObject.JumpStart.onCursorDown[y].call(sceneObject);
+
+			// Only ONE object can be clicked at a time.
+			break;
+		}
+
+		if( sceneObject.blocksLOS )
+			break;
+	}
+};
+
+jumpStart.prototype.onMouseUp = function()
+{
+	this.onCursorUp();
+};
+
+jumpStart.prototype.onCursorUp = function()
+{
+	var sceneObject = this.clickedObject;
+
+	if( !sceneObject )
+		return;
+
+	var x;
+	for( x in sceneObject.JumpStart.onCursorUp )
+	{
+		sceneObject.JumpStart.onCursorUp[x].call(sceneObject);
+	}
+
+	this.clickedObject = null;
+};
+
+jumpStart.prototype.onMouseMove = function(e)
+{
+	if( !this.webMode )
+		return;
+
+	// Fill with 2D position for now
+	var mouse3D = new THREE.Vector3(0, 0, 0);
+	mouse3D.x = (e.clientX / window.innerWidth) * 2 - 1;
+	mouse3D.y = -(e.clientY / window.innerHeight) * 2 + 1;
+	mouse3D.z = 0.5;
+
+	// Convert the 2D position to a 3D point
+	mouse3D.unproject(this.camera);
+
+	// Get a look vector from the camera to mouse3D
+	var direction = new THREE.Vector3();
+	direction = mouse3D.sub(this.camera.position).normalize();
+
+	this.futureCursorRay = { "origin": this.camera.position, "direction": direction };
+}
+
+jumpStart.prototype.onCursorMove = function(e)
+{
+	this.futureCursorRay = e.cursorRay;
+};
+
+jumpStart.prototype.processCursorMove = function()
+{
+	if( !this.options.enabledCursorEvents.cursorMove )
+		return;
+
+	// Check if cursor has moved (OBSOLETE: WE MUST ALWAYS RAYCAST BECAUSE OBJECTS MOVE TOO!!)
+	/*
+	if( !this.futureCursorRay || (this.futureCursorRay.origin === this.cursorRay.origin &&
+			this.futureCursorRay.direction === this.cursorRay.direction) )
+		return;
+	*/
+
+	this.cursorRay = this.futureCursorRay;
+
+	// Update the local user's look info
+	this.localUser.lookOrigin.copy(this.cursorRay.origin);
+	this.localUser.lookDirection.copy(this.cursorRay.direction);
+
+	// Set the raycaster
+	this.rayCaster.set( this.cursorRay.origin, this.cursorRay.direction );
+
+	// FIXME: TWO OPTIONS
+	// A. Build a list of every eligible scene object THEN raycast.
+	// B. Raycast, then filter for eligible objects.
+
+	var intersects = this.rayCaster.intersectObjects(this.scene.children, true);
+
+	function unhoverObject(sceneObject)
+	{
+		var y;
+		for( y in sceneObject.JumpStart.onCursorOff )
+			sceneObject.JumpStart.onCursorOff[y].call(sceneObject);
+	}
+
+	var foundHoveredObject = false;
+	var oldHoveredObject = this.hoveredObject;
+	var x, sceneObject, futureHoverObject, y;
+	for( x in intersects )
+	{
+		sceneObject = intersects[x].object.parent;
+		if( !sceneObject.hasOwnProperty("JumpStart") || !sceneObject.JumpStart.blocksLOS )
+			continue;
+
+		if( (this.options.enabledCursorEvents.cursorOver &&
+			Object.keys(sceneObject.JumpStart.onCursorOver).length !== 0) ||
+			(this.options.enabledCursorEvents.cursorOff) &&
+			Object.keys(sceneObject.JumpStart.onCursorOff).length !== 0)
+		{
+			foundHoveredObject = true;
+
+			if( this.hoveredObject && this.hoveredObject !== sceneObject )
+			{
+				unhoverObject(this.hoveredObject);
+				this.hoveredObject = null;
+			}
+
+			// Now set this new object as hovered
+			for( y in sceneObject.JumpStart.onCursorOver )
+				sceneObject.JumpStart.onCursorOver[y].call(sceneObject);
+
+			this.hoveredObject = sceneObject;
+		}
+	}
+
+	if( !foundHoveredObject && this.hoveredObject )
+	{
+		unhoverObject(this.hoveredObject);
+		this.hoveredObject = null;
+	}
+
+};
+
 jumpStart.prototype.initiate = function()
 {
 	if( this.altContentAlreadyLoaded )
@@ -124,10 +287,41 @@ jumpStart.prototype.initiate = function()
 
 	this.altContentAlreadyLoaded = true;
 
-	this.objectLoader = new THREE.AltOBJMTLLoader();
+	if( this.webMode )
+	{
+		this.enclosure = { "innerWidth": window.innerWidth, "innerHeight": window.innerHeight, "innerDepth": window.innerWidth };
+		this.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser" };
+
+		if( this.options.debugMode )
+			this.localUser.displayName = "Flynn";
+		else
+		{
+			while( this.localUser.displayName === "WebUser" || this.localUser.displayName === "" )
+				this.localUser.displayName = prompt("Enter a player name:", "");
+
+			if( !this.localUser.displayName || this.localUser.displayName === "WebUser" || this.localUser.displayName === "" )
+			{
+				window.history.back();
+				return;
+			}
+		}
+	}
+
+	if( this.options.legacyLoader )
+		this.objectLoader = new THREE.AltOBJMTLLoader();
+	else
+		this.objectLoader = new THREE.OBJMTLLoader();
+
 	this.scene = new THREE.Scene();
 	this.clock = new THREE.Clock();
 	this.rayCaster = new THREE.Raycaster();
+
+	// FIXME: Why is this a spoofed ray?  Is it needed for web mode?
+	this.cursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
+	this.futureCursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
+
+	this.localUser.lookOrigin = new THREE.Vector3();
+	this.localUser.lookDirection = new THREE.Vector3();
 
 	if ( this.webMode )
 	{
@@ -169,21 +363,28 @@ jumpStart.prototype.initiate = function()
 			this.worldScale = this.options["worldScale"];
 
 		this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0), 0.0);
-		this.renderer = altspace.getThreeJSRenderer();
+
+		if( this.options.legacyLoader )
+			this.renderer = altspace.getThreeJSRenderer();
+		else
+			this.renderer = altspace.getThreeJSRenderer({version:'0.2.0'});
+
+		g_CursorEvents = new CursorEvents(g_Scene);
+		g_CursorEvents.enableMouseEvents(g_Camera);
 	}
 
-	g_LocalUser = this.localUser;
-	g_WorldOffset = this.worldOffset;
-	g_WorldScale = this.worldScale;
-	g_ObjectLoader = this.objectLoader;
-	g_Camera = this.camera;
-	g_Renderer = this.renderer;
-	g_Scene = this.scene;
-	g_Clock = this.clock;
+	g_localUser = this.localUser;
+	g_worldOffset = this.worldOffset;
+	g_worldScale = this.worldScale;
+	g_objectLoader = this.objectLoader;
+	g_camera = this.camera;
+	g_renderer = this.renderer;
+	g_scene = this.scene;
+	g_clock = this.clock;
 	g_rayCaster = this.rayCaster;
-	g_Enclosure = this.enclosure;
-//	g_CursorEvents = this.cursorEvents;
-	g_DeltaTime = this.deltaTime;
+	g_enclosure = this.enclosure;
+	g_cursorEvents = this.cursorEvents;
+	g_deltaTime = this.deltaTime;
 
 	// We are ready to rock-n-roll!!
 	this.initialized = true;
@@ -202,30 +403,40 @@ jumpStart.prototype.run = function()
 
 jumpStart.prototype.onTick = function()
 {
-	JumpStart.deltaTime = JumpStart.clock.getDelta();
-	g_DeltaTime = JumpStart.deltaTime;
+	if( !this.initialized )
+		return;
+
+	this.deltaTime = this.clock.getDelta();
+	g_DeltaTime = this.deltaTime;
+
+	this.processCursorMove();
 
 	if( window.hasOwnProperty("OnTick") )
 		OnTick();
 
-	requestAnimationFrame( JumpStart.onTick );
+	requestAnimationFrame( function(){ JumpStart.onTick(); } );
 
-//	if( JumpStart.cursorEvents )
-//		JumpStart.cursorEvents.update();
-
+	var sceneObject;
 	var x, y;
-	for( x in JumpStart.scene.children )
+	for( x in this.scene.children )
 	{
-		if( JumpStart.scene.children[x].hasOwnProperty("onTick") )
+		sceneObject = this.scene.children[x];
+		if( !sceneObject.hasOwnProperty("JumpStart") )
+			continue;
+
+		if( sceneObject.JumpStart.hasOwnProperty("onTick") )
 		{
-			for( y in JumpStart.scene.children[x].onTick )
+			for( y in sceneObject.JumpStart.onTick )
 			{
-				JumpStart.scene.children[x].onTick[y].call(JumpStart.scene.children[x]);
+				sceneObject.JumpStart.onTick[y].call(sceneObject);
 			}
 		}
 	}
 
-	JumpStart.renderer.render( JumpStart.scene, JumpStart.camera );
+	if( this.cursorEvents )
+		this.cursorEvents.update();
+
+	this.renderer.render( this.scene, this.camera );
 };
 
 jumpStart.prototype.onWindowResize = function()
@@ -250,14 +461,24 @@ jumpStart.prototype.setOptions = function(options)
 	var x;
 	for( x in options )
 	{
+		// Only handle options that exist.
+		if( !this.options.hasOwnProperty(x) )
+			continue;
+
 		if( typeof options[x] !== 'object' )
 			this.options[x] = options[x];
 		else
 		{
 			for( y in options[x] )
+			{
 				this.options[x][y] = options[x][y];
+			}
 		}
 	}
+
+	// Determine if we must raycast every cursor move:
+	if( this.options.enabledCursorEvents.cursorOver || this.options.enabledCursorEvents.cursorOff )
+		this.options.enabledCursorEvents.cursorMove = true;
 };
 
 jumpStart.prototype.loadModels = function()
@@ -278,7 +499,11 @@ jumpStart.prototype.loadModels = function()
 	{
 		var fileName = models[x];
 		JumpStart.models.push({"fileName": fileName, "batchName": JumpStart.modelLoader.batchName});
-		JumpStart.objectLoader.load(fileName, JumpStart.modelLoader.batchCallbackFactory(fileName, JumpStart.modelLoader.batchName));
+		
+		if( JumpStart.options.legacyLoader )
+			JumpStart.objectLoader.load(fileName, JumpStart.modelLoader.batchCallbackFactory(fileName, JumpStart.modelLoader.batchName));
+		else
+			JumpStart.objectLoader.load(fileName, fileName.substring(0, fileName.length - 3) + "mtl", JumpStart.modelLoader.batchCallbackFactory(fileName, JumpStart.modelLoader.batchName));
 	}
 
 	return {
@@ -359,9 +584,8 @@ jumpStart.prototype.spawnInstance = function(arg)
 			}
 */
 
-			// Prepare it to get onTick logic.
-			clone.onTick = {};
-
+			this.prepInstance.call(clone);
+			
 			console.log("Spawned an object");
 
 			return clone;
@@ -369,6 +593,37 @@ jumpStart.prototype.spawnInstance = function(arg)
 	}
 
 	return null;
+};
+
+jumpStart.prototype.prepInstance = function()
+{
+	var sceneObject = this;
+
+	// Prepare it to get callback logic.
+	sceneObject.JumpStart =
+	{
+		"onTick": {},
+		"onCursorDown": {},
+		"onCursorUp": {},
+		"onCursorOver": {},
+		"onCursorOff": {},
+		"blocksLOS": true,
+		"tintColor": new THREE.Color(),
+		"setTint": function(tintColor)
+		{
+			if( JumpStart.webMode )
+			{
+				var x, mesh;
+				for( x in this.children )
+				{
+					mesh = this.children[x];
+
+					if( mesh.material && mesh.material instanceof THREE.MeshPhongMaterial )
+						mesh.material.ambient = tintColor;
+				}
+			}
+		}.bind(this)
+	};
 };
 
 function jumpStartModelLoader()
