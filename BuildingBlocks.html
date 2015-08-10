@@ -1,0 +1,380 @@
+<!-- Author: Elijah Newman-Gomez -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+		<title>JumpStart</title>
+
+		<script src="../lib/three.js"></script>
+		<script src="../lib/firebase.js"></script>
+		<script src="../src/AltOBJMTLLoader.js"></script>
+		<script src="../lib/OBJMTLLoader.js"></script>
+		<script src="../lib/MTLLoader.js"></script>
+		<script src="../src/sync/FirebaseSync.js"></script>
+		<!-- <script src="../src/cursor/CursorEvents.js"></script> -->
+		<!-- <script src="../src/cursor/AltObjectControls.js"></script> -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+</head>
+<body>
+
+<div id="info">JumpStart</div>
+
+<!-- APPEND JUMPSTART.JS TO YOUR BODY ELEMENT -->
+<script src="JumpStart.js"></script>
+
+<script>
+
+// (OPTIONAL) CONFIGURE JUMPSTART
+var myOptions =
+{
+	"debugMode": true,
+	"legacyLoader": true,
+	"worldScale": 1.0,
+	"scaleWithEnclosure": true,
+	"enabledCursorEvents":
+	{
+		"cursorDown": true,
+		"cursorUp": true,
+		"cursorEnter": true,
+		"cursorLeave": true,
+		"cursorMove": false
+	},
+	"camera":
+	{
+		"lookAtOrigin": true,
+		"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+		//"position": new THREE.Vector3(1.0, 1.0, 2.0),
+		"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+	},
+	"firebase":
+	{
+		"rootUrl": "https://jump-start.firebaseio.com/",
+		"appId": "JumpStart",
+		"params": { "TRACE": false }
+	}
+};
+JumpStart.setOptions(myOptions);
+
+
+// DEFINE JUMPSTART'S TWO CALLBACKS
+
+// PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
+function OnPrecache()
+{
+	// Precache anything that your app needs.
+	var myModels = [
+		"models/BuildingBlocks/jewel.obj",
+		"models/BuildingBlocks/cube.obj",
+		"models/BuildingBlocks/grass.obj",
+		"models/BuildingBlocks/dirt.obj",
+		"models/BuildingBlocks/bricks.obj",
+		"models/BuildingBlocks/cube_cage.obj"
+	];
+
+	JumpStart.loadModels(myModels).then(function() {
+
+		// Finally call JumpStart.doneCaching() to signify you are done.
+		// Your OnReady global function wll be called next.
+		JumpStart.doneCashing();
+	});
+}
+
+// PURPOSE: Gets called every time the scene is about to be rendered.
+function OnTick()
+{
+	// do work
+}
+
+</script>
+
+
+<script>
+
+// ALL YOUR NON-JUMPSTART CODE GOES HERE
+var g_sampleBlock;
+var g_previewBlock;
+var g_MaxBlocks = 600;
+var g_BlockWidth = 25.0;	// Actual 3ds Max units
+var g_CurrentBlockType = 0;
+var g_BlockTypes = ["models/BuildingBlocks/cube.obj", "models/BuildingBlocks/grass.obj", "models/BuildingBlocks/dirt.obj", "models/BuildingBlocks/jewel.obj", "models/BuildingBlocks/bricks.obj"];
+
+// TODO: Make calling the JumpStart.run() command OPTIONAL!! (swap it for a JumpStart.preventDefault())
+function OnReady()
+{
+	// The first user
+	if( g_localUser.firstUser )
+	{
+		// Nothing special required.
+	}
+
+	// PREVIEW BLOCK
+	g_previewBlock = JumpStart.spawnInstance("models/BuildingBlocks/cube_cage.obj");
+	g_previewBlock.JumpStart.blocksLOS = false;
+
+	// Do something each render tick.
+	g_previewBlock.JumpStart.onTick = function()
+	{
+		if( !g_lookHit )
+			return;
+
+		function isBlockAlreadyHere(block)
+		{
+			var x, sceneObject;
+			for( x in g_scene.children )
+			{
+				sceneObject = g_scene.children[x];
+				if( !sceneObject.hasOwnProperty('isBlock') || sceneObject === block )
+					continue;
+
+				if( sceneObject.position.equals(block.position) )
+					return true;
+			}
+
+			return false;
+		}
+
+		// Prepare to snap...
+		var hitPlane = null;
+		var hitBlock = null;
+		if( g_lookHit.object.parent.hasOwnProperty('isBlock') )
+			hitBlock = g_lookHit.object.parent;
+
+		if( !hitBlock )
+		{
+			if( g_lookHit.object.hasOwnProperty('isCursorPlane') )
+			{
+				hitPlane = g_lookHit.object;
+				if( hitPlane.position.y === g_worldOffset.y )
+				{
+					// Apply FLOOR gridsnap
+					var snappedPosition = new THREE.Vector3().copy(g_lookHit.scaledPoint);
+
+					// X snap
+					var blockXShift = 0.0;
+					var remainderX = g_lookHit.scaledPoint.x % (g_BlockWidth/1.0);
+					var testRemainderX = (g_lookHit.scaledPoint.x + g_lookHit.face.normal.x) % (g_BlockWidth/1.0);
+					if( testRemainderX < ((-1) * (g_BlockWidth/2.0)))
+						blockXShift = (-1) * g_BlockWidth;
+					else if( testRemainderX > (g_BlockWidth/2.0))
+						blockXShift = g_BlockWidth;
+
+					remainderX = (-1) * (remainderX) + blockXShift;
+
+					// Z snap
+					var blockZShift = 0.0;
+					var remainderZ = g_lookHit.scaledPoint.z % (g_BlockWidth/1.0);
+					var testRemainderZ = (g_lookHit.scaledPoint.z + g_lookHit.face.normal.z) % (g_BlockWidth/1.0);
+					if( testRemainderZ < ((-1) * (g_BlockWidth/2.0)))
+						blockZShift = (-1) * g_BlockWidth;
+					else if( testRemainderZ > (g_BlockWidth/2.0))
+						blockZShift = g_BlockWidth;
+
+					remainderZ = (-1) * (remainderZ) + blockZShift;
+
+					// Apply the snap offsets
+					snappedPosition.add(new THREE.Vector3(remainderX, 0, remainderZ));
+					this.position.copy(snappedPosition);
+
+					if( this.hasOwnProperty('isInvalid') && this.isInvalid )
+					{
+						this.isInvalid = false;
+						this.scale.set(1, 1, 1);
+					}
+				}
+				else
+				{
+					this.isInvalid = true;
+					this.scale.set(0.0001, 0.0001, 0.0001);
+				}
+			}
+		}
+		else
+		{
+			// Apply BLOCK gridsnap
+			var snappedPosition = new THREE.Vector3().copy(g_lookHit.object.parent.position);
+
+			var offset = new THREE.Vector3(g_BlockWidth, g_BlockWidth, g_BlockWidth);
+			offset.multiply(g_lookHit.face.normal);
+
+			snappedPosition.add(offset);
+			this.position.copy(snappedPosition);
+
+
+			if( g_lookHit.object.parent.hasOwnProperty('scaleFactor') && g_lookHit.object.parent.scaleFactor < 1.0 )
+			{
+				this.isInvalid = true;
+				this.scale.set(0.0001, 0.0001, 0.0001);
+			}
+			else if( this.hasOwnProperty('isInvalid') && this.isInvalid )
+			{
+				this.isInvalid = false;
+				this.scale.set(1, 1, 1);
+			}
+		}
+
+		// Don't spawn 2 blocks in the same spot!!
+		// FIXME This ain't cheap if there are lots of blocks.
+		if( isBlockAlreadyHere(g_previewBlock) )
+		{
+			this.isInvalid = true;
+			this.scale.set(0.0001, 0.0001, 0.0001);
+		}
+	};
+
+	// So we know what we're spawning.
+	CreateSampleBlock();
+
+	// START SIMULATION
+	JumpStart.run();
+}
+
+function onCursorDown()
+{
+	if( g_previewBlock.hasOwnProperty('isInvalid') && g_previewBlock.isInvalid )
+		return;
+
+	spawnBlock();
+}
+
+// Damn capitalization!! Need sleep & to fix.
+function CreateSampleBlock()
+{
+	var oldPulse, oldPulseDirection;
+	if( typeof g_sampleBlock === 'object' )
+	{
+		oldPulse = g_sampleBlock.pulse;
+		oldPulseDirection = g_sampleBlock.pulseDirection;
+		g_scene.remove(g_sampleBlock);
+	}
+
+	// Attach a headsUp object
+	// TODO: JumpStart needs more work before it can support hierarchies, so manage this object independently instead.
+	g_sampleBlock = JumpStart.spawnInstance(g_BlockTypes[g_CurrentBlockType]);
+
+	if(typeof oldPulse !== 'undefined' )
+	{
+		g_sampleBlock.pulse = oldPulse;
+		g_sampleBlock.pulseDirection = oldPulseDirection;
+	}
+
+	g_sampleBlock.JumpStart.blocksLOS = false;
+
+	// Do something each render tick.
+	g_sampleBlock.JumpStart.onTick = function()
+	{
+		if( !this.hasOwnProperty('pulse'))
+		{
+			this.pulse = 0.5;
+			this.pulseDirection = true;
+		}
+		
+		if( g_previewBlock )
+		{
+			this.position.copy(g_previewBlock.position);
+			this.scale.copy(g_previewBlock.scale);
+
+			if( this.pulseDirection )
+				this.pulse += 0.1 * g_deltaTime;
+			else
+				this.pulse -= 0.1 * g_deltaTime;
+
+			if( this.pulse >= 0.55 )
+				this.pulseDirection = false;
+			else if( this.pulse <= 0.45 )
+				this.pulseDirection = true;
+
+			this.scale.multiplyScalar(this.pulse);
+		}
+	}
+}
+
+function spawnBlock()
+{
+	if( g_MaxBlocks <= g_numSyncedInstances )
+		return null;
+
+	var instance = JumpStart.spawnInstance(g_BlockTypes[g_CurrentBlockType]);
+	instance.position.copy(g_previewBlock.position);
+	instance.isBlock = true;
+
+	instance.JumpStart.onSpawn["spawnEffects"] = spawnEffects;
+	instance.JumpStart.onTick["growUp"] = growUp;
+
+	// We are a networked object!!
+	JumpStart.addSyncedObject(instance);
+
+	return instance;
+}
+
+function spawnEffects(isLocal, isInitial)
+{
+	this.isBlock = true;
+
+	if( isInitial )	// This flag is bullshit.  Synced objects get spawned in async.  Will be fixed soon!!
+		return;
+
+	if( isLocal )
+		this.scaleFactor = g_sampleBlock.scale.x;
+	else
+		this.scaleFactor = 0.2;
+
+	this.scale.set(1, 1, 1).multiplyScalar(this.scaleFactor);
+}
+
+function growUp()
+{
+	if( !this.hasOwnProperty('scaleFactor') )
+		this.scaleFactor = 1.0;
+
+	if( this.scaleFactor < 1.0 )
+		this.scaleFactor += 1.0 * g_deltaTime;
+
+	if( this.scaleFactor > 1.0 )
+	{
+		this.scaleFactor = 1.0;
+		delete this.JumpStart.onTick['default'];
+	}
+
+	this.scale.set(1, 1, 1).multiplyScalar(this.scaleFactor);
+}
+
+function CycleBlock(delta)
+{
+	g_CurrentBlockType += delta;
+
+	if( g_CurrentBlockType == g_BlockTypes.length )
+		g_CurrentBlockType = 0;
+	else if( g_CurrentBlockType < 0 )
+		g_CurrentBlockType = g_BlockTypes.length-1;
+
+	CreateSampleBlock();
+}
+
+// FIXME: Input NEEDS to be handled through JumpStart calls, for tick-sync.
+document.addEventListener("keydown", function(e)
+{
+	if( e.keyCode == 0 || e.keyCode == 32 )
+	{
+		var hitBlock = g_lookHit.object.parent;
+		if( hitBlock.hasOwnProperty('isBlock') )
+		{
+			JumpStart.removeSyncedObject(hitBlock);
+		}
+	}
+	else if( e.keyCode == 88 )
+	{
+		JumpStart.pendingEventA = function() { CycleBlock(1); };
+	}
+	else if( e.keyCode == 90 )
+		JumpStart.pendingEventA = function() { CycleBlock(-1); };
+	else if( e.keyCode == 67 )
+	{
+		JumpStart.pendingClick = true;
+		console.log("okay");
+	}
+
+}, false);
+
+</script>
+
+</body>
+</html>
