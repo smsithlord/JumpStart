@@ -47,8 +47,8 @@ var myOptions =
 	},
 	"firebase":
 	{
-		"rootUrl": "https://jump-start.firebaseio.com/",
-		"appId": "JumpStart",
+//		"rootUrl": "https://jump-start.firebaseio.com/",
+//		"appId": "JumpStart",
 		"params": { "TRACE": false }
 	}
 };
@@ -138,12 +138,8 @@ function OnReady()
 		var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
 
 		var offset = new THREE.Vector3(100.0, 0.0, 0.0);
-		offset.multiplyScalar(g_worldScale);
 		myOtherInstance.position.add(offset);
-
-		var scale = new THREE.Vector3(2.0, 2.0, 2.0);
-		scale.multiplyScalar(g_worldScale);
-		myOtherInstance.scale.copy(scale);
+		myOtherInstance.scale.multiplyScalar(2.0);
 
 		// Must block line-of-sight to be hoverable!!
 		//myOtherInstance.JumpStart.blocksLOS = false;

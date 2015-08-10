@@ -284,26 +284,24 @@ jumpStart.prototype.processCursorMove = function()
 		if( intersects[x].object.hasOwnProperty("isCursorPlane") )
 		{
 			var goodPoint = true;
-//			if( !this.webMode && false )
-//			{
-				// Make sure it's a INWARD surface
-				var samplePoint = new THREE.Vector3();
-				samplePoint.copy(intersects[x].point);
-				samplePoint.add(intersects[x].face.normal);
 
-				var distA = samplePoint.distanceTo(this.scene.position);
+			// Make sure it's a INWARD surface
+			var samplePoint = new THREE.Vector3();
+			samplePoint.copy(intersects[x].point);
+			samplePoint.add(intersects[x].face.normal);
 
-				var mirroredNormal = new THREE.Vector3();
-				mirroredNormal.copy(intersects[x].face.normal).multiplyScalar(-1.0);
+			var distA = samplePoint.distanceTo(this.scene.position);
 
-				samplePoint.copy(intersects[x].point);
-				samplePoint.add(mirroredNormal);
+			var mirroredNormal = new THREE.Vector3();
+			mirroredNormal.copy(intersects[x].face.normal).multiplyScalar(-1.0);
 
-				var distB = samplePoint.distanceTo(this.scene.position);
+			samplePoint.copy(intersects[x].point);
+			samplePoint.add(mirroredNormal);
 
-				if( distA > distB )
-					goodPoint = false;
-//			}
+			var distB = samplePoint.distanceTo(this.scene.position);
+
+			if( distA > distB )
+				goodPoint = false;
 
 			if( goodPoint )
 			{
@@ -360,16 +358,7 @@ jumpStart.prototype.processCursorMove = function()
 		worldNormal.add(cursorHit.point);
 
 		this.crosshair.lookAt(worldNormal);
-
-/*
-		if( cursorHit.face.hasOwnProperty('centroid') )
-		{
-document.getElementById("info").innerHTML = "<h1>" + cursorHit.face.centroid;
-		// set the position of the cone in front of the face centroid in object space
-		// cone height is 100, so offset the position by half of that
-			this.crosshair.position = cursorHit.face.centroid.clone().addSelf( cursorHit.face.normal.clone().multiplyScalar(50) );
-		}
-		*/
+		this.crosshair.position.multiplyScalar(this.enclosure.innerHeight / this.enclosure.adjustedHeight);//.copy(cursorHit.point);
 	}
 
 };
@@ -381,10 +370,19 @@ jumpStart.prototype.initiate = function()
 
 	this.altContentAlreadyLoaded = true;
 
+	this.worldScale = this.options["worldScale"];
+
 	if( this.webMode )
 	{
 		//this.enclosure = { "innerWidth": window.innerWidth / 3.0, "innerHeight": window.innerHeight / 3.0, "innerDepth": window.innerWidth / 3.0 };
-		this.enclosure = { "innerWidth": Math.round(1024 / 2.5), "innerHeight": Math.round(1024 / 2.5), "innerDepth": Math.round(1024 / 2.5) };
+		this.enclosure = {
+			"innerWidth": Math.round(1024 / 2.5),
+			"innerHeight": Math.round(1024 / 2.5),
+			"innerDepth": Math.round(1024 / 2.5),
+			"adjustedWidth": Math.round(1024 / 2.5),
+			"adjustedHeight": Math.round(1024 / 2.5),
+			"adjustedDepth": Math.round(1024 / 2.5)
+		};
 		this.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser" };
 
 		if( this.options.debugMode )
@@ -401,6 +399,15 @@ jumpStart.prototype.initiate = function()
 			}
 		}
 	}
+	else
+	{
+		// Altspace has a different style of scaling
+		this.worldScale *= 3.0;
+
+		this.enclosure.adjustedWidth = Math.round(this.enclosure.innerWidth * JumpStart.worldScale);
+		this.enclosure.adjustedHeight = Math.round(this.enclosure.innerWidth * JumpStart.worldScale);
+		this.enclosure.adjustedDepth = Math.round(this.enclosure.innerDepth * JumpStart.worldScale);
+	}
 
 	if( this.options.legacyLoader )
 		this.objectLoader = new THREE.AltOBJMTLLoader();
@@ -408,6 +415,8 @@ jumpStart.prototype.initiate = function()
 		this.objectLoader = new THREE.OBJMTLLoader();
 
 	this.scene = new THREE.Scene();
+	this.scene.scale.multiplyScalar(this.worldScale);
+
 	this.clock = new THREE.Clock();
 	this.rayCaster = new THREE.Raycaster();
 
@@ -419,12 +428,11 @@ jumpStart.prototype.initiate = function()
 	this.localUser.lookDirection = new THREE.Vector3();
 	this.localUser.firstUser = true;
 
-	this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0), 0.0);
+	var scaledRatio = this.enclosure.innerHeight / this.enclosure.adjustedHeight;
+	this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0) * scaledRatio, 0.0);
 
 	if ( this.webMode )
 	{
-		this.worldScale = this.options["worldScale"];
-
 		this.renderer = new THREE.WebGLRenderer();
 		this.renderer.setClearColor("#AAAAAA");
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
@@ -457,10 +465,10 @@ jumpStart.prototype.initiate = function()
 	{
 		this.scene.addEventListener( "cursormove", function(e) { JumpStart.onCursorMove(e); });
 
-		if( this.options.scaleWithEnclosure )
-			this.worldScale = 500.0 / (this.enclosure.pixelsPerMeter / 1.0) * this.options["worldScale"];
-		else
-			this.worldScale = this.options["worldScale"];
+//		if( this.options.scaleWithEnclosure )
+//			this.worldScale = 500.0 / (this.enclosure.pixelsPerMeter / 1.0) * this.options["worldScale"];
+//		else
+//			this.worldScale = this.options["worldScale"];
 
 		if( this.options.legacyLoader )
 			this.renderer = altspace.getThreeJSRenderer();
@@ -475,7 +483,7 @@ jumpStart.prototype.initiate = function()
 		new THREE.MeshBasicMaterial( { color: "#9400d3", transparent: false, opacity: 0.5 })
 	);
 	bottomPlane.isCursorPlane = true;
-	bottomPlane.position.y = -(this.enclosure.innerHeight / 2.0) - 0.25;
+	bottomPlane.position.y = this.worldOffset.y - 0.25;
 	this.scene.add(bottomPlane);
 
 	var topPlane = new THREE.Mesh(
@@ -484,7 +492,7 @@ jumpStart.prototype.initiate = function()
 		new THREE.MeshBasicMaterial( { color: "#ffd700", transparent: false, opacity: 0.5 })
 	);
 	topPlane.isCursorPlane = true;
-	topPlane.position.y = this.enclosure.innerHeight / 2.0;
+	topPlane.position.y = -this.worldOffset.y - 0.25;
 
 	this.scene.add(topPlane);
 
@@ -493,7 +501,7 @@ jumpStart.prototype.initiate = function()
 		new THREE.MeshBasicMaterial( { color: "#00bfff", transparent: false, opacity: 0.5 })
 	);
 	northPlane.isCursorPlane = true;
-	northPlane.position.z = -(this.enclosure.innerDepth / 2.0) - 0.25;
+	northPlane.position.z = ((-(this.enclosure.innerDepth / 2.0)) / this.worldScale) - 0.25;
 	this.scene.add(northPlane);
 
 	var southPlane = new THREE.Mesh(
@@ -501,7 +509,7 @@ jumpStart.prototype.initiate = function()
 		new THREE.MeshBasicMaterial( { color: "#00bfff", transparent: false, opacity: 0.5 })
 	);
 	southPlane.isCursorPlane = true;
-	southPlane.position.z = this.enclosure.innerDepth / 2.0;
+	southPlane.position.z = ((this.enclosure.innerDepth / 2.0) / this.worldScale);
 	this.scene.add(southPlane);
 
 	var westPlane = new THREE.Mesh(
@@ -509,7 +517,7 @@ jumpStart.prototype.initiate = function()
 		new THREE.MeshBasicMaterial( { color: "#1e90ff", transparent: false, opacity: 0.5 })
 	);
 	westPlane.isCursorPlane = true;
-	westPlane.position.x = -(this.enclosure.innerDepth / 2.0) - 0.25;
+	westPlane.position.x = (-(this.enclosure.innerDepth / 2.0) / this.worldScale) - 0.25;
 	this.scene.add(westPlane);
 
 	var eastPlane = new THREE.Mesh(
@@ -517,7 +525,7 @@ jumpStart.prototype.initiate = function()
 		new THREE.MeshBasicMaterial( { color: "#1e90ff", transparent: false, opacity: 0.5 })
 	);
 	eastPlane.isCursorPlane = true;
-	eastPlane.position.x = this.enclosure.innerDepth / 2.0;
+	eastPlane.position.x = (this.enclosure.innerDepth / 2.0) / this.worldScale;
 	this.scene.add(eastPlane);
 
 	g_localUser = this.localUser;
@@ -953,7 +961,6 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 
 	// Make sure the fileName is a cached model.
 	// do work
-	var scale = new THREE.Vector3(1.0, 1.0, 1.0);
 
 	var clone;
 	var x;
@@ -969,9 +976,6 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 
 			// Set the orientation
 			clone.rotation.set(0.0, 0.0, 0.0);
-
-			// Scale the object
-			clone.scale.copy(scale.multiplyScalar(this.worldScale));
 
 			// Add the instance to the scene
 			if( !options.parent )
