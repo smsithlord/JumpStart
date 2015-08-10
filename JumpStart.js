@@ -1,3 +1,6 @@
+// TODO:
+// - Reduce firebase footprint when mouse events are disabled in options.
+
 // Declare some globals
 var g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime;
 
@@ -115,23 +118,16 @@ jumpStart.prototype.onFirebaseConnect = function()
 	console.log("Connected to firebase.");
 
 	// Finish initiating the game world...
-//	setTimeout(function() {
-		this.initiate();
-//	}, 100);
+	// Might want to wait to make sure all items get sycned
+	setTimeout(function(){
+		JumpStart.initiate();
+	}, 1000);
 };
 
 jumpStart.prototype.onFirebaseAddObject = function(key, syncData)
 {
-	// FIXME: Need to implement a g_InitialSynced!!!
-	console.log("firebase object added");
-
 	if( !this.syncedInstances.hasOwnProperty(key) && !this.pendingObjects.hasOwnProperty(key) )
-	{
 		this.pendingObjects[key] = syncData;
-
-		console.log("Network Object Pending (" + key + "):");
-		console.log(syncData);
-	}
 };
 
 jumpStart.prototype.onFirebaseRemoveObject = function()
@@ -141,6 +137,7 @@ jumpStart.prototype.onFirebaseRemoveObject = function()
 
 jumpStart.prototype.addSyncedObject = function(sceneObject, syncData)
 {
+	// TODO: Make networked cursor event callbacks OPTIONAL!!
 	var syncData = {
 		"modelFile": sceneObect.jumpStart.modelFile,
 		"owner": g_LocalUserName,
@@ -545,7 +542,7 @@ jumpStart.prototype.initiate = function()
 		var crosshair = JumpStart.spawnInstance("models/JumpStart/crosshair.obj");
 		crosshair.scale.multiplyScalar(1.0);
 
-		crosshair.JumpStart.onTick["spinMe"] = function()
+		crosshair.JumpStart.onTick["_spinMe"] = function()
 		{
 			if( !this.hasOwnProperty('spinAmount') || this.spinAmount >= Math.PI * 2.0 )
 				this.spinAmount = 0.0;
@@ -615,13 +612,97 @@ jumpStart.prototype.doneCashing = function()
 	// Spawn any synced objects that already exist on the server...
 	// DO WORK FIXME
 
-	var key, syncData;
+	function eventFactory(eventName, sceneObject)
+	{
+		return function()
+		{
+			window[eventName].call(sceneObject);
+		}
+	}
+
+	var key, syncData, x, index;
 	for( key in this.pendingObjects )
 	{
 		syncData = this.pendingObjects[key];
-		
+
 		var instance = this.spawnInstance(syncData.modelFile, {'key': key});
-//		instance.position.x += 100.0 * Math.random();
+
+		if( syncData.hasOwnProperty('tickListeners') )
+		{
+			for( x in syncData.tickListeners )
+			{
+				// Just replace ALL listeners, and we'll end up as the one named 'default'.
+				if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+				{
+					instance.JumpStart.onTick = {};
+					instance.JumpStart.onTick[x] = window[x];
+				}
+
+				break;
+			}
+		}
+
+		if( syncData.hasOwnProperty('cursorDownListeners') )
+		{
+			for( x in syncData.cursorDownListeners )
+			{
+				// Just replace ALL listeners, and we'll end up as the one named 'default'.
+				if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+				{
+					instance.JumpStart.onCursorDown = {};
+					instance.JumpStart.onCursorDown[x] = window[x];
+				}
+
+				break;
+			}
+		}
+
+		if( syncData.hasOwnProperty('cursorUpListeners') )
+		{
+			for( x in syncData.cursorUpListeners )
+			{
+				// Just replace ALL listeners, and we'll end up as the one named 'default'.
+				if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+				{
+					instance.JumpStart.onCursorUp = {};
+					instance.JumpStart.onCursorUp[x] = window[x];
+				}
+
+				break;
+			}
+		}
+
+		if( syncData.hasOwnProperty('cursorEnterListeners') )
+		{
+			for( x in syncData.cursorEnterListeners )
+			{
+				// Just replace ALL listeners, and we'll end up as the one named 'default'.
+				if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+				{
+					instance.JumpStart.onCursorEnter = {};
+					instance.JumpStart.onCursorEnter[x] = window[x];
+				}
+
+				break;
+			}
+		}
+
+		if( syncData.hasOwnProperty('cursorLeaveListeners') )
+		{
+			for( x in syncData.cursorLeaveListeners )
+			{
+				// Just replace ALL listeners, and we'll end up as the one named 'default'.
+				if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+				{
+					instance.JumpStart.onCursorLeave = {};
+					instance.JumpStart.onCursorLeave[x] = window[x];
+				}
+
+				break;
+			}
+		}
+
+		console.log(instance);
 	}
 
 	if( window.hasOwnProperty("OnReady") )
@@ -644,7 +725,7 @@ jumpStart.prototype.onTick = function()
 	this.deltaTime = this.clock.getDelta();
 	g_deltaTime = this.deltaTime;
 
-	this.processCursorMove();
+//	this.processCursorMove();
 
 	if( window.hasOwnProperty("OnTick") )
 		OnTick();
@@ -652,29 +733,51 @@ jumpStart.prototype.onTick = function()
 	requestAnimationFrame( function(){ JumpStart.onTick(); } );
 
 	var sceneObject;
-	var x, y;
+	var x, y, z;
 	for( x in this.scene.children )
 	{
 		sceneObject = this.scene.children[x];
 		if( !sceneObject.hasOwnProperty("JumpStart") )
 			continue;
 
-		/* FOR LISTENERS ATTACHED DIRECTLY TO SCENE OBJECTS. REQUIRED IF NO CROSSHAIR!!
-		if( !this.webMode )
-		{
-			if( !(sceneObject.JumpStart.hasCursorEffects & 0x1) &&
-				Object.keys(sceneObject.JumpStart.onCursorUp).length !== 0)
+		this.prepEventListeners(sceneObject);
+
+//		/* FOR LISTENERS ATTACHED DIRECTLY TO SCENE OBJECTS. REQUIRED IF NO CROSSHAIR!!
+//		if( !this.webMode )
+//		{
+	// DO ONTICK EVENT TOO!! ???? (maybe not, it might not be neded here.)
+	/*
+			if( typeof sceneObject.JumpStart.onCursorDown === 'function' ||
+					Object.keys(sceneObject.JumpStart.onCursorDown).length !== 0 )
 			{
-				sceneObject.addEventListener('cursorup', function()
+				if( !(sceneObject.JumpStart.hasCursorEffects & 0x2) )
+				{*/
+					/* FIXME: Required if no crosshair!!
+					sceneObject.addEventListener('cursorup', function()
+					{
+						var y;
+						for( y in this.JumpStart.onCursorUp )
+							this.JumpStart.onCursorUp[y].call(this);
+					});
+					*/
+/*
+					sceneObject.JumpStart.hasCursorEffects |= 0x2;
+				}
+
+				if( typeof sceneObject.JumpStart.onCursorDown === 'function' )
 				{
-					var y;
-					for( y in this.JumpStart.onCursorUp )
-						this.JumpStart.onCursorUp[y].call(this);
-				});
+					sceneObject.JumpStart.onCursorDown = {'default': sceneObject.JumpStart.onCursorDown};
+				}
 
-				sceneObject.JumpStart.hasCursorEffects |= 0x1;
+				// FIXME: Only supporting 1 event callback.  Should support N.
+				for( z in sceneObject.JumpStart.onCursorDown )
+				{
+					sceneObject.JumpStart.cursorDownListeners = z;
+					break;
+				}
 			}
-
+			*/
+/*
 			if( !(sceneObject.JumpStart.hasCursorEffects & 0x4) &&
 				Object.keys(sceneObject.JumpStart.onCursorDown).length !== 0)
 			{
@@ -714,7 +817,7 @@ jumpStart.prototype.onTick = function()
 				sceneObject.JumpStart.hasCursorEffects |= 0x10;
 			}
 		}
-		*/
+//		*/
 
 		if( sceneObject.JumpStart.hasOwnProperty("onTick") )
 		{
@@ -724,6 +827,8 @@ jumpStart.prototype.onTick = function()
 			}
 		}
 	}
+
+	this.processCursorMove();
 
 	this.renderer.render( this.scene, this.camera );
 };
@@ -826,8 +931,6 @@ jumpStart.prototype.addSyncedObject = function(sceneObject, syncData, key)
 
 jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 {
-	console.log("spawn something bra!");
-
 	var options = {
 		"parent": null,
 		"key": "",
@@ -836,8 +939,6 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 
 	if( typeof userOptions !== 'undefined' )
 	{
-		//options = arguments;
-
 		// Merg user args
 		var x;
 		for( x in userOptions )
@@ -848,8 +949,6 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 
 			options[x] = userOptions[x];
 		}
-
-		console.log(userOptions);
 	}
 
 	// Make sure the fileName is a cached model.
@@ -914,6 +1013,11 @@ jumpStart.prototype.prepInstance = function(modelFile)
 		"onCursorUp": {},
 		"onCursorEnter": {},
 		"onCursorLeave": {},
+		"tickListeners": {},
+		"cursorDownListeners": {},
+		"cursorUpListeners": {},
+		"cursorEnterListeners": {},
+		"cursorLeaveListeners": {},
 		"blocksLOS": true,
 		"tintColor": new THREE.Color(),
 		"hasCursorEffects": 0x0,
@@ -946,14 +1050,110 @@ jumpStart.prototype.prepInstance = function(modelFile)
 	};
 };
 
+jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
+{
+	var eventName = null;
+	if( typeof inEventName === 'string' )
+		eventName = inEventName;
+
+	var x;
+	if( !eventName || eventName === 'tick' )
+	{
+		if( typeof sceneObject.JumpStart.onTick === 'function' )
+			sceneObject.JumpStart.onTick = {'default': sceneObject.JumpStart.onTick};
+
+		// FIXME: Only supporting 1 event callback. Should support N.
+		for( x in sceneObject.JumpStart.onTick )
+		{
+			if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+			{
+				sceneObject.JumpStart.tickListeners[x] = x;
+				break;
+			}
+		}
+	}
+
+	if( !eventName || eventName === 'cursordown' )
+	{
+		if( typeof sceneObject.JumpStart.onCursorDown === 'function' )
+			sceneObject.JumpStart.onCursorDown = {'default': sceneObject.JumpStart.onCursorDown};
+
+		// FIXME: Only supporting 1 event callback. Should support N.
+		for( x in sceneObject.JumpStart.onCursorDown )
+		{
+			if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+			{
+				sceneObject.JumpStart.cursorDownListeners[x] = x;
+				break;
+			}
+		}
+	}
+
+	if( !eventName || eventName === 'cursorup' )
+	{
+		if( typeof sceneObject.JumpStart.onCursorUp === 'function' )
+			sceneObject.JumpStart.onCursorUp = {'default': sceneObject.JumpStart.onCursorUp};
+
+		// FIXME: Only supporting 1 event callback. Should support N.
+		for( x in sceneObject.JumpStart.onCursorUp )
+		{
+			if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+			{
+				sceneObject.JumpStart.cursorUpListeners[x] = x;
+				break;
+			}
+		}
+	}
+
+	if( !eventName || eventName === 'cursorenter' )
+	{
+		if( typeof sceneObject.JumpStart.onCursorEnter === 'function' )
+			sceneObject.JumpStart.onCursorEnter = {'default': sceneObject.JumpStart.onCursorEnter};
+
+		// FIXME: Only supporting 1 event callback. Should support N.
+		for( x in sceneObject.JumpStart.onCursorEnter )
+		{
+			if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+			{
+				sceneObject.JumpStart.cursorEnterListeners[x] = x;
+				break;
+			}
+		}
+	}
+
+	if( !eventName || eventName === 'cursorleave' )
+	{
+		if( typeof sceneObject.JumpStart.onCursorLeave === 'function' )
+			sceneObject.JumpStart.onCursorLeave = {'default': sceneObject.JumpStart.onCursorLeave};
+
+		// FIXME: Only supporting 1 event callback. Should support N.
+		for( x in sceneObject.JumpStart.onCursorLeave )
+		{
+			if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+			{
+				sceneObject.JumpStart.cursorLeaveListeners[x] = x;
+				break;
+			}
+		}
+	}
+};
+
 jumpStart.prototype.addSyncedObject = function(sceneObject, userSyncData)
 {
 	if( !this.firebaseSync )
 		return;
 
+	// Prep listeners NOW, before we are added to the firebase.
+	this.prepEventListeners(sceneObject);
+	
 	// Any property of sceneObject.JumpStart that can change AND that we want synced needs to be in syncData.
 	var syncData = {
 		"modelFile": sceneObject.JumpStart.modelFile,
+		"tickListeners": sceneObject.JumpStart.tickListeners,
+		"cursorDownListeners": sceneObject.JumpStart.cursorDownListeners,
+		"cursorUpListeners": sceneObject.JumpStart.cursorUpListeners,
+		"cursorEnterListeners": sceneObject.JumpStart.cursorEnterListeners,
+		"cursorLeaveListeners": sceneObject.JumpStart.cursorLeaveListeners
 	};
 
 	// Now merg in any values we were passed by the user as well (1 level deep)
@@ -983,7 +1183,9 @@ jumpStart.prototype.addSyncedObject = function(sceneObject, userSyncData)
 	sceneObject.userData.syncData = syncData;
 
 	// Add this unique object to the Firebase
-	var key = this.firebaseSync.senderId + "-" + Date.now();
+	// Hash the unique ID's because they are VERY long.
+	// In the case of conflicts, the 2nd object does not spawn. (Thanks to firebase.js)
+	var key = __hash(this.firebaseSync.senderId + Date.now() + sceneObject.uuid);
 	this.firebaseSync.addObject(sceneObject, key);
 
 	// Store this key with this object locally
@@ -1063,3 +1265,48 @@ jumpStartModelLoader.prototype.onAllModelsLoaded = function(batchName)
 
 	JumpStart.modelLoader.onModelBatchLoaded(batchName);
 }
+
+
+
+
+// Method: hash
+// Purpose:
+//   Generate a hash of the given value.
+// Credits:
+//   This function is based on a function by baderj on the XBMC forums.
+//   The thread is located at: http://forum.xbmc.org/showthread.php?tid=58389
+__hash = function(value) {
+
+	var unsignNumber = function(number, bytes) {
+  		return number >= 0 ? number : Math.pow(256, bytes || 4) + number;
+	};
+	
+  var data = value;
+  data = data.replace(/\//g, "\\");
+
+  var CRC = 0xffffffff;
+  data = data.toLowerCase();
+  for( var j = 0; j < data.length; j++) {
+    var c = data.charCodeAt(j);
+    CRC ^= c << 24;
+    for( var i = 0; i < 8; i++) {
+      if( unsignNumber(CRC, 8) & 0x80000000) {
+        CRC = (CRC << 1) ^ 0x04C11DB7;
+      }
+      else {
+        CRC <<= 1;
+      }
+    }
+  }
+
+  if(CRC < 0) {
+    CRC = CRC >>> 0;
+  }
+
+  var CRC_str = CRC.toString(16);
+  while(CRC_str.length < 8) {
+    CRC_str = '0' + CRC_str;
+  }
+
+  return CRC_str;
+};

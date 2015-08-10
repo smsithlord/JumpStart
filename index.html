@@ -81,6 +81,33 @@ function OnTick()
 
 <script>
 
+function spinObject()
+{
+	this.rotateY(1.0 * g_deltaTime);
+}
+
+function growObject()
+{
+	this.scale.multiplyScalar(2.0);
+}
+
+function shrinkObject()
+{
+	this.scale.multiplyScalar(0.5);
+}
+
+function hightlightOnObject()
+{
+	var myColor = new THREE.Color(1.5, 1.5, 1.5);
+	this.JumpStart.setTint(myColor);
+}
+
+function highlightOffObject()
+{
+	var myColor = new THREE.Color(1.0, 1.0, 1.0);
+	this.JumpStart.setTint(myColor);
+}
+
 // ALL YOUR NON-JUMPSTART CODE GOES HERE
 // TODO: Make calling the JumpStart.run() command OPTIONAL!! (swap it for a JumpStart.preventDefault())
 function OnReady()
@@ -92,42 +119,15 @@ function OnReady()
 		var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
 
 		// Do something each render tick.
-		myInstance.JumpStart.onTick["mySpinBehavior"] = function()
-		{
-			this.rotateY(1.0 * g_deltaTime);
-		};
+		myInstance.JumpStart.onTick["spinObject"] = spinObject;
 
 		// Do something when it's clicked.
-		myInstance.JumpStart.onCursorDown["myCursorDownBehavior"] = function()
-		{
-			this.scale.multiplyScalar(2.0);
-		};
-
-		myInstance.JumpStart.onCursorUp["myCursorUpBehavior"] = function()
-		{
-			this.scale.multiplyScalar(0.5);
-		};
+		myInstance.JumpStart.onCursorDown["growObject"] = growObject;
+		myInstance.JumpStart.onCursorUp["shrinkObject"] = shrinkObject;
 
 		// Do something when it's hovered over.
-		myInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
-		{
-			/*
-			var crap = "<h2>";
-			for( var x in this.userData.tintColor )
-				crap += x + "<br />";
-
-			document.getElementById("info").innerHTML = crap;
-			*/
-
-			var myColor = new THREE.Color(1.0, 1.0, 0);
-			this.JumpStart.setTint(myColor);
-		};
-
-		myInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
-		{
-			var myColor = new THREE.Color(1.0, 1.0, 1.0);
-			this.JumpStart.setTint(myColor);
-		};
+		myInstance.JumpStart.onCursorEnter["hightlightOnObject"] = hightlightOnObject;
+		myInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
 
 		// We are a networked object!!
 		JumpStart.addSyncedObject(myInstance);
@@ -149,17 +149,8 @@ function OnReady()
 		//myOtherInstance.JumpStart.blocksLOS = false;
 
 		// Do something when it's hovered over.
-		myOtherInstance.JumpStart.onCursorEnter["myCursorEnterBehavior"] = function()
-		{
-			var myColor = new THREE.Color(0, 1, 1);
-			this.JumpStart.setTint(myColor);
-		};
-
-		myOtherInstance.JumpStart.onCursorLeave["myCursorLeaveBehavior"] = function()
-		{
-			var myColor = new THREE.Color(1, 1, 1);
-			this.JumpStart.setTint(myColor);
-		};
+		myOtherInstance.JumpStart.onCursorEnter["hightlightOnObject"] = hightlightOnObject;
+		myOtherInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
 
 		// We are a networked object!!
 		JumpStart.addSyncedObject(myOtherInstance);
