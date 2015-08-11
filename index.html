@@ -18,7 +18,103 @@
 
 <div id="info">JumpStart</div>
 
-<!-- APPEND JUMPSTART.JS TO YOUR BODY ELEMENT -->
+<!-- APPEND JUMPSTART TO YOUR BODY ELEMENT -->
+<script id="JumpStartDebugElements" type="text/html">
+<!-- THE FOLLOWING HTML/CSS IS ONLY INJECTED IF JUMPSTART IS IN DEBUG MODE!! -->
+	<style>
+		.JumpStartDebugIcon
+		{
+			width: 109px;
+			height: 109px;
+			cursor: pointer;
+			margin-top: 5px;
+			margin-bottom: 5px;
+			margin-left: 5px;
+			margin-right: 5px;
+			display: inline-block;
+		}
+
+		.JumpStartDebugIcon:hover
+		{
+			-webkit-filter: brightness(2);
+		}
+
+		.JumpStartDevPane
+		{
+			width: 100%;
+			height: 400px;
+			border: 0;
+			overflow: hidden;
+			font-size: 35px;
+			font-weight: bold;
+			text-align: center;
+		}
+
+		.JumpStartFunctionEntry
+		{
+			width: 100%;
+			height: 100%;
+			overflow-y: auto;
+			font-size: 25px;
+			font-family: Arial;
+			font-weight: bold;
+			background-color: rgba(255, 255, 255, 0.5);
+		}
+
+		.JumpStartInput[type='button']
+		{
+			font-size: 35px;
+			font-face: Arial;
+			font-weight: bold;
+			margin: 10px;
+			cursor: pointer;
+		}
+
+		.JumpStartFunctionSelect
+		{
+			font-size: 25px;
+			font-face: Arial;
+			font-weight: bold;
+			margin-bottom: 10px;
+			cursor: pointer;
+			width: 100%;
+		}
+	</style>
+
+	<script id="JumpStartEditObjectPanel" type="text/html">
+		<div style="position: absolute; top: 100px; left: 0; right: 0; text-align: center;" id="JumpStartDebugPanel">
+			<div style="width: 900px; height: 600px; border: 2px solid #000; border-radius: 20px; background-color: rgba(0, 0, 0, 0.5); display: inline-block;">
+				<div class="JumpStartDebugIcon" style="background-image: url('debugui/ontick.png');" onclick="JumpStart.debugui.editListener('onTick');"></div>
+				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursorenter.png');" onclick="JumpStart.debugui.editListener('onCursorEnter');"></div>
+				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursorleave.png');" onclick="JumpStart.debugui.editListener('onCursorLeave');"></div>
+				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursordown.png');" onclick="JumpStart.debugui.editListener('onCursorDown');"></div>
+				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursorup.png');" onclick="JumpStart.debugui.editListener('onCursorUp');"></div>
+				<div class="JumpStartDebugIcon" style="background-image: url('debugui/onspawn.png');" onclick="JumpStart.debugui.editListener('onSpawn');"></div>
+				<div class="JumpStartDebugIcon" style="background-image: url('debugui/globals.png');"></div>
+				<br clear='all' />
+				<div class="JumpStartDevPane">
+					<div style="display: inline-block; text-align: left;">
+						<ol><li>Choose a listener (above)</li>
+						<li>Code your logic</li>
+						<li>OK to test your work</li>
+						<li>Export to save your app to notepad</li></ol>
+					</div>
+				</div>
+				<div style="float: right;">
+					<input type="button" class="JumpStartInput" value=" Cancel " onclick="JumpStart.debugui.cancelChanges();" />
+					<input type="button" class="JumpStartInput" value=" Apply " onclick="JumpStart.debugui.applyChanges();" />
+					<input type="button" class="JumpStartInput" value=" OK " onclick="JumpStart.debugui.okChanges();" />
+				</div>
+			</div>
+		</div>
+	</script>
+
+	<script id="JumpStartFunctionEdit" type="text/html">
+		<select class="JumpStartFunctionSelect"></select>
+		<textarea class="JumpStartFunctionEntry"></textarea>
+	</script>
+</script>
+
 <script src="JumpStart.js"></script>
 
 <script>
@@ -158,6 +254,77 @@ function OnReady()
 	JumpStart.run();
 }
 
+</script>
+
+<script>
+document.addEventListener("keydown", function(e)
+{
+	//console.log(e.keyCode);
+	if( e.keyCode == 0 || e.keyCode == 32 )
+	{
+		if( JumpStart.debugui && !JumpStart.debugui.editPanelElem )
+		{
+			// Get the object under our crosshair
+			var hitObject = (g_lookHit && g_lookHit.object.parent.hasOwnProperty('JumpStart')) ? g_lookHit.object.parent : null;
+
+			if( !hitObject )
+			{
+				if( JumpStart.debugui.focusedObject )
+					JumpStart.debugui.focusedObject = null;
+			}
+			else if( !JumpStart.debugui.editPanelElem )
+			{
+				JumpStart.debugui.focusedObject = hitObject;
+
+				var templateElem = document.getElementById("JumpStartEditObjectPanel");
+				var container = document.createElement("div");
+				container.className = "JumpStartContainerPanel";
+				container.innerHTML = templateElem.innerHTML;
+
+				document.body.appendChild(container);
+				JumpStart.debugui.editPanelElem = container;
+			}
+			else
+			{
+				console.log("User wants to focus on a different object!!")
+			}
+		}
+	}
+	else if( e.keyCode === 9)
+	{
+		// Let's allow tabs when typing into the code textbox, cha.
+		if( e.target.className !== "JumpStartFunctionEntry" )
+			return;
+
+		// Function taken from http://stackoverflow.com/questions/11076975/insert-text-into-textarea-at-cursor-position-javascript by Rab Nawaz
+		function insertAtCursor(myField, myValue) {
+			var oldCursorPos = myField.selectionStart;
+
+		    //IE support
+		    if (document.selection) {
+		        myField.focus();
+		        sel = document.selection.createRange();
+		        sel.text = myValue;
+		    }
+		    //MOZILLA and others
+		    else if (myField.selectionStart || myField.selectionStart == '0') {
+		        var startPos = myField.selectionStart;
+		        var endPos = myField.selectionEnd;
+		        myField.value = myField.value.substring(0, startPos)
+		            + myValue
+		            + myField.value.substring(endPos, myField.value.length);
+		    } else {
+		        myField.value += myValue;
+		    }
+
+		    var cursorPos = oldCursorPos + 1;
+		    myField.setSelectionRange(cursorPos, cursorPos);
+		}
+
+		insertAtCursor(e.target, "	");
+		e.preventDefault();
+	}
+}, false);
 </script>
 
 </body>

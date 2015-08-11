@@ -65,6 +65,7 @@ function jumpStart()
 	this.pendingObjects = {};
 	this.numSyncedInstances = 0;
 	this.initialSync = true;
+	this.debugui = new jumpStartDebugUI();
 
 	// FIXME: placeholders for real input event handlers.  will be something basic, like unity itself uses.
 	this.pendingClick = false;
@@ -613,6 +614,23 @@ jumpStart.prototype.initiate = function()
 
 		function prepPrecache()
 		{
+			// WE ALSO HAVE SOME STUFF TO "CACHE" IF IN DEBUG MODE...
+			// Inject the css if in debug mode
+			console.log(JumpStart.options.debugMode)
+			if( JumpStart.options.debugMode )
+			{
+				JumpStart.debugui = new jumpStartDebugUI();
+
+				var templateElem = document.getElementById("JumpStartDebugElements");
+				if( templateElem )
+				{
+					var container = document.createElement("div");
+					container.innerHTML = templateElem.innerHTML;
+					document.body.appendChild(container);
+				}
+			}
+
+			// User global, if it exists.
 			if( window.hasOwnProperty("OnPrecache") )
 				OnPrecache();
 			else
@@ -1396,7 +1414,227 @@ jumpStartModelLoader.prototype.onAllModelsLoaded = function(batchName)
 	JumpStart.modelLoader.onModelBatchLoaded(batchName);
 }
 
+function jumpStartDebugUI()
+{
+	this.editPanelElem = null;
+	this.editFunction = null;
+	this.focusedObject = null;
+}
 
+jumpStartDebugUI.prototype.editOnTick = function()
+{
+	var sceneObject = JumpStart.debugui.focusedObject;
+
+	// Grab a couple of pointers...
+	var contentElem = JumpStart.debugui.editPanelElem.getElementsByClassName('JumpStartDevPane')[0];
+
+	while( contentElem.hasChildNodes() )
+	    contentElem.removeChild(contentElem.lastChild);
+
+	// Get the template we want to spawn...
+	var templateElem = document.getElementById('JumpStartFunctionEdit');
+	if( templateElem )
+		contentElem.innerHTML = templateElem.innerHTML;
+	
+	// Get our textarea element
+	var textareaElem = contentElem.getElementsByClassName('JumpStartFunctionEntry')[0];
+
+	// FIXME: Just getting the 'default' event for now.  Should support N events!!
+	var currentListener = null;
+	var x;
+	for( x in sceneObject.JumpStart.onTick )
+	{
+		currentListener = sceneObject.JumpStart.onTick[x];
+		break;
+	}
+
+	textareaElem.value = currentListener;
+};
+
+jumpStartDebugUI.prototype.editListener = function(listenerName)
+{
+	var sceneObject = JumpStart.debugui.focusedObject;
+
+	// Grab a couple of pointers...
+	var contentElem = JumpStart.debugui.editPanelElem.getElementsByClassName('JumpStartDevPane')[0];
+
+	while( contentElem.hasChildNodes() )
+	    contentElem.removeChild(contentElem.lastChild);
+
+	// Get the template we want to spawn...
+	var templateElem = document.getElementById('JumpStartFunctionEdit');
+	if( templateElem )
+		contentElem.innerHTML = templateElem.innerHTML;
+	
+	// Get our textarea element
+	var textareaElem = contentElem.getElementsByClassName('JumpStartFunctionEntry')[0];
+
+	// FIXME: Just getting the 'default' event for now.  Should support N events!!
+	var currentListener = null;
+	var funcName = null;
+	var funcArgs = null;
+	var funcMeat = null;
+	var x;
+	for( x in sceneObject.JumpStart[listenerName] )
+	{
+		currentListener = sceneObject.JumpStart[listenerName][x];
+		funcName = x;
+		break;
+	}
+
+	// Strip some stuff from this listener...
+	var textareaContent = "" + currentListener;
+
+	var found = textareaContent.indexOf("function ");
+	if( found === 0 )
+	{
+		found = textareaContent.indexOf("(");
+		if( found >= 0 )
+		{
+			funcArgs = textareaContent.substring(found + 1);
+			found = funcArgs.indexOf(")");
+			if( found >= 0 )
+				funcArgs = funcArgs.substring(0, found);
+		}
+
+		found = textareaContent.indexOf("{");
+		if( found >= 0 )
+		{
+			funcMeat = textareaContent.substring(found+2);
+			found = funcMeat.lastIndexOf("}");
+			if( found >= 0 )
+				funcMeat = funcMeat.substring(0, found-1);
+		}
+	}
+	/*
+	else
+	{
+		funcArgs = textareaContect.substring(found+12);
+
+		found = textareaContent.indexOf("{");
+		if( found >= 0 )
+			funcMeat = "	" + functextareaContentArgs.substring(found+1);
+
+		found = funcMeat.lastIndexOf("}");
+		if( found >= 0 )
+			funcMeat = funcMeat.substring(0, found);
+	}
+	*/
+
+	textareaElem.value = funcMeat;
+
+	JumpStart.debugui.editFunction = {'name': funcName, 'args': funcArgs, 'meat': funcMeat, 'type': listenerName};
+
+	// Set the listener drop down list (for N listener support)
+	var select = contentElem.getElementsByClassName('JumpStartFunctionSelect')[0];
+	var option = document.createElement("option");
+
+	var upperListenerName = listenerName;
+	var firstLetter = upperListenerName.substring(0, 1).toUpperCase();
+	upperListenerName = firstLetter + upperListenerName.substring(1);
+	option.text = upperListenerName + ": " + funcName + "(" + funcArgs + ")";
+	select.appendChild(option);
+};
+/*
+jumpStartDebugUI.prototype.editOnCursorEnter = function()
+{
+	var sceneObject = JumpStart.debugui.focusedObject;
+
+	// Grab a couple of pointers...
+	var contentElem = JumpStart.debugui.editPanelElem.getElementsByClassName('JumpStartDevPane')[0];
+
+	while( contentElem.hasChildNodes() )
+	    contentElem.removeChild(contentElem.lastChild);
+
+	// Get the template we want to spawn...
+	var templateElem = document.getElementById('JumpStartFunctionEdit');
+	if( templateElem )
+		contentElem.innerHTML = templateElem.innerHTML;
+	
+	// Get our textarea element
+	var textareaElem = contentElem.getElementsByClassName('JumpStartFunctionEntry')[0];
+
+	// FIXME: Just getting the 'default' event for now.  Should support N events!!
+	var currentListener = null;
+	var x;
+	for( x in sceneObject.JumpStart.onCursorEnter )
+	{
+		currentListener = sceneObject.JumpStart.onCursorEnter[x];
+		break;
+	}
+
+	// Strip some stuff from this listener...
+	var textareaContent = "" + currentListener;
+
+	var funcName = null;
+	var found = textareaContent.indexOf("function ");
+	if( found === 0 )
+	{
+		// function [x] {
+		funcName = textareaContent.substring(9);
+		found = funcName.indexOf("(");
+		if( found >= 0 )
+			funcName = funcName.substring(0, found);
+	}
+
+	var funcArgs = null;
+	found = textareaContent.indexOf("(");
+	if( found >= 0 )
+	{
+		funcArgs = textareaContent.substring(found + 1);
+		found = funcArgs.indexOf(")");
+		if( found >= 0 )
+			funcArgs = funcArgs.substring(0, found);
+	}
+
+	var funcMeat = null;
+	found = textareaContent.indexOf("{");
+	if( found >= 0 )
+	{
+		funcMeat = textareaContent.substring(found+2);
+		found = funcMeat.lastIndexOf("}");
+		if( found >= 0 )
+			funcMeat = funcMeat.substring(0, found-1);
+	}
+
+	textareaElem.value = funcMeat;
+
+	this.editFunction = {'name': funcName, 'args': funcArgs, 'meat': funcMeat};
+};
+*/
+jumpStartDebugUI.prototype.cancelChanges = function()
+{
+	//var victim = document.body.getElementsByClassName("JumpStartContainerPanel")[0];
+	var victim = JumpStart.debugui.editPanelElem;
+	document.body.removeChild(victim);
+
+	JumpStart.debugui.editPanelElem = null;
+	JumpStart.debugui.focusedObject = null;
+	JumpStart.debugui.editFunction = null;
+};
+
+jumpStartDebugUI.prototype.applyChanges = function()
+{
+	var textareaElem = JumpStart.debugui.editPanelElem.getElementsByClassName('JumpStartFunctionEntry')[0];
+	textareaContent = textareaElem.value;
+
+	var editFunction = JumpStart.debugui.editFunction;
+
+	var funcArgs = editFunction.args;
+	if( !funcArgs )
+		funcArgs = "";
+
+	var code = editFunction.name + " = function(" + funcArgs + ") { " + textareaContent + " };";
+	eval(code);
+	JumpStart.debugui.focusedObject.JumpStart[editFunction.type][editFunction.name] = window[editFunction.name];
+
+	var victim = JumpStart.debugui.editPanelElem;
+	document.body.removeChild(victim);
+
+	JumpStart.debugui.editPanelElem = null;
+	JumpStart.debugui.focusedObject = null;
+	JumpStart.debugui.editFunction = null;
+};
 
 
 // Method: hash
