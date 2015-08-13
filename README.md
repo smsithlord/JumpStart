@@ -49,10 +49,7 @@ work on 2 of my computers.)
 - (OPTIONAL) Define an onTick global function that gets called every render tick.
 - Define an onReady global function that gets called when your app is ready to run.
 - Spawn new objects using JumpStart.spawnInstance([String object])
-<<<<<<< HEAD
 - Call JumpStart.run() at the end of your onReady function to begin the simulation.
 
 #### Known Bugs
 - The first user to enter a room in networked web-mode is asked to enter their name twice
-=======
->>>>>>> origin/master
