@@ -112,7 +112,7 @@ function onReady()
 
 	// REPLICATE THE LISTENERS FROM THE CROSSHAIR BECAUSE ALTSPACE DOES NOT CARE ABOUT OUR blocksLOS PROPERTY!!
 	g_previewBlock.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
-//	g_previewBlock.addEventListener("cursorup", function(e) { JumpStart.onCursorUp(e); });
+	g_previewBlock.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
 
 	// Do something each render tick.
 	g_previewBlock.JumpStart.onTick = function()

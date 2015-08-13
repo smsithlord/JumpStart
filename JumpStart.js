@@ -73,6 +73,7 @@ function jumpStart()
 
 	// FIXME: placeholders for real input event handlers.  will be something basic, like unity itself uses.
 	this.pendingClick = false;
+	this.pendingClickUp = false;
 	this.pendingEventA = null;
 
 	this.models = [];
@@ -751,7 +752,7 @@ jumpStart.prototype.initiate = function()
 		if( !JumpStart.webMode )
 		{
 			crosshair.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
-//			crosshair.addEventListener("cursorup", function(e) { JumpStart.onCursorUp(e); });
+			crosshair.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
 		}
 
 		function prepPrecache()
@@ -795,7 +796,7 @@ jumpStart.prototype.initiate = function()
 					for( x in members )
 						count++;
 
-					if( count > 1 )
+					if( count > 0 )
 						JumpStart.localUser.firstUser = false;
 
 					// Now we're ready for game logic
@@ -955,6 +956,11 @@ jumpStart.prototype.onTick = function()
 	{
 		this.onCursorDown();
 		this.pendingClick = false;
+	}
+	else if( this.pendingClickUp )
+	{
+		this.onCursorUp();
+		this.pendingClickUp = false;
 	}
 
 	if( this.pendingEventA )
