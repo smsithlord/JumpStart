@@ -1,0 +1,45 @@
+<!-- Author: Elijah Newman-Gomez -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+		<title>JumpStart Minimal</title>
+
+		<script src="../lib/three.js"></script>
+		<script src="../lib/firebase.js"></script>
+		<script src="../src/AltOBJMTLLoader.js"></script>
+		<script src="../lib/OBJMTLLoader.js"></script>
+		<script src="../lib/MTLLoader.js"></script>
+		<script src="../src/sync/FirebaseSync.js"></script>
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+</head>
+<body>
+
+<div id="info">JumpStart Minimal</div>
+
+<!-- APPEND JUMPSTART TO YOUR BODY ELEMENT -->
+<script src="JumpStart.js"></script>
+
+<script>
+function onReady()
+{
+	// JumpStart can only use models IT loads
+	JumpStart.loadModels("models/JumpStart/jewel.obj").then(function() {
+
+		// After model has loaded, spawn an object using it
+		// NOTE: The returned THREE.JS object is extended with a JumpStart sub-object
+		var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
+
+		// Give it a SPIN behavior
+		// NOTE: JumpStart event listeners go onto JumpStart sub-object
+		myInstance.JumpStart.onTick = function() {
+			this.rotateY(1.0 * g_deltaTime);
+		};
+
+		// Now start the simulation
+		JumpStart.run();
+	});
+}
+</script>
+
+</body>
+</html>

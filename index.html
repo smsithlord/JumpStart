@@ -143,9 +143,9 @@ var myOptions =
 	},
 	"firebase":
 	{
-//		"rootUrl": "https://jump-start.firebaseio.com/",
-//		"appId": "JumpStart",
-		"params": { "TRACE": false }
+		//"rootUrl": "https://jump-start.firebaseio.com/",
+		//"appId": "JumpStart",
+		"params": { "AUTOSYNC": false, "TRACE": false }
 	}
 };
 JumpStart.setOptions(myOptions);
@@ -154,20 +154,20 @@ JumpStart.setOptions(myOptions);
 // DEFINE JUMPSTART'S TWO CALLBACKS
 
 // PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
-function OnPrecache()
+function onPrecache()
 {
 	// Precache anything that your app needs.
 	var myModels = ["models/JumpStart/jewel.obj", "models/JumpStart/grass.obj"];
 	JumpStart.loadModels(myModels).then(function() {
 
 		// Finally call JumpStart.doneCaching() to signify you are done.
-		// Your OnReady global function wll be called next.
-		JumpStart.doneCashing();
+		// Your onReady global function wll be called next.
+		JumpStart.doneCaching();
 	});
 }
 
 // PURPOSE: Gets called every time the scene is about to be rendered.
-function OnTick()
+function onTick()
 {
 	// do work
 }
@@ -185,6 +185,10 @@ function spinObject()
 function growObject()
 {
 	this.scale.multiplyScalar(2.0);
+	this.JumpStart.modelFile = "testing";
+	this.userData.syncData.modelFile = "testing";
+
+	JumpStart.syncObject(this);
 }
 
 function shrinkObject()
@@ -206,7 +210,7 @@ function highlightOffObject()
 
 // ALL YOUR NON-JUMPSTART CODE GOES HERE
 // TODO: Make calling the JumpStart.run() command OPTIONAL!! (swap it for a JumpStart.preventDefault())
-function OnReady()
+function onReady()
 {
 	// The first user
 	if( g_localUser.firstUser )
@@ -216,6 +220,9 @@ function OnReady()
 
 		// Do something each render tick.
 		myInstance.JumpStart.onTick["spinObject"] = spinObject;
+
+		// DO something on spawn
+		myInstance.JumpStart.onSpawn["prepJewel"] = prepJewel;
 
 		// Do something when it's clicked.
 		myInstance.JumpStart.onCursorDown["growObject"] = growObject;
@@ -249,6 +256,13 @@ function OnReady()
 	}
 
 
+	var instance = JumpStart.spawnCursorPlane({
+		"position": new THREE.Vector3(-40, 10.0, 0).add(g_worldOffset),
+		"rotation": new THREE.Vector3(0, 0, 0),
+		"width": "33.3",
+		"height": "33.3"
+	});
+
 
 	// START SIMULATION
 	JumpStart.run();
@@ -257,6 +271,14 @@ function OnReady()
 </script>
 
 <script>
+function prepJewel(isLocal, isInitial)
+{
+	this.JumpStart.addDataListener("modelFile", function(oldValue, value, isLocal) {
+		console.log("hhhhhoooooollllaaaaaaa");
+		console.log(arguments);
+	});
+}
+
 document.addEventListener("keydown", function(e)
 {
 	//console.log(e.keyCode);

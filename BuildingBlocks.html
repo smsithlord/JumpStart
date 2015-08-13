@@ -58,7 +58,7 @@ JumpStart.setOptions(myOptions);
 // DEFINE JUMPSTART'S TWO CALLBACKS
 
 // PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
-function OnPrecache()
+function onPrecache()
 {
 	// Precache anything that your app needs.
 	var myModels = [
@@ -73,13 +73,13 @@ function OnPrecache()
 	JumpStart.loadModels(myModels).then(function() {
 
 		// Finally call JumpStart.doneCaching() to signify you are done.
-		// Your OnReady global function wll be called next.
-		JumpStart.doneCashing();
+		// Your onReady global function wll be called next.
+		JumpStart.doneCaching();
 	});
 }
 
 // PURPOSE: Gets called every time the scene is about to be rendered.
-function OnTick()
+function onTick()
 {
 	// do work
 }
@@ -98,7 +98,7 @@ var g_CurrentBlockType = 0;
 var g_BlockTypes = ["models/BuildingBlocks/cube.obj", "models/BuildingBlocks/grass.obj", "models/BuildingBlocks/dirt.obj", "models/BuildingBlocks/jewel.obj", "models/BuildingBlocks/bricks.obj"];
 
 // TODO: Make calling the JumpStart.run() command OPTIONAL!! (swap it for a JumpStart.preventDefault())
-function OnReady()
+function onReady()
 {
 	// The first user
 	if( g_localUser.firstUser )
@@ -109,6 +109,10 @@ function OnReady()
 	// PREVIEW BLOCK
 	g_previewBlock = JumpStart.spawnInstance("models/BuildingBlocks/cube_cage.obj");
 	g_previewBlock.JumpStart.blocksLOS = false;
+
+	// REPLICATE THE LISTENERS FROM THE CROSSHAIR BECAUSE ALTSPACE DOES NOT CARE ABOUT OUR blocksLOS PROPERTY!!
+	g_previewBlock.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
+//	g_previewBlock.addEventListener("cursorup", function(e) { JumpStart.onCursorUp(e); });
 
 	// Do something each render tick.
 	g_previewBlock.JumpStart.onTick = function()
@@ -143,7 +147,7 @@ function OnReady()
 			if( g_lookHit.object.hasOwnProperty('isCursorPlane') )
 			{
 				hitPlane = g_lookHit.object;
-				if( hitPlane.position.y === g_worldOffset.y )
+				if( hitPlane === g_floorPlane )
 				{
 					// Apply FLOOR gridsnap
 					var snappedPosition = new THREE.Vector3().copy(g_lookHit.scaledPoint);
@@ -366,12 +370,12 @@ document.addEventListener("keydown", function(e)
 	}
 	else if( e.keyCode == 90 )
 		JumpStart.pendingEventA = function() { CycleBlock(-1); };
+	/*
 	else if( e.keyCode == 67 )
 	{
 		JumpStart.pendingClick = true;
-		console.log("okay");
 	}
-
+	*/
 }, false);
 
 </script>
