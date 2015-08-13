@@ -102,7 +102,7 @@ function jumpStart()
 		{
 			"rootUrl": "",
 			"appId": "",
-			"params": { "AUTOSYNC": false, "TRACE": false }
+			"params": { "AUTOSYNC": true, "TRACE": false }
 		}
 	};
 
