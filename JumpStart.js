@@ -1871,7 +1871,7 @@ jumpStart.prototype.addSyncedObject = function(sceneObject, userSyncData, userKe
 //	console.log("Added synced object with key " + key);
 };
 
-jumpState.prototype.makeStatic = function(sceneObject)
+jumpStart.prototype.makeStatic = function(sceneObject)
 {
 	sceneObject.JumpStart.physicsState = 0;
 };
