@@ -13,6 +13,8 @@
 		<!-- <script src="../src/cursor/CursorEvents.js"></script> -->
 		<!-- <script src="../src/cursor/AltObjectControls.js"></script> -->
 		<link rel="stylesheet" type="text/css" href="myStyle.css">
+
+		<!--<script src="esprima.js"></script>-->
 </head>
 <body>
 
@@ -185,10 +187,6 @@ function spinObject()
 function growObject()
 {
 	this.scale.multiplyScalar(2.0);
-	this.JumpStart.modelFile = "testing";
-	this.userData.syncData.modelFile = "testing";
-
-	JumpStart.syncObject(this);
 }
 
 function shrinkObject()
@@ -233,7 +231,7 @@ function onReady()
 		myInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
 
 		// We are a networked object!!
-		JumpStart.addSyncedObject(myInstance);
+		myInstance.JumpStart.sync();
 
 
 
@@ -252,7 +250,7 @@ function onReady()
 		myOtherInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
 
 		// We are a networked object!!
-		JumpStart.addSyncedObject(myOtherInstance);
+		myOtherInstance.JumpStart.sync();
 	}
 
 

@@ -59,8 +59,8 @@ function onReady()
 		// NOTE: All networked event listeners must be global functions and defined as follows
 		myInstance.JumpStart.onTick["myJewelTickLogic"] = myJewelTickLogic;
 
-		// Declare this object as networked
-		JumpStart.addSyncedObject(myInstance);
+		// Declare this object as networked & sync its initial position
+		myInstance.JumpStart.sync();
 	}
 
 	// Now start the simulation

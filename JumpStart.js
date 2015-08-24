@@ -62,6 +62,10 @@ function jumpStart()
 	this.crosshair = null;
 	this.firebaseSync = null;
 	this.syncedInstances = {};
+
+	// Any properties of a scene object's JumpStart sub-object that are NOT whitelisted get auto-synced.
+	this.noSyncProperties = ["addDataListener", "setTint", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
+
 	this.networkReady = false;	// Know if we are networked & ready to go.
 	this.localDataListeners = {};	// Need to simulate network activity locally
 	this.pendingObjects = {};
@@ -70,6 +74,8 @@ function jumpStart()
 	this.debugui = new jumpStartDebugUI();
 	this.pendingDataListeners = [];
 	this.floorPlane = {};
+
+	this.cachedSounds = {};
 
 	// FIXME: placeholders for real input event handlers.  will be something basic, like unity itself uses.
 	this.pendingClick = false;
@@ -90,7 +96,13 @@ function jumpStart()
 			"cursorUp": true,
 			"cursorEnter": true,
 			"cursorLeave": true,
-			"cursorMove": true
+			"cursorMove": true,
+			"bottomPlane": true,
+			"topPlane": true,
+			"northPlane": true,
+			"southPlane": true,
+			"eastPlane": true,
+			"westPlane": true
 		},
 		"camera":
 		{
@@ -145,17 +157,19 @@ jumpStart.prototype.onFirebaseAddObject = function(key, syncData)
 		return;	// We already exist. (THIS SHOULD NEVER HAPPEN?? Probably not needed.)
 
 	// Make sure we are ready to spawn stuff.
-	if( !this.initialSync )
-		this.networkSpawn(key, syncData, false);
-	else if( !this.pendingObjects.hasOwnProperty(key) )
+//	if( !this.initialSync )
+//		this.networkSpawn(key, syncData, false);
+	if( !this.pendingObjects.hasOwnProperty(key) )
 		this.pendingObjects[key] = syncData;
 };
 
 jumpStart.prototype.onFirebaseRemoveObject = function(key, syncData)
 {
-	console.log("removal detected.");
 	var object = this.syncedInstances[key];
-// g_Scene.remove(object);
+
+	if( !object )
+		return;
+
 	this.removeSyncedObject(object, false);
 
 //	delete g_SyncedInstances[key];
@@ -170,8 +184,31 @@ jumpStart.prototype.onFirebaseRemoveObject = function(key, syncData)
 
 jumpStart.prototype.syncObject = function(sceneObject)
 {
+	this.prepEventListeners(sceneObject);
+
+	if( !this.syncedInstances.hasOwnProperty(sceneObject.JumpStart.key) )
+	{
+		this.addSyncedObject(sceneObject);
+		return;
+	}
+
 	if( this.networkReady )
-		this.firebaseSync.saveObject(sceneObject);
+	{
+		// First, copy all updated values from JumpStart into userData.syncData
+		var x;
+		for( x in sceneObject.JumpStart )
+		{
+			if( this.noSyncProperties.indexOf(x) !== -1 )
+				continue;
+
+			sceneObject.userData.syncData[x] = sceneObject.JumpStart[x];
+		}
+
+		if( this.networkReady )
+			this.firebaseSync.saveObject(sceneObject);
+	}
+
+
 //	else // DO THIS ALWAYS BECAUSE DATA LISTNERES ARE NOT CALLED ON THE LOCAL PC!!
 //	{
 		// Otherwise, simulate shit for the data listeners...
@@ -225,17 +262,6 @@ jumpStart.prototype.processPendingDataListeners = function()
 		if( this.options.firebase.appId === "" || this.options.firebase.rootUrl === "" )
 			continue;
 
-		var isSynced = false;
-		var x;
-		for( x in this.syncedInstances )
-		{
-			if( this.syncedInstances[x] === args.sceneObject )
-			{
-				isSynced = true;
-				break;
-			}
-		}
-
 		//this.firebaseSync.addDataListener(args.sceneObject, args.property, args.callback);
 		this.firebaseSync.addDataListener(args.sceneObject, args.property, "value", function(snapshot, eventType) { JumpStart.onDataChangeHandler(snapshot, args.sceneObject, args.callback); });
 	}
@@ -248,7 +274,6 @@ jumpStart.prototype.onDataChangeHandler = function(firebaseSnapshot, sceneObject
 		callback.call(sceneObject, sceneObject.JumpStart[property], firebaseSnapshot.val(), false);
 }
 
-// FIXME: The initiate function should be using this method to spawn the spoofed enclosure walls!!
 jumpStart.prototype.spawnCursorPlane = function(userParams)
 {
 	// Default params
@@ -551,6 +576,11 @@ jumpStart.prototype.processCursorMove = function()
 	}
 
 	g_lookHit = this.localUser.lookHit;
+
+	if( !this.localUser.lookHit )
+		this.crosshair.scale.set(0.0001, 0.0001, 0.0001);
+	else
+		this.crosshair.scale.set(1, 1, 1);
 };
 
 jumpStart.prototype.initiate = function()
@@ -565,18 +595,24 @@ jumpStart.prototype.initiate = function()
 	if( this.webMode )
 	{
 		//this.enclosure = { "innerWidth": window.innerWidth / 3.0, "innerHeight": window.innerHeight / 3.0, "innerDepth": window.innerWidth / 3.0 };
+		var commonVal = Math.round(1024 / 2.5);
 		this.enclosure = {
-			"innerWidth": Math.round(1024 / 2.5),
-			"innerHeight": Math.round(1024 / 2.5),
-			"innerDepth": Math.round(1024 / 2.5),
-			"adjustedWidth": Math.round(1024 / 2.5),
-			"adjustedHeight": Math.round(1024 / 2.5),
-			"adjustedDepth": Math.round(1024 / 2.5)
+			"innerWidth": commonVal,
+			"innerHeight": commonVal,
+			"innerDepth": commonVal,
+			"adjustedWidth": commonVal,
+			"adjustedHeight": commonVal,
+			"adjustedDepth": commonVal,
+			"scaledWidth": Math.round(commonVal * (1 / this.worldScale)),
+			"scaledHeight": Math.round(commonVal * (1 / this.worldScale)),
+			"scaledDepth": Math.round(commonVal * (1 / this.worldScale))
 		};
 		this.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser" };
 
-		if( this.options.debugMode )
-			this.localUser.displayName = "Flynn";
+		this.localUser.displayName = "WebUser" + Date.now();
+//		if( this.options.debugMode )
+//			this.localUser.displayName = "Flynn";
+		/* don't ask until after init
 		else
 		{
 			while( this.localUser.displayName === "WebUser" || this.localUser.displayName === "" )
@@ -588,6 +624,7 @@ jumpStart.prototype.initiate = function()
 				return;
 			}
 		}
+		*/
 	}
 	else
 	{
@@ -597,6 +634,10 @@ jumpStart.prototype.initiate = function()
 		this.enclosure.adjustedWidth = Math.round(this.enclosure.innerWidth * JumpStart.worldScale);
 		this.enclosure.adjustedHeight = Math.round(this.enclosure.innerWidth * JumpStart.worldScale);
 		this.enclosure.adjustedDepth = Math.round(this.enclosure.innerDepth * JumpStart.worldScale);
+
+		this.enclosure.scaledWidth = Math.round(this.enclosure.innerWidth * (1 / JumpStart.worldScale));
+		this.enclosure.scaledHeight = Math.round(this.enclosure.innerWidth * (1 / JumpStart.worldScale));
+		this.enclosure.scaledDepth = Math.round(this.enclosure.innerDepth * (1 / JumpStart.worldScale));
 	}
 
 //	this.enclosure.bounds = {};
@@ -659,57 +700,78 @@ jumpStart.prototype.initiate = function()
 		this.scene.addEventListener( "cursormove", function(e) { JumpStart.onCursorMove(e); });
 
 		if( this.options.legacyLoader )
-			this.renderer = altspace.getThreeJSRenderer();
+			this.renderer = altspace.getThreeJSRenderer({version:'0.1.0'});
 		else
 			this.renderer = altspace.getThreeJSRenderer({version:'0.2.0'});
 	}
 
 	// Create some invisible planes for raycasting.
-	var bottomPlane = JumpStart.spawnCursorPlane({
-		"position": this.worldOffset,
-		"rotate": new THREE.Vector3(-Math.PI / 2.0, 0, 0),
-		"width": this.enclosure.innerWidth,
-		"height": this.enclosure.innerDepth
-	});
+	if( this.options.enabledCursorEvents.bottomPlane )
+	{
+		console.log("creating bottom plane");
+		var pos = new THREE.Vector3().copy(this.worldOffset);
+		pos.y += 0.5;
 
-	// Save this for users to use
-	this.floorPlane = bottomPlane;
-//	g_floorPlane = bottomPlane;
+		var bottomPlane = JumpStart.spawnCursorPlane({
+			"position": pos,
+			"rotate": new THREE.Vector3(-Math.PI / 2.0, 0, 0),
+			"width": this.enclosure.innerWidth,
+			"height": this.enclosure.innerDepth
+		});
 
-	var topPlane = JumpStart.spawnCursorPlane({
-		"position": new THREE.Vector3(this.worldOffset.x, -this.worldOffset.y, this.worldOffset.z),
-		"rotate": new THREE.Vector3(Math.PI / 2.0, 0, 0),
-		"width": this.enclosure.innerWidth,
-		"height": this.enclosure.innerDepth
-	});
+		// Save this for users to use
+		this.floorPlane = bottomPlane;
+	}
 
-	var northPlane = JumpStart.spawnCursorPlane({
-		"position": new THREE.Vector3(0, 0, this.worldOffset.y),
-		"rotate": new THREE.Vector3(0, 0, 0),
-		"width": this.enclosure.innerWidth,
-		"height": this.enclosure.innerDepth
-	});
+	if( this.options.enabledCursorEvents.topPlane )
+	{
+		var topPlane = JumpStart.spawnCursorPlane({
+			"position": new THREE.Vector3(this.worldOffset.x, -this.worldOffset.y, this.worldOffset.z),
+			"rotate": new THREE.Vector3(Math.PI / 2.0, 0, 0),
+			"width": this.enclosure.innerWidth,
+			"height": this.enclosure.innerDepth
+		});
+	}
 
-	var southPlane = JumpStart.spawnCursorPlane({
-		"position": new THREE.Vector3(0, 0, -this.worldOffset.y),
-		"rotate": new THREE.Vector3(0, Math.PI, 0),
-		"width": this.enclosure.innerWidth,
-		"height": this.enclosure.innerDepth
-	});
+	if( this.options.enabledCursorEvents.northPlane )
+	{
+		var northPlane = JumpStart.spawnCursorPlane({
+			"position": new THREE.Vector3(0, 0, this.worldOffset.y),
+			"rotate": new THREE.Vector3(0, 0, 0),
+			"width": this.enclosure.innerWidth,
+			"height": this.enclosure.innerDepth
+		});
+	}
 
-	var westPlane = JumpStart.spawnCursorPlane({
-		"position": new THREE.Vector3(this.worldOffset.y, 0, 0),
-		"rotate": new THREE.Vector3(0, Math.PI / 2.0, 0),
-		"width": this.enclosure.innerWidth,
-		"height": this.enclosure.innerDepth
-	});
+	if( this.options.enabledCursorEvents.southPlane )
+	{
+		var southPlane = JumpStart.spawnCursorPlane({
+			"position": new THREE.Vector3(0, 0, -this.worldOffset.y),
+			"rotate": new THREE.Vector3(0, Math.PI, 0),
+			"width": this.enclosure.innerWidth,
+			"height": this.enclosure.innerDepth
+		});
+	}
 
-	var eastPlane = JumpStart.spawnCursorPlane({
-		"position": new THREE.Vector3(-this.worldOffset.y, 0, 0),
-		"rotate": new THREE.Vector3(0, -Math.PI / 2.0, 0),
-		"width": this.enclosure.innerWidth,
-		"height": this.enclosure.innerDepth
-	});
+	if( this.options.enabledCursorEvents.westPlane )
+	{
+		var westPlane = JumpStart.spawnCursorPlane({
+			"position": new THREE.Vector3(this.worldOffset.y, 0, 0),
+			"rotate": new THREE.Vector3(0, Math.PI / 2.0, 0),
+			"width": this.enclosure.innerWidth,
+			"height": this.enclosure.innerDepth
+		});
+	}
+
+	if( this.options.enabledCursorEvents.eastPlane )
+	{
+		var eastPlane = JumpStart.spawnCursorPlane({
+			"position": new THREE.Vector3(-this.worldOffset.y, 0, 0),
+			"rotate": new THREE.Vector3(0, -Math.PI / 2.0, 0),
+			"width": this.enclosure.innerWidth,
+			"height": this.enclosure.innerDepth
+		});
+	}
 
 	g_localUser = this.localUser;
 	g_worldOffset = this.worldOffset;
@@ -795,7 +857,7 @@ jumpStart.prototype.initiate = function()
 					var x;
 					for( x in members )
 						count++;
-
+console.log("Member count: " + count);
 					if( count > 0 )
 						JumpStart.localUser.firstUser = false;
 
@@ -830,7 +892,87 @@ jumpStart.prototype.doneCaching = function()
 
 jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 {
+	// 1. Copy everything that exists in syncData into JumpStart
+	// 2. If there are any event listeners named, apply them to the object.
+
+	if( this.pendingObjects.hasOwnProperty(key) )
+		delete this.pendingObjects[key];
+
 	var instance = this.spawnInstance(syncData.modelFile, {'key': key, 'syncData': syncData});
+
+	this.updateJumpStartProperties(instance, syncData);
+
+	// If the object has a spawn listener, NOW is the time...
+	for( x in instance.JumpStart.onSpawn )
+		instance.JumpStart.onSpawn[x].call(instance, false, isInitial);	// FIXME: This isInital flag is bullshit!!
+
+	instance.JumpStart.key = key;
+	this.syncedInstances[key] = instance;
+	this.numSyncedInstances++;
+
+	return instance;
+};
+
+jumpStart.prototype.updateJumpStartProperties = function(instance, syncData)
+{
+	var needsAppliedForce = false;
+
+	var x, y;
+	for( x in syncData )
+	{
+		if( !instance.JumpStart.hasOwnProperty(x) && typeof syncData[x] === 'object' )
+		{
+			// Try to determine which type of object it is
+			if( syncData[x].hasOwnProperty('x') && syncData[x].hasOwnProperty('y') && syncData[x].hasOwnProperty('z') )
+				instance.JumpStart[x] = new THREE.Vector3();
+			else
+				instance.JumpStart[x] = {};
+		}
+
+		if( typeof syncData[x] === 'object' )
+		{
+			for( y in syncData[x] )
+				instance.JumpStart[x][y] = syncData[x][y];
+		}
+		else
+		{
+			// Apply any force that is needed
+			if( x === "physicsState" && syncData[x] !== instance.JumpStart.physicsState )
+				needsAppliedForce = true;
+
+			// Copy the value over like regular
+			instance.JumpStart[x] = syncData[x];
+		}
+	}
+
+	if( needsAppliedForce && instance.JumpStart.hasOwnProperty("velocity") )
+		instance.JumpStart.velocity.add(instance.JumpStart.appliedForce);
+
+	if( syncData.hasOwnProperty('networkRemovedListeners') )
+	{
+		for( x in syncData.networkRemovedListeners )
+		{
+			// Just replace ALL listeners, and we'll end up as the one named 'default'.
+			if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+			{
+				instance.JumpStart.onNetworkRemoved = {};
+				instance.JumpStart.onNetworkRemoved[x] = window[x];
+			}
+
+			break;
+		}
+	}
+	else
+	{
+		// If the object has an onSpawn listener that isn't named default, then clear it!
+		for( x in instance.JumpStart.onNetworkRemoved )
+		{
+			if( x !== "default" )
+				instance.JumpStart.onNetworkRemoved = {};
+
+			break;
+		}
+	}
 
 	if( syncData.hasOwnProperty('spawnListeners') )
 	{
@@ -842,6 +984,17 @@ jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 				instance.JumpStart.onSpawn = {};
 				instance.JumpStart.onSpawn[x] = window[x];
 			}
+
+			break;
+		}
+	}
+	else
+	{
+		// If the object has an onSpawn listener that isn't named default, then clear it!
+		for( x in instance.JumpStart.onSpawn )
+		{
+			if( x !== "default" )
+				instance.JumpStart.onSpawn = {};
 
 			break;
 		}
@@ -861,6 +1014,17 @@ jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 			break;
 		}
 	}
+	else
+	{
+		// If the object has an onSpawn listener that isn't named default, then clear it!
+		for( x in instance.JumpStart.onTick )
+		{
+			if( x !== "default" )
+				instance.JumpStart.onTick = {};
+
+			break;
+		}
+	}
 
 	if( syncData.hasOwnProperty('cursorDownListeners') )
 	{
@@ -872,6 +1036,17 @@ jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 				instance.JumpStart.onCursorDown = {};
 				instance.JumpStart.onCursorDown[x] = window[x];
 			}
+
+			break;
+		}
+	}
+	else
+	{
+		// If the object has an onSpawn listener that isn't named default, then clear it!
+		for( x in instance.JumpStart.onCursorDown )
+		{
+			if( x !== "default" )
+				instance.JumpStart.onCursorDown = {};
 
 			break;
 		}
@@ -891,6 +1066,17 @@ jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 			break;
 		}
 	}
+	else
+	{
+		// If the object has an onSpawn listener that isn't named default, then clear it!
+		for( x in instance.JumpStart.onCursorUp )
+		{
+			if( x !== "default" )
+				instance.JumpStart.onCursorUp = {};
+
+			break;
+		}
+	}
 
 	if( syncData.hasOwnProperty('cursorEnterListeners') )
 	{
@@ -902,6 +1088,17 @@ jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 				instance.JumpStart.onCursorEnter = {};
 				instance.JumpStart.onCursorEnter[x] = window[x];
 			}
+
+			break;
+		}
+	}
+	else
+	{
+		// If the object has an onSpawn listener that isn't named default, then clear it!
+		for( x in instance.JumpStart.onCursorEnter )
+		{
+			if( x !== "default" )
+				instance.JumpStart.onCursorEnter = {};
 
 			break;
 		}
@@ -921,15 +1118,17 @@ jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 			break;
 		}
 	}
+	else
+	{
+		// If the object has an onSpawn listener that isn't named default, then clear it!
+		for( x in instance.JumpStart.onCursorLeave )
+		{
+			if( x !== "default" )
+				instance.JumpStart.onCursorLeave = {};
 
-
-	// If the object has a spawn listener, NOW is the time...
-	for( x in instance.JumpStart.onSpawn )
-		instance.JumpStart.onSpawn[x].call(instance, false, isInitial);	// FIXME: This isInital flag is bullshit!!
-
-	this.syncedInstances[x] = instance;
-
-	return instance;
+			break;
+		}
+	}
 };
 
 jumpStart.prototype.run = function()
@@ -940,8 +1139,107 @@ jumpStart.prototype.run = function()
 
 jumpStart.prototype.onTick = function()
 {
+	function recursive(parentObject)
+	{
+		var sceneObject;
+		var x, y, z;
+		for( x in parentObject.children )
+		{
+			sceneObject = parentObject.children[x];
+			if( !sceneObject.hasOwnProperty("JumpStart") )
+				continue;
+
+			// Fix up anything the local app dev assigned to listeners
+			this.prepEventListeners(sceneObject);
+
+			// Sync current state with network state
+			//if( sceneObject.userData.hasOwnProperty("syncData") )
+			if( sceneObject.JumpStart.hasOwnProperty("key") && typeof this.syncedInstances[sceneObject.JumpStart.key] !== 'undefined' )
+				this.updateJumpStartProperties(sceneObject, sceneObject.userData.syncData);
+
+			if( sceneObject.JumpStart.hasOwnProperty("physicsState") && sceneObject.JumpStart.physicsState !== 0 )
+			{
+				// Sense velocity is not synced, make sure it exists on anything that needs it.
+				if( !sceneObject.JumpStart.hasOwnProperty("velocity") )
+					sceneObject.JumpStart.velocity = new THREE.Vector3(0, 0, 0);
+
+				var state = sceneObject.JumpStart.physicsState;
+				if( state === 1 )
+				{
+					// Gravity is a bit much, so cut it in half.
+					sceneObject.JumpStart.velocity.y -= 9.8 * g_deltaTime;
+				}
+
+				// Terminal velocity because we have no air drag
+				if( sceneObject.JumpStart.velocity.length() > 5.0 )
+				{
+					sceneObject.JumpStart.velocity.normalize().multiplyScalar( 5.0 );
+				}
+
+				// Update the rotation
+				sceneObject.rotateX((sceneObject.JumpStart.freefallRot.x * 5.0) * this.deltaTime);
+				sceneObject.rotateY((sceneObject.JumpStart.freefallRot.y * 5.0) * this.deltaTime);
+				sceneObject.rotateZ((sceneObject.JumpStart.freefallRot.z * 5.0) * this.deltaTime);
+
+				// Bounce us off of walls
+				var maxWidth = this.enclosure.scaledDepth / 2;
+				var maxHeight = this.enclosure.scaledHeight / 2;
+				var maxDepth = this.enclosure.scaledDepth / 2;
+
+				if( sceneObject.position.x > maxWidth )
+				{
+					sceneObject.position.x = maxWidth;
+					sceneObject.JumpStart.velocity.x = -sceneObject.JumpStart.velocity.x;
+				}
+				else if( sceneObject.position.x < -maxWidth )
+				{
+					sceneObject.position.x = -maxWidth;
+					sceneObject.JumpStart.velocity.x = -sceneObject.JumpStart.velocity.x;
+				}
+
+				if( sceneObject.position.z > maxDepth )
+				{
+					sceneObject.position.z = maxDepth;
+					sceneObject.JumpStart.velocity.z = -sceneObject.JumpStart.velocity.z;
+				}
+				else if( sceneObject.position.z < -maxDepth )
+				{
+					sceneObject.position.z = -maxDepth;
+					sceneObject.JumpStart.velocity.z = -sceneObject.JumpStart.velocity.z;
+				}
+
+				if( sceneObject.position.y > maxHeight )
+				{
+					sceneObject.position.y = maxHeight;
+					sceneObject.JumpStart.velocity.y = -sceneObject.JumpStart.velocity.y;
+				}
+				else if( sceneObject.position.y < -maxHeight )
+				{
+					sceneObject.position.y = -maxHeight;
+					sceneObject.JumpStart.velocity.y = -sceneObject.JumpStart.velocity.y;
+				}
+
+				sceneObject.position.add(sceneObject.JumpStart.velocity);
+			}
+
+			if( sceneObject.JumpStart.hasOwnProperty("onTick") )
+			{
+				for( y in sceneObject.JumpStart.onTick )
+					sceneObject.JumpStart.onTick[y].call(sceneObject);
+			}
+
+			if( sceneObject.children.length > 0 )
+				recursive.call(this, sceneObject);
+		}
+	}
+
 	if( !this.initialized )
 		return;
+
+	// Spawn anything that needs to be spawned
+	var index;
+	for( index in this.pendingObjects )
+		this.networkSpawn(index, this.pendingObjects[index], false);
 
 	this.processPendingDataListeners();
 
@@ -974,103 +1272,7 @@ jumpStart.prototype.onTick = function()
 
 	requestAnimationFrame( function(){ JumpStart.onTick(); } );
 
-	var sceneObject;
-	var x, y, z;
-	for( x in this.scene.children )
-	{
-		sceneObject = this.scene.children[x];
-		if( !sceneObject.hasOwnProperty("JumpStart") )
-			continue;
-
-		this.prepEventListeners(sceneObject);
-
-//		/* FOR LISTENERS ATTACHED DIRECTLY TO SCENE OBJECTS. REQUIRED IF NO CROSSHAIR!!
-//		if( !this.webMode )
-//		{
-	// DO ONTICK EVENT TOO!! ???? (maybe not, it might not be neded here.)
-	/*
-			if( typeof sceneObject.JumpStart.onCursorDown === 'function' ||
-					Object.keys(sceneObject.JumpStart.onCursorDown).length !== 0 )
-			{
-				if( !(sceneObject.JumpStart.hasCursorEffects & 0x2) )
-				{*/
-					/* FIXME: Required if no crosshair!!
-					sceneObject.addEventListener('cursorup', function()
-					{
-						var y;
-						for( y in this.JumpStart.onCursorUp )
-							this.JumpStart.onCursorUp[y].call(this);
-					});
-					*/
-/*
-					sceneObject.JumpStart.hasCursorEffects |= 0x2;
-				}
-
-				if( typeof sceneObject.JumpStart.onCursorDown === 'function' )
-				{
-					sceneObject.JumpStart.onCursorDown = {'default': sceneObject.JumpStart.onCursorDown};
-				}
-
-				// FIXME: Only supporting 1 event callback.  Should support N.
-				for( z in sceneObject.JumpStart.onCursorDown )
-				{
-					sceneObject.JumpStart.cursorDownListeners = z;
-					break;
-				}
-			}
-			*/
-/*
-			if( !(sceneObject.JumpStart.hasCursorEffects & 0x4) &&
-				Object.keys(sceneObject.JumpStart.onCursorDown).length !== 0)
-			{
-				sceneObject.addEventListener('cursordown', function()
-				{
-					var y;
-					for( y in this.JumpStart.onCursorDown )
-						this.JumpStart.onCursorDown[y].call(this);
-				});
-
-				sceneObject.JumpStart.hasCursorEffects |= 0x4;
-			}
-
-			if( !(sceneObject.JumpStart.hasCursorEffects & 0x8) &&
-				Object.keys(sceneObject.JumpStart.onCursorEnter).length !== 0)
-			{
-				sceneObject.addEventListener('cursorenter', function()
-				{
-					var y;
-					for( y in this.JumpStart.onCursorEnter )
-						this.JumpStart.onCursorEnter[y].call(this);
-				});
-
-				sceneObject.JumpStart.hasCursorEffects |= 0x8;
-			}
-
-			if( !(sceneObject.JumpStart.hasCursorEffects & 0x10) &&
-				Object.keys(sceneObject.JumpStart.onCursorLeave).length !== 0)
-			{
-				sceneObject.addEventListener('cursorleave', function()
-				{
-					var y;
-					for( y in this.JumpStart.onCursorLeave )
-						this.JumpStart.onCursorLeave[y].call(this);
-				});
-
-				sceneObject.JumpStart.hasCursorEffects |= 0x10;
-			}
-		}
-//		*/
-
-		if( sceneObject.JumpStart.hasOwnProperty("onTick") )
-		{
-			for( y in sceneObject.JumpStart.onTick )
-			{
-				sceneObject.JumpStart.onTick[y].call(sceneObject);
-			}
-		}
-	}
-
-	//this.processCursorMove();
+	recursive.call(this, this.scene);
 
 	this.renderer.render( this.scene, this.camera );
 };
@@ -1189,7 +1391,8 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 			clone = this.models[x].object.clone();
 
 			// Set the position
-			clone.position.copy(this.worldOffset);
+			if( !options.parent )
+				clone.position.copy(this.worldOffset);
 
 			// Set the orientation
 			clone.rotation.set(0.0, 0.0, 0.0);
@@ -1202,11 +1405,18 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 
 			this.prepInstance.call(clone, fileName);
 
+			if( !this.webMode )
+			{
+				clone.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
+				clone.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
+			}
+
 			// Add this object to the synced instance list
 //			/*
 			if( options.key !== "" )
 			{
 				this.syncedInstances[options.key] = clone;
+				clone.JumpStart.key = options.key;
 				this.numSyncedInstances++;
 				g_numSyncedInstances = this.numSyncedInstances;
 
@@ -1214,7 +1424,7 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 			}
 //			*/
 			
-			console.log("Spawned an object");
+//			console.log("Spawned an object");
 
 			return clone;
 		}
@@ -1234,12 +1444,14 @@ jumpStart.prototype.prepInstance = function(modelFile)
 	// Prepare it to get callback logic.
 	sceneObject.JumpStart =
 	{
+		"onNetworkRemoved": {},
 		"onSpawn": {},
 		"onTick": {},
 		"onCursorDown": {},
 		"onCursorUp": {},
 		"onCursorEnter": {},
 		"onCursorLeave": {},
+		"networkRemoved": {},
 		"spawnListeners": {},
 		"tickListeners": {},
 		"cursorDownListeners": {},
@@ -1281,6 +1493,22 @@ jumpStart.prototype.prepInstance = function(modelFile)
 		"addDataListener": function(property, listener)
 		{
 			JumpStart.addDataListener(this, property, listener);
+		}.bind(this),
+		"sync": function()
+		{
+			JumpStart.syncObject(this);
+		}.bind(this),
+		"applyForce": function(force)
+		{
+			JumpStart.applyForce(this, force);
+		}.bind(this),
+		"makePhysics": function()
+		{
+			JumpStart.makePhysics(this);
+		}.bind(this),
+		"makeStatic": function()
+		{
+			JumpStart.makeStatic(this);
 		}.bind(this)
 		/*
 		"setModel": function(userModelName)
@@ -1307,8 +1535,28 @@ jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
 		eventName = inEventName;
 
 	var x;
+	if( !eventName || eventName === 'networkRemoved' )
+	{
+		sceneObject.JumpStart.networkRemovedListeners = {};
+
+		if( typeof sceneObject.JumpStart.onNetworkRemoved === 'function' )
+			sceneObject.JumpStart.onNetworkRemoved = {'default': sceneObject.JumpStart.onNetworkRemoved};
+
+		// FIXME: Only supporting 1 event callback. Should support N.
+		for( x in sceneObject.JumpStart.onNetworkRemoved )
+		{
+			if( x.indexOf("_") !== 0 && typeof window[x] === 'function' )
+			{
+				sceneObject.JumpStart.networkRemovedListeners[x] = x;
+				break;
+			}
+		}
+	}
+
 	if( !eventName || eventName === 'spawn' )
 	{
+		sceneObject.JumpStart.spawnListeners = {};
+
 		if( typeof sceneObject.JumpStart.onSpawn === 'function' )
 			sceneObject.JumpStart.onSpawn = {'default': sceneObject.JumpStart.onSpawn};
 
@@ -1325,6 +1573,8 @@ jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
 
 	if( !eventName || eventName === 'tick' )
 	{
+		sceneObject.JumpStart.tickListeners = {};
+
 		if( typeof sceneObject.JumpStart.onTick === 'function' )
 			sceneObject.JumpStart.onTick = {'default': sceneObject.JumpStart.onTick};
 
@@ -1337,10 +1587,21 @@ jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
 				break;
 			}
 		}
+/*
+		if( sceneObject.userData.syncData )
+		{
+			var syncData = sceneObject.userData.syncData;
+
+			if( syncData.hasOwnProperty("tickListeners") )
+				delete syncData.tickListeners;
+		}
+		*/
 	}
 
 	if( !eventName || eventName === 'cursordown' )
 	{
+		sceneObject.JumpStart.cursorDownListeners = {};
+
 		if( typeof sceneObject.JumpStart.onCursorDown === 'function' )
 			sceneObject.JumpStart.onCursorDown = {'default': sceneObject.JumpStart.onCursorDown};
 
@@ -1357,6 +1618,8 @@ jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
 
 	if( !eventName || eventName === 'cursorup' )
 	{
+		sceneObject.JumpStart.cursorUpListeners = {};
+
 		if( typeof sceneObject.JumpStart.onCursorUp === 'function' )
 			sceneObject.JumpStart.onCursorUp = {'default': sceneObject.JumpStart.onCursorUp};
 
@@ -1369,10 +1632,21 @@ jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
 				break;
 			}
 		}
+/*
+		if( sceneObject.userData.syncData )
+		{
+			var syncData = sceneObject.userData.syncData;
+
+			if( syncData.hasOwnProperty("cursorUpListeners") )
+				delete syncData.cursorUpListeners;
+		}
+		*/
 	}
 
 	if( !eventName || eventName === 'cursorenter' )
 	{
+		sceneObject.JumpStart.cursorEnterListeners = {};
+
 		if( typeof sceneObject.JumpStart.onCursorEnter === 'function' )
 			sceneObject.JumpStart.onCursorEnter = {'default': sceneObject.JumpStart.onCursorEnter};
 
@@ -1385,10 +1659,21 @@ jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
 				break;
 			}
 		}
+/*
+		if( sceneObject.userData.syncData )
+		{
+			var syncData = sceneObject.userData.syncData;
+
+			if( syncData.hasOwnProperty("cursorEnterListeners") )
+				delete syncData.cursorEnterListeners;
+		}
+		*/
 	}
 
 	if( !eventName || eventName === 'cursorleave' )
 	{
+		sceneObject.JumpStart.cursorLeaveListeners = {};
+
 		if( typeof sceneObject.JumpStart.onCursorLeave === 'function' )
 			sceneObject.JumpStart.onCursorLeave = {'default': sceneObject.JumpStart.onCursorLeave};
 
@@ -1401,6 +1686,15 @@ jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
 				break;
 			}
 		}
+/*
+		if( sceneObject.userData.syncData )
+		{
+			var syncData = sceneObject.userData.syncData;
+
+			if( syncData.hasOwnProperty("cursorLeaveListeners") )
+				delete syncData.cursorLeaveListeners;
+		}
+			*/
 	}
 };
 
@@ -1411,27 +1705,57 @@ jumpStart.prototype.removeSyncedObject = function(victim, userIsLocal)
 
 	var isLocal = (typeof userIsLocal !== 'undefined') ? userIsLocal : true;
 
-	if( this.firebaseSync )
+	// If this is a networked object, remove it from the Firebase
+	var x;
+	for( x in this.syncedInstances )
 	{
-		// If this is a networked object, remove it from the Firebase
-		var x;
-		for( x in this.syncedInstances )
+		if( this.syncedInstances[x] === victim )
 		{
-			if( this.syncedInstances[x] === victim )
-			{
-				if( isLocal )
-					this.firebaseSync.removeObject(x);
+			if( isLocal && this.firebaseSync )
+				this.firebaseSync.removeObject(x);
 
-				// Remove it from the local array of synced instances too
-				delete this.syncedInstances[x];
-				this.numSyncedInstances--;
-				break;
-			}
+			// Remove it from the local array of synced instances too
+			delete this.syncedInstances[x];
+			this.numSyncedInstances--;
+			break;
 		}
 	}
 
-	// Remove the local object instance too (and always)
-	this.scene.remove(victim);
+	var hasListener = false;
+	for( x in victim.JumpStart.onNetworkRemoved )
+	{
+		victim.JumpStart.onNetworkRemoved[x].call(victim, userIsLocal);
+		hasListener = true;
+	}
+
+	if( !hasListener )
+	{
+		// Remove the local object instance too (unless the object has an onNetworkRemoved callback)
+		this.scene.remove(victim);
+	}
+};
+
+jumpStart.prototype.unsyncObject = function(sceneObject)
+{
+	var x;
+	for( x in this.syncedInstances )
+	{
+		if( this.syncedInstances[x] === sceneObject )
+		{
+			// Remove it from the local array of synced instances too
+			delete this.syncedInstances[x];
+			this.numSyncedInstances--;
+
+			if( this.firebaseSync )
+				this.firebaseSync.removeObject(x);
+
+			// If we have an onNetworkRemoved listener, now is the time
+			for( x in sceneObject.JumpStart.onNetworkRemoved )
+				sceneObject.JumpStart.onNetworkRemoved[x].call(sceneObject, true);
+
+			break;
+		}
+	}
 };
 
 /*
@@ -1463,70 +1787,192 @@ jumpStart.prototype.addSyncedObject = function(sceneObject, userSyncData, userKe
 	for( x in sceneObject.JumpStart.onSpawn )
 		sceneObject.JumpStart.onSpawn[x].call(sceneObject, true);
 
-	var key, syncData;
+	var key;
 	// Add this unique object to the Firebase
 	// Hash the unique ID's because they are VERY long.
 	// In the case of conflicts, the 2nd object does not spawn. (Thanks to firebase.js)
 	if( this.firebaseSync && (typeof userKey !== 'string' || userKey === "") )
 		key = __hash(this.firebaseSync.senderId + Date.now() + sceneObject.uuid);
+	else if( (typeof userKey !== 'string' || userKey === "") )
+		key = __hash(this.localUser.displayName + Date.now() + sceneObject.uuid);
 	else
 		key = userKey;
 
+
+	/* UPDATE: Instead, just put all non-whitelisted values from JumpStart into syncdata to simplify things
 		// Any property of sceneObject.JumpStart that can change AND that we want synced needs to be in syncData.
-		syncData = {
-			"modelFile": sceneObject.JumpStart.modelFile,
-			"spawnListeners": sceneObject.JumpStart.spawnListeners,
-			"tickListeners": sceneObject.JumpStart.tickListeners,
-			"cursorDownListeners": sceneObject.JumpStart.cursorDownListeners,
-			"cursorUpListeners": sceneObject.JumpStart.cursorUpListeners,
-			"cursorEnterListeners": sceneObject.JumpStart.cursorEnterListeners,
-			"cursorLeaveListeners": sceneObject.JumpStart.cursorLeaveListeners
-		};
+	syncData = {
+		"modelFile": sceneObject.JumpStart.modelFile,
+		"spawnListeners": sceneObject.JumpStart.spawnListeners,
+		"tickListeners": sceneObject.JumpStart.tickListeners,
+		"cursorDownListeners": sceneObject.JumpStart.cursorDownListeners,
+		"cursorUpListeners": sceneObject.JumpStart.cursorUpListeners,
+		"cursorEnterListeners": sceneObject.JumpStart.cursorEnterListeners,
+		"cursorLeaveListeners": sceneObject.JumpStart.cursorLeaveListeners
+	};
+	*/
 
-		// Now merg in any values we were passed by the user as well (1 level deep)
-		// WARNING: User variable names are sharing space with JumpStart variable names in sceneObject.JumpStart.userData.syncData!!
-		// FIXME: Fix this ASAP (if at all) because this will affect user code on the frontend of the API!!
-		// FIXME: x2 FIXME because user variables are probably getting whiped out when this function is called.
-		if( typeof userSyncData !== 'undefined' )
+	var syncData = {};
+	for( x in sceneObject.JumpStart )
+	{
+		if( this.noSyncProperties.indexOf(x) !== -1 )
+			continue;
+
+		//syncData[x] = sceneObject.JumpStart[x];
+
+		// FIXME: Is this really needed anymore? Would the above line not be a deep enough copy to keep syncData and JumpStart data separate?
+		if( typeof sceneObject.JumpStart[x] !== 'object' )
+			syncData[x] = sceneObject.JumpStart[x];
+		else
 		{
-			var x, y;
-			for( x in userSyncData )
-			{
-				// Only handle options that exist.
-//				if( !syncData.hasOwnProperty(x) )
-//					continue;
+			if( !syncData.hasOwnProperty(x) )
+				syncData[x] = {};
+				
+			for( y in sceneObject.JumpStart[x] )
+				syncData[x][y] = sceneObject.JumpStart[x][y];
+		}
+	}
 
-				if( typeof userSyncData[x] !== 'object' )
-					syncData[x] = userSyncData[x];
-				else
+	// Now merg in any values we were passed by the user as well (1 level deep)
+	// WARNING: User variable names are sharing space with JumpStart variable names in sceneObject.JumpStart.userData.syncData!!
+	// FIXME: Fix this ASAP (if at all) because this will affect user code on the frontend of the API!!
+	// FIXME: x2 FIXME because user variables are probably getting whiped out when this function is called.
+	if( typeof userSyncData !== 'undefined' && userSyncData )
+	{
+		var x, y;
+		for( x in userSyncData )
+		{
+			if( typeof userSyncData[x] !== 'object' )
+				syncData[x] = userSyncData[x];
+			else
+			{
+				if( !syncData.hasOwnProperty(x) )
+					syncData[x] = {};
+				
+				for( y in userSyncData[x] )
 				{
-					if( !syncData.hasOwnProperty(x) )
-						syncData[x] = {};
-					
-					for( y in userSyncData[x] )
-					{
-						syncData[x][y] = userSyncData[x][y];
-					}
+					syncData[x][y] = userSyncData[x][y];
 				}
 			}
 		}
+	}
 
-		sceneObject.userData.syncData = syncData;
-		console.log(sceneObject.userData.syncData);
-//	}
-	
+	sceneObject.userData.syncData = syncData;
 
-	if( !this.firebaseSync )
-		return;
-
-	this.firebaseSync.addObject(sceneObject, key);
+	if( this.firebaseSync )
+		this.firebaseSync.addObject(sceneObject, key);
 
 	// Store this key with this object locally
 	this.syncedInstances[key] = sceneObject;
+	sceneObject.JumpStart.key = key;
 	this.numSyncedInstances++;
 	g_numSyncedInstances = this.numSyncedInstances;
 
-	console.log("Added synced object with key " + key);
+//	console.log("Added synced object with key " + key);
+};
+
+jumpState.prototype.makeStatic = function(sceneObject)
+{
+	sceneObject.JumpStart.physicsState = 0;
+};
+
+jumpStart.prototype.makePhysics = function(sceneObject)
+{
+	if( !sceneObject.hasOwnProperty("JumpStart") )
+	{
+		console.log("Only objects created with JumpStart.spawnInstance can be turned into physics objects!");
+		return;
+	}
+
+//	if( sceneObject.JumpStart.hasOwnProperty("physicsState") )
+//		console.log("Object is already physics!");
+
+	// synced
+	sceneObject.JumpStart.physicsState = 0x1;
+	sceneObject.JumpStart.appliedForce = new THREE.Vector3(0, 0, 0);
+	sceneObject.JumpStart.freefallRot = new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random());
+
+	// NOT synced
+	sceneObject.JumpStart.velocity = new THREE.Vector3(0, 0, 0);
+};
+
+jumpStart.prototype.applyForce = function(sceneObject, force)
+{
+	if( !sceneObject.hasOwnProperty("JumpStart") )
+	{
+		console.log("Only objects created with JumpStart.spawnInstance can be turned into physics objects!");
+		return;
+	}
+
+	if( !sceneObject.JumpStart.hasOwnProperty("physicsState") || sceneObject.JumpStart.physicsState === 0 )
+		this.makePhysics(sceneObject);
+
+	sceneObject.JumpStart.appliedForce = force;
+	sceneObject.JumpStart.velocity.add(force);
+};
+
+jumpStart.prototype.stopSyncing = function(sceneObject)
+{
+	if( this.syncedInstances.hasOwnProperty(sceneObject.JumpStart.key) )
+		delete this.syncedInstances[sceneObject.JumpStart.key];
+};
+
+jumpStart.prototype.precacheSound = function(sound_file_name)
+{
+	if( typeof this.cachedSounds[sound_file_name] != 'undefined' )
+		return;
+
+	var soundName = sound_file_name + ".ogg";
+
+//	var thisGameBoard = this;
+	var soundFileName = sound_file_name;
+	var sound = new Audio(soundName);
+	//canplay, canplaythrough
+
+	// Just mark the sound as pre-cached already, because sometimes they are not being detected as being cached...
+	this.onSoundCached(sound, soundFileName);
+
+/*
+	sound.addEventListener("canplaythrough", function() {
+		thisGameBoard.onSoundCached(sound, soundFileName);
+		sound.removeEventListener("canplaythrough", arguments.callee);
+	});
+*/
+};
+
+jumpStart.prototype.onSoundCached = function(loadedSound, soundFileName)
+{
+	if( typeof this.cachedSounds[soundFileName] != 'undefined' )
+		return;
+
+	this.cachedSounds[soundFileName] = loadedSound;
+//	this.state.caching--;
+
+//	this.showAlert({text: "LOADING (" + (gNumAssets - this.state.caching) + "/" + gNumAssets + ")", duration: 800});
+//	console.log("Precached sound: " + soundFileName);
+
+//	if( this.state.caching < 1 )
+//	{
+//		var nextStateName = this.state.id.substring(5);
+//		this.setState(nextStateName);
+//	}
+};
+
+jumpStart.prototype.playSound = function(sound_file_name, volume_scale)
+{
+	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
+	{
+		this.precacheSound(sound_file_name);
+
+		// Playing un-cached sounds is disabled!! (by default)
+		return;
+	}
+
+	var volumeScale = (typeof volume_scale == 'undefined') ? 1.0 : volume_scale;
+
+	var cachedSound = this.cachedSounds[sound_file_name].cloneNode();
+	cachedSound.volume = 1.0 * volumeScale;
+	cachedSound.play();
 };
 
 function jumpStartModelLoader()
@@ -1748,6 +2194,17 @@ jumpStartDebugUI.prototype.applyChanges = function()
 	eval(code);
 	JumpStart.debugui.focusedObject.JumpStart[editFunction.type][editFunction.name] = window[editFunction.name];
 
+/*
+	try { 
+        esprima.parse('var answer =  42 *;');
+    }
+    catch(err) {
+        console.log("Error is " + err);
+    }
+ */
+
+	//console.log(syntax);
+
 	var victim = JumpStart.debugui.editPanelElem;
 	document.body.removeChild(victim);
 
@@ -1755,6 +2212,64 @@ jumpStartDebugUI.prototype.applyChanges = function()
 	JumpStart.debugui.focusedObject = null;
 	JumpStart.debugui.editFunction = null;
 };
+
+
+/*
+FirebaseSync.prototype._copyObjectData = function( object, objectData) {
+
+	object.position.x = objectData.position.x;
+	object.position.y = objectData.position.y;
+	object.position.z = objectData.position.z;
+
+	object.rotation.x = objectData.rotation.x;
+	object.rotation.y = objectData.rotation.y;
+	object.rotation.z = objectData.rotation.z;
+
+	object.scale.x = objectData.scale.x;
+	object.scale.y = objectData.scale.y;
+	object.scale.z = objectData.scale.z;
+
+	if ( objectData.hasOwnProperty( "syncData" )) {
+
+		// copy top-level syncData into object.userData
+		var syncDataClone = JSON.parse( JSON.stringify( objectData.syncData ));
+		object.userData.syncData = syncDataClone;
+
+		// Now do stuff for JumpStart
+		if( window.hasOwnProperty("JumpStart") && object.hasOwnProperty("JumpStart") )
+			JumpStart.updateJumpStartProperties(object, object.userData.syncData);
+	}
+
+}
+*/
+
+
+
+FirebaseSync.prototype.addDataListener = function(object, property, eventType, listener) {
+
+	if ( !this.firebaseRoom ) return ; // still initializing
+
+	var objectKey = this.uuid2key[ object.uuid ];
+	if ( !objectKey ) {
+		console.error("Object not yet added to FirebaseSync", object);
+		return ; // Cannot save positon if we don't have object's key.
+	}
+
+	var propertyLocation = this.firebaseRoom.child("objects").child(objectKey).child(property);
+
+	function callbackFactory(snapshot, callback, eventType) {
+		// If our local state already looks like the incoming, ignore.
+		if( object.userData.syncData[snapshot.key()] != snapshot.val() )
+			callback.call(this, snapshot, eventType);
+	}
+
+	propertyLocation.on(eventType, function(snapshot) { callbackFactory(snapshot, listener, eventType); }, this._firebaseCancel, object);
+
+	if ( this.TRACE ) console.log("Added " + property + " " + eventType + " listener for " + object);
+};
+
+
+
 
 
 // Method: hash

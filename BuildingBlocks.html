@@ -4,19 +4,25 @@
 <head>
 		<title>JumpStart</title>
 
-		<script src="../lib/three.js"></script>
-		<script src="../lib/firebase.js"></script>
-		<script src="../src/AltOBJMTLLoader.js"></script>
-		<script src="../lib/OBJMTLLoader.js"></script>
-		<script src="../lib/MTLLoader.js"></script>
-		<script src="../src/sync/FirebaseSync.js"></script>
-		<!-- <script src="../src/cursor/CursorEvents.js"></script> -->
-		<!-- <script src="../src/cursor/AltObjectControls.js"></script> -->
+		<script src="lib/three.js"></script>
+		<script src="lib/firebase.js"></script>
+		<script src="src/AltOBJMTLLoader.js"></script>
+		<script src="lib/OBJMTLLoader.js"></script>
+		<script src="lib/MTLLoader.js"></script>
+		<script src="src/sync/FirebaseSync.js"></script>
 		<link rel="stylesheet" type="text/css" href="myStyle.css">
 </head>
 <body>
 
-<div id="info">JumpStart</div>
+<div style="width: 100%; position: fixed;">
+<center>
+	<img src="misc/buildtitle.png" />
+</center>
+</div>
+
+<img src="misc/buildbuttons.png" style="position: fixed; top: 150px; left: 10px;" />
+
+<div id="info" style="display: none;">JumpStart</div>
 
 <!-- APPEND JUMPSTART.JS TO YOUR BODY ELEMENT -->
 <script src="JumpStart.js"></script>
@@ -26,7 +32,7 @@
 // (OPTIONAL) CONFIGURE JUMPSTART
 var myOptions =
 {
-	"debugMode": true,
+	"debugMode": false,
 	"legacyLoader": true,
 	"worldScale": 1.0,
 	"scaleWithEnclosure": true,
@@ -47,8 +53,8 @@ var myOptions =
 	},
 	"firebase":
 	{
-		"rootUrl": "https://jump-start.firebaseio.com/",
-		"appId": "JumpStart",
+		"rootUrl": "https://building-blocks.firebaseio.com/",
+		"appId": "building-blocks",
 		"params": { "TRACE": false }
 	}
 };
@@ -60,6 +66,9 @@ JumpStart.setOptions(myOptions);
 // PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
 function onPrecache()
 {
+//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+//	allDataRef.remove();
+
 	// Precache anything that your app needs.
 	var myModels = [
 		"models/BuildingBlocks/jewel.obj",
@@ -67,8 +76,14 @@ function onPrecache()
 		"models/BuildingBlocks/grass.obj",
 		"models/BuildingBlocks/dirt.obj",
 		"models/BuildingBlocks/bricks.obj",
-		"models/BuildingBlocks/cube_cage.obj"
+		"models/BuildingBlocks/cube_cage.obj",
+		"models/BuildingBlocks/explosion.obj"
 	];
+
+//	this.precacheSound("sounds/pistol-1");
+//	this.precacheSound("sounds/00electrexplo01");
+//	this.precacheSound("sounds/00electrexplo03");
+	JumpStart.precacheSound("sounds/BuildingBlocks/expl_03");
 
 	JumpStart.loadModels(myModels).then(function() {
 
@@ -188,6 +203,7 @@ function onReady()
 				{
 					this.isInvalid = true;
 					this.scale.set(0.0001, 0.0001, 0.0001);
+					g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
 				}
 			}
 		}
@@ -207,6 +223,7 @@ function onReady()
 			{
 				this.isInvalid = true;
 				this.scale.set(0.0001, 0.0001, 0.0001);
+				g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
 			}
 			else if( this.hasOwnProperty('isInvalid') && this.isInvalid )
 			{
@@ -221,6 +238,7 @@ function onReady()
 		{
 			this.isInvalid = true;
 			this.scale.set(0.0001, 0.0001, 0.0001);
+			g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
 		}
 	};
 
@@ -302,9 +320,10 @@ function spawnBlock()
 
 	instance.JumpStart.onSpawn["spawnEffects"] = spawnEffects;
 	instance.JumpStart.onTick["growUp"] = growUp;
+	instance.JumpStart.onNetworkRemoved["fancyRemove"] = fancyRemove;
 
-	// We are a networked object!!
-	JumpStart.addSyncedObject(instance);
+	// Add us as a networked object!!
+	instance.JumpStart.sync();
 
 	return instance;
 }
@@ -353,6 +372,119 @@ function CycleBlock(delta)
 	CreateSampleBlock();
 }
 
+function fancyRemove(isLocal)
+{
+	if( typeof isLocal === 'undefined' )
+		return;
+
+	var hitBlock = this;
+
+	JumpStart.playSound("sounds/BuildingBlocks/expl_03", 1.0);
+
+	var explosion = JumpStart.spawnInstance("models/BuildingBlocks/explosion.obj");
+	explosion.scale.set(0.001, 0.001, 0.001);
+	explosion.userData.scaleSize = 0.001;
+	explosion.userData.scaleDirection = 1;
+	explosion.position.copy(hitBlock.position).y += g_BlockWidth / 2.0;
+	explosion.JumpStart.blocksLOS = false;
+
+	g_scene.remove(hitBlock);
+
+	explosion.JumpStart.onTick = function()
+	{
+		if( this.userData.scaleDirection === 1 )
+		{
+			this.userData.scaleSize += 5.0 * g_deltaTime;
+
+			if( this.userData.scaleSize >= 1.0 )
+				this.userData.scaleDirection = -1;
+		}
+		else
+		{
+			this.userData.scaleSize -= 4.0 * g_deltaTime;
+
+			if( this.userData.scaleSize <= 0.001 )
+			{
+				g_scene.remove(this);
+				return;
+			}
+		}
+
+		this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+		this.rotateY(15.0 * g_deltaTime);
+		this.rotateX(20.0 * g_deltaTime);
+	};
+
+	//hitBlock.JumpStart.applyForce(new THREE.Vector3(0, 10.0, 0));
+
+	var gibs = new Array();
+
+	/*
+	var gib1 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib1.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, 0, (g_BlockWidth / 4.0) * -1.0));
+	gib1.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib1);
+	*/
+
+	var gib2 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib2.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, 0, (g_BlockWidth / 4.0) * -1.0));
+	gib2.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib2);
+
+	var gib3 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib3.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, 0, (g_BlockWidth / 4.0) * 1.0));
+	gib3.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib3);
+
+	/*
+	var gib4 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib4.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, 0, (g_BlockWidth / 4.0) * 1.0));
+	gib4.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib4);
+	*/
+
+	/*
+	var gib5 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib5.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * -1.0));
+	gib5.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib5);
+	*/
+
+	var gib6 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib6.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * -1.0));
+	gib6.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib6);
+
+	var gib7 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib7.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * 1.0));
+	gib7.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib7);
+
+	/*
+	var gib8 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+	gib8.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * 1.0));
+	gib8.scale.set(0.5, 0.5, 0.5);
+	gibs.push(gib8);
+	*/
+
+	var x, randoX, randoY;
+	for( x in gibs )
+	{
+		randoX = 5.0 * Math.random();
+		if( Math.random() > 0.5 )
+			randoX *= -1.0;
+
+		randoZ = 5.0 * Math.random();
+		if( Math.random() > 0.5 )
+			randoZ *= -1.0;
+
+		gibs[x].JumpStart.blocksLOS = false;
+		gibs[x].JumpStart.applyForce(new THREE.Vector3(randoX, 20.0, randoZ));
+		gibs[x].JumpStart.onTick["blockDebris"] = blockDebris;
+		gibs[x].position.y += 0.5;
+	}
+}
+
 // FIXME: Input NEEDS to be handled through JumpStart calls, for tick-sync.
 document.addEventListener("keydown", function(e)
 {
@@ -361,6 +493,7 @@ document.addEventListener("keydown", function(e)
 		var hitBlock = g_lookHit.object.parent;
 		if( hitBlock.hasOwnProperty('isBlock') )
 		{
+			hitBlock.JumpStart.blocksLOS = false;
 			JumpStart.removeSyncedObject(hitBlock);
 		}
 	}
@@ -377,6 +510,23 @@ document.addEventListener("keydown", function(e)
 	}
 	*/
 }, false);
+
+function blockDebris()
+{
+	if( this.userData.hasOwnProperty("terminal") )
+	{
+		this.userData.terminal -= g_deltaTime;
+
+		if( this.userData.terminal <= 0 )
+			g_scene.remove(this);
+	}
+	else if( this.position.y <= g_worldOffset.y )
+	{
+		this.position.y = g_worldOffset.y;
+		this.JumpStart.physicsState = 0;
+		this.userData.terminal = 5.0;
+	}
+}
 
 </script>
 

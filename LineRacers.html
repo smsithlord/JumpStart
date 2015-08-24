@@ -1,0 +1,862 @@
+<!-- Author: Elijah Newman-Gomez -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+		<title>JumpStart</title>
+
+		<script src="lib/three.js"></script>
+		<script src="lib/firebase.js"></script>
+		<script src="src/AltOBJMTLLoader.js"></script>
+		<script src="lib/OBJMTLLoader.js"></script>
+		<script src="lib/MTLLoader.js"></script>
+		<script src="src/sync/FirebaseSync.js"></script>
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+</head>
+<body>
+
+<div style="width: 100%; position: fixed;">
+<center>
+	<img src="misc/lineracerstitle.png" />
+</center>
+</div>
+
+<canvas id="canvas" style="display: inline-block; position: fixed; bottom: 0; left: 0;">Canvas is not supported in your browser.</canvas>
+
+<script src="JumpStart.js"></script>
+
+<script>
+var myOptions =
+{
+	"debugMode": false,
+	"legacyLoader": true,
+	"worldScale": 1.0,
+	"enabledCursorEvents":
+	{
+		"cursorDown": true,
+		"cursorUp": true,
+		"cursorEnter": true,
+		"cursorLeave": true,
+		"cursorMove": true
+	},
+	"camera":
+	{
+		"lookAtOrigin": true,
+		"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+		"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+	},
+	"firebase":
+	{
+		"rootUrl": "https://lineracers.firebaseio.com/",
+		"appId": "lineracers",
+		"params": { "AUTOSYNC": true, "TRACE": false }
+	}
+};
+JumpStart.setOptions(myOptions);
+
+function onPrecache()
+{
+//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+//	allDataRef.remove();
+
+	var myModels = ["models/LineRacers/r.obj", "models/LineRacers/a.obj", "models/LineRacers/c.obj", "models/LineRacers/e.obj", "models/LineRacers/carstand.obj", "models/LineRacers/carstand_offsets.obj", "models/LineRacers/car.obj", "models/LineRacers/pixel.obj", "models/LineRacers/driver.obj", "models/LineRacers/rearright.obj", "models/LineRacers/rearleft.obj", "models/LineRacers/frontright.obj", "models/LineRacers/frontleft.obj", "models/LineRacers/body.obj", "models/LineRacers/car_offsets.obj", "models/LineRacers/explosion.obj"];
+	JumpStart.loadModels(myModels).then(function() {
+		JumpStart.doneCaching();
+	});
+}
+
+</script>
+
+
+<script>
+var g_cars = new Array();
+
+function onTick()
+{
+	fireworksLoop();
+}
+
+function bobLetter()
+{
+	var amount = (4.0 * g_deltaTime) * this.userData.bobDirection;
+	this.translateY(amount);
+
+	var difference = this.position.y - this.userData.bobOrigin;
+	if( (difference > 0 && difference > 2.0) ||
+		(difference < 0 && difference < -2.0) )
+	{
+		if( difference >= 0 )
+			this.position.y = this.userData.bobOrigin + 2.0;
+		else
+			this.position.y = this.userData.bobOrigin - 2.0;
+
+		this.userData.bobDirection *= -1.0;
+	}
+}
+
+function startButtonTick()
+{
+	if( !g_localUser.lookHit || !g_localUser.lookHit.object || !g_crosshair || !g_localUser.lookOrigin)
+		return;
+
+	if( g_localUser.lookHit.object === g_floorPlane)
+	{
+		this.position.copy(g_crosshair.position);
+		this.lookAt(g_localUser.lookOrigin);
+		this.rotation.x = 0;
+		this.rotation.z = 0;
+	}
+}
+
+function createStartButton()
+{
+	var startButton = JumpStart.spawnInstance("models/LineRacers/carstand.obj");
+	startButton.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+	startButton.JumpStart.onTick["startButtonTick"] = startButtonTick;
+	startButton.JumpStart.blocksLOS = false;
+
+	// Make the start button re-position itself IMMIDATELY
+	startButtonTick.call(startButton);
+
+	// attach all our parts
+	var verts;
+	var x;
+	for( x in JumpStart.models )
+	{
+		if( JumpStart.models[x].fileName === "models/LineRacers/carstand_offsets.obj" )
+		{
+			verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
+			break;
+		}
+	}
+
+	var dummyCar = JumpStart.spawnInstance("models/LineRacers/car.obj", {"parent": startButton});
+	dummyCar.position.copy(verts[1]);
+	dummyCar.JumpStart.blocksLOS = false;
+
+	var letterR = JumpStart.spawnInstance("models/LineRacers/r.obj", {"parent": startButton});
+	letterR.position.copy(verts[0]);
+	letterR.JumpStart.blocksLOS = false;
+	letterR.userData.bobDirection = 1.0;
+	letterR.userData.bobOrigin = letterR.position.y;
+	letterR.JumpStart.onTick = bobLetter;
+
+	var letterA = JumpStart.spawnInstance("models/LineRacers/a.obj", {"parent": startButton});
+	letterA.position.copy(verts[2]);
+	letterA.JumpStart.blocksLOS = false;
+	letterA.userData.bobDirection = -1.0;
+	letterA.userData.bobOrigin = letterA.position.y;
+	letterA.JumpStart.onTick = bobLetter;
+
+	var letterC = JumpStart.spawnInstance("models/LineRacers/c.obj", {"parent": startButton});
+	letterC.position.copy(verts[4]);
+	letterC.JumpStart.blocksLOS = false;
+	letterC.userData.bobDirection = 1.0;
+	letterC.userData.bobOrigin = letterC.position.y;
+	letterC.JumpStart.onTick = bobLetter;
+
+	var letterE = JumpStart.spawnInstance("models/LineRacers/e.obj", {"parent": startButton});
+	letterE.position.copy(verts[3]);
+	letterE.JumpStart.blocksLOS = false;
+	letterE.userData.bobDirection = -1.0;
+	letterE.userData.bobOrigin = letterE.position.y;
+	letterE.JumpStart.onTick = bobLetter;
+}
+
+function onReady()
+{
+	// first user
+	if( g_localUser.firstUser )
+	{
+
+	}
+
+	createStartButton();
+
+	// START SIMULATION
+	JumpStart.run();
+}
+
+function spawnCar()
+{
+	// create a car
+	var car = JumpStart.spawnInstance("models/LineRacers/body.obj");
+	car.position.copy(this.position);
+	car.rotation.copy(this.rotation);
+	car.translateZ(-100.0);
+
+	var position = new THREE.Vector3().copy(g_crosshair.position);
+	position.y = g_worldOffset.y;
+	car.lookAt(position);
+
+	car.JumpStart.onSpawn["initCar"] = initCar;
+	car.JumpStart.onTick["makeTracks"] = makeTracks;
+	car.JumpStart.onNetworkRemoved["carRemoved"] = carRemoved;
+
+	car.JumpStart.sync();
+	car.userData.myCar = true;
+
+	g_scene.remove(this);
+}
+
+function initCar(isLocal, isInitial)
+{
+	car = this;
+
+	if( !car.userData.hasOwnProperty("myCar") )
+		car.userData.myCar = false;
+
+	car.JumpStart.blocksLOS = false;
+
+	// attach all our parts
+	var verts;
+	var x;
+	for( x in JumpStart.models )
+	{
+		if( JumpStart.models[x].fileName === "models/LineRacers/car_offsets.obj" )
+		{
+			verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
+			break;
+		}
+	}
+
+	var driver = JumpStart.spawnInstance("models/LineRacers/driver.obj", {"parent": car});
+	driver.position.copy(verts[2]);
+	driver.JumpStart.blocksLOS = false;
+	driver.userData.bobDirection = 1.0;
+	driver.userData.bobOrigin = driver.position.y;
+	driver.JumpStart.onTick = function()
+	{
+		var amount = (10.0 * g_deltaTime) * this.userData.bobDirection;
+		this.translateY(amount);
+
+		var difference = this.position.y - this.userData.bobOrigin;
+		if( (difference > 0 && difference > 1.0) ||
+			(difference < 0 ) )
+		{
+			if( difference >= 0 )
+				this.position.y = this.userData.bobOrigin + 1.0;
+			else
+				this.position.y = this.userData.bobOrigin;
+
+			this.userData.bobDirection *= -1.0;
+		}
+	};
+
+	var rearRight = JumpStart.spawnInstance("models/LineRacers/rearright.obj", {"parent": car});
+	rearRight.position.copy(verts[0]);
+	rearRight.JumpStart.blocksLOS = false;
+	rearRight.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
+
+	var rearLeft = JumpStart.spawnInstance("models/LineRacers/rearleft.obj", {"parent": car});
+	rearLeft.position.copy(verts[4]);
+	rearLeft.JumpStart.blocksLOS = false;
+	rearLeft.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
+
+	var frontRight = JumpStart.spawnInstance("models/LineRacers/frontright.obj", {"parent": car});
+	frontRight.position.copy(verts[1]);
+	frontRight.JumpStart.blocksLOS = false;
+	frontRight.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
+
+	var frontLeft = JumpStart.spawnInstance("models/LineRacers/frontleft.obj", {"parent": car});
+	frontLeft.position.copy(verts[3]);
+	frontLeft.JumpStart.blocksLOS = false;
+	frontLeft.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
+
+	car.JumpStart.blocksLOS = false;
+	car.userData.fadeBegun = false;
+
+	// create a trail
+	var trail = JumpStart.spawnInstance("models/LineRacers/pixel.obj");
+	trail.scale.y = 20.0;
+	trail.position.copy(car.position);
+	trail.rotation.copy(car.rotation);
+	trail.translateZ(-20.0);
+	trail.translateY(5.0);
+	trail.scale.x = 4.0;
+	trail.JumpStart.blocksLOS = false;
+
+	// bookkeeping of car trails
+	car.userData.lastPosition = new THREE.Vector3().copy(car.position);
+	car.userData.oldestTrail = trail;
+	car.userData.activeTrail = trail;
+	g_cars.push(car);
+}
+
+// Purpose:
+//	1. Drive towards the crosshair.
+//	2. Keep the active trail aligned.
+//	3. Create a new trail object every X meters.
+//	4. Check for collisions against the trails.
+
+function makeTracks()
+{
+	if( JumpStart.webMode && this.userData.oldestTrail )
+	{
+		var trail = this.userData.oldestTrail;
+
+		var nextTrail;
+		while( typeof trail !== 'undefined' )
+		{
+			if( !trail.userData.hasOwnProperty("spinMode") || trail.userData.spinMode === true )
+			{
+				trail.rotateZ(Math.PI);
+				nextTrail = trail.userData.nextTrail;
+				if( typeof nextTrail !== 'undefined' )
+				{
+					nextTrail.userData.spinMode = true;
+					trail.userData.spinMode = false;
+				}
+				else
+				{
+					nextTrail = this.userData.oldestTrail;
+					nextTrail.userData.spinMode = true;
+					trail.userData.spinmode = false;
+				}
+
+				break;
+			}
+
+			trail = trail.userData.nextTrail;
+		}
+
+/*
+		var foundFlip = false;
+		while( trail )
+		{
+			if( !trail.userData.hasOwnProperty("spinMode") || trail.userData.spinMode )
+			{
+				trail.userData.spinMode = false;
+				trail.rotateY(Math.PI / 2.0);
+
+				if( trail.userData.nextTrail )
+					trail.userData.nextTrail.userData.spinMode = true;
+
+				foundFlip = true;
+				break;
+			}
+
+			trail = trail.userData.nextTrail;
+		}
+
+		if( !foundFlip )
+			this.userData.oldestTrail.spinMode = true;
+		*/
+	}
+
+	if( this.userData.myCar )
+	{
+		// Drive towards the crosshair.
+		var position = new THREE.Vector3().copy(g_crosshair.position);
+		position.y = g_worldOffset.y;
+
+		//position.multiplyScalar(1/g_worldScale);
+
+		if( position.distanceTo(this.position) > 20.0 )
+			this.lookAt(position);
+
+		this.translateZ(100.0 * g_deltaTime);
+
+		// Test for collisions
+		var x, car, barrier, testPoint, dist;
+		for( x in g_cars )
+		{
+			car = g_cars[x];
+			barrier = car.userData.oldestTrail;
+
+			while( barrier )
+			{
+				// ignore the active trail
+				if( !barrier || barrier === this.userData.activeTrail || barrier.userData.nextTrail === this.userData.activeTrail )
+					break;
+				
+				// only care about barriers we can hit
+				if( typeof barrier.userData.rayToNext === 'undefined' || barrier.position.distanceTo(this.position) > barrier.scale.z / 2.0 )
+				{
+					barrier = barrier.userData.nextTrail;
+					continue;
+				}
+
+				testPoint = barrier.userData.rayToNext.closestPointToPoint(this.position);
+				dist = testPoint.distanceTo(this.position);
+
+				if( dist < 10.0 )
+				{
+					// HIT!!
+					delete this.JumpStart.onTick;
+
+					// FIXME: JumpStart has an issue that makes clearing the tick listener from here
+					// NOT work unless network is enabled!!
+				}
+
+				barrier = barrier.userData.nextTrail;
+			}
+		}
+	}
+
+	// Keep the active trail aligned.
+	var trail = this.userData.activeTrail;
+	trail.position.copy(this.position);
+	trail.rotation.copy(this.rotation);
+	trail.translateZ(-20.0);
+	trail.translateY(5.0);
+	trail.lookAt(this.userData.lastPosition);
+	trail.rotateZ(Math.PI);
+	trail.scale.z = trail.position.distanceTo(this.userData.lastPosition) * 2.0;
+
+	// Create a new trail object every 10.0 meters.
+	if( trail.scale.z > 20.0 )
+	{
+		// Spawn the object
+		var nextTrail = JumpStart.spawnInstance("models/LineRacers/pixel.obj");
+		nextTrail.scale.y = 20.0;
+		nextTrail.position.copy(this.position);
+		nextTrail.rotation.copy(this.rotation);
+		nextTrail.translateZ(-20.0);
+		nextTrail.translateY(5.0);
+		nextTrail.scale.x = 4.0;
+		nextTrail.JumpStart.blocksLOS = false;
+
+		// update the linked list
+		trail.userData.nextTrail = nextTrail;
+
+		var direction = new THREE.Vector3().copy(trail.position).sub(nextTrail.position);
+		trail.userData.rayToNext = new THREE.Ray(trail.position, direction.normalize());
+
+		// bookkeeping of car trails
+		this.userData.lastPosition.copy(trail.position);
+		this.userData.activeTrail = nextTrail;
+
+		if( !this.userData.fadeBegun )
+		{
+			// start the trail fade
+			this.userData.fadeBegun = true;
+			trail.JumpStart.onTick["smartFade"] = smartFade;
+		}
+
+		if( this.userData.myCar )
+			this.JumpStart.sync();
+	}
+}
+
+function smartFade()
+{
+	this.scale.z -= 150.0 * g_deltaTime;
+
+	if( this.scale.z <= 0 )
+	{
+		var ending = false;
+		if( this.userData.hasOwnProperty('nextTrail') )
+			this.userData.nextTrail.JumpStart.onTick["smartFade"] = smartFade;
+		else
+			ending = true;
+
+		// Update the car's oldestTrail
+		var x, car, body, y, part, clone, randoX, randoY, randoZ;
+		for( x in g_cars )
+		{
+			if( g_cars[x].userData.oldestTrail === this )
+			{
+				car = g_cars[x];
+				car.userData.oldestTrail = this.userData.nextTrail;
+
+				if( ending && car.userData.myCar )
+				{
+					// LAST TRAIL HAS BEEN REMOVED
+					JumpStart.unsyncObject(car);
+
+					//var startButton = JumpStart.spawnInstance("models/LineRacers/carstand.obj");
+					//startButton.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+					createStartButton();
+				}
+
+				break;
+			}
+		}
+
+		g_scene.remove(this);
+	}
+}
+
+function carRemoved()
+{
+	var car = this;
+	g_cars.splice(g_cars.indexOf(car), 1);
+
+	// Make a visual fire ball
+	var explosion = JumpStart.spawnInstance("models/LineRacers/explosion.obj");
+	explosion.scale.set(0.001, 0.001, 0.001);
+	explosion.userData.scaleSize = 0.001;
+	explosion.userData.scaleDirection = 1;
+	explosion.position.copy(car.position).y += 15.0;
+	explosion.JumpStart.blocksLOS = false;
+
+	explosion.JumpStart.onTick = function()
+	{
+		if( this.userData.scaleDirection === 1 )
+		{
+			this.userData.scaleSize += 5.0 * g_deltaTime;
+
+			if( this.userData.scaleSize >= 1.0 )
+				this.userData.scaleDirection = -1;
+		}
+		else
+		{
+			this.userData.scaleSize -= 4.0 * g_deltaTime;
+
+			if( this.userData.scaleSize <= 0.001 )
+			{
+				g_scene.remove(this);
+				return;
+			}
+		}
+
+		this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+		this.rotateY(15.0 * g_deltaTime);
+		this.rotateX(20.0 * g_deltaTime);
+	};
+
+	// Add a body to explode
+	var body = JumpStart.spawnInstance("models/LineRacers/body.obj", {"parent": car});
+
+	var y, part, clone, randoY, randoX, randoZ, force;
+	for( y in car.children )
+	{
+		part = car.children[y];
+
+		if( !part.hasOwnProperty("JumpStart") )
+			continue;
+
+		clone = JumpStart.spawnInstance(part.JumpStart.modelFile);
+		clone.position.copy(new THREE.Vector3().setFromMatrixPosition(part.matrixWorld));
+		clone.JumpStart.blocksLOS = false;
+
+		randoY = 0.0;
+		if( clone.position.equals(new THREE.Vector3(0, 0, 0)) )
+		{
+			randoY = 30.0;
+			clone.position.copy(car.position);
+
+			if( !JumpStart.webMode )
+			{
+				// FIXME: Why is 10 the magic number, i wonder?
+				clone.position.y += 10.0;
+			}
+		}
+		else if( !JumpStart.webMode )
+			clone.position.multiplyScalar(1/g_worldScale);
+
+		clone.quaternion.copy(part.getWorldQuaternion());
+
+		randoX = 20.0 * Math.random();
+		if( Math.random() > 0.5 )
+			randoX *= -1.0;
+
+		randoZ = 20.0 * Math.random();
+		if( Math.random() > 0.5 )
+			randoZ *= -1.0;
+
+		// The main body should go nearly straight up
+		if( JumpStart.webMode && clone.position.equals(car.position) )
+		{
+			randoX *= 0.3;
+			randoZ *= 0.3;
+		}
+
+		force = new THREE.Vector3().copy(part.position);
+
+		clone.JumpStart.applyForce(new THREE.Vector3(force.x + randoX, (force.y * 10.0) + randoY, force.z + randoZ));
+
+		// The main body shouldn't spin so much.
+		if( randoY !== 0.0 )
+			clone.JumpStart.freefallRot.multiplyScalar(0.3);
+
+		clone.JumpStart.onTick = function()
+		{
+			if( this.position.y < g_worldOffset.y )
+			{
+				this.position.y = g_worldOffset.y;
+				this.JumpStart.physicsState = 0;
+
+				this.userData.lifeSpan = 4.0;
+				this.JumpStart.onTick = function()
+				{
+					this.userData.lifeSpan -= g_deltaTime;
+
+					if( this.userData.lifeSpan <= 0 )
+					{
+						this.userData.lifeSpan = 0;
+						g_scene.remove(this);
+					}
+				};
+			}
+		};
+	}
+
+	g_scene.remove(car);
+}
+
+</script>
+
+<script>
+// when animating on canvas, it is best to use requestAnimationFrame instead of setTimeout or setInterval
+// not supported in all browsers though and sometimes needs a prefix, so we need a shim
+window.requestAnimFrame = ( function() {
+	return window.requestAnimationFrame ||
+				window.webkitRequestAnimationFrame ||
+				window.mozRequestAnimationFrame ||
+				function( callback ) {
+					window.setTimeout( callback, 1000 / 60 );
+				};
+})();
+
+// now we will setup our basic variables for the demo
+var canvas = document.getElementById( 'canvas' ),
+		ctx = canvas.getContext( '2d' ),
+		// full screen dimensions
+		cw = window.innerWidth,
+		ch = window.innerHeight / 3.0,
+		// firework collection
+		fireworks = [],
+		// particle collection
+		particles = [],
+		// starting hue
+		hue = 120,
+		// when launching fireworks with a click, too many get launched at once without a limiter, one launch per 5 loop ticks
+		limiterTotal = 5,
+		limiterTick = 0,
+		// this will time the auto launches of fireworks, one launch per 80 loop ticks
+		timerTotal = 80,
+		timerTick = 0,
+		mousedown = false,
+		// mouse x coordinate,
+		mx,
+		// mouse y coordinate
+		my;
+		
+// set canvas dimensions
+canvas.width = cw;
+canvas.height = ch;
+
+// now we are going to setup our function placeholders for the entire demo
+
+// get a random number within a range
+function random( min, max ) {
+	return Math.random() * ( max - min ) + min;
+}
+
+// calculate the distance between two points
+function calculateDistance( p1x, p1y, p2x, p2y ) {
+	var xDistance = p1x - p2x,
+			yDistance = p1y - p2y;
+	return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
+}
+
+// create firework
+function Firework( sx, sy, tx, ty ) {
+	// actual coordinates
+	this.x = sx;
+	this.y = sy;
+	// starting coordinates
+	this.sx = sx;
+	this.sy = sy;
+	// target coordinates
+	this.tx = tx;
+	this.ty = ty;
+	// distance from starting point to target
+	this.distanceToTarget = calculateDistance( sx, sy, tx, ty );
+	this.distanceTraveled = 0;
+	// track the past coordinates of each firework to create a trail effect, increase the coordinate count to create more prominent trails
+	this.coordinates = [];
+	this.coordinateCount = 3;
+	// populate initial coordinate collection with the current coordinates
+	while( this.coordinateCount-- ) {
+		this.coordinates.push( [ this.x, this.y ] );
+	}
+	this.angle = Math.atan2( ty - sy, tx - sx );
+	this.speed = 2;
+	this.acceleration = 1.05;
+	this.brightness = random( 50, 70 );
+	// circle target indicator radius
+	this.targetRadius = 1;
+}
+
+// update firework
+Firework.prototype.update = function( index ) {
+	// remove last item in coordinates array
+	this.coordinates.pop();
+	// add current coordinates to the start of the array
+	this.coordinates.unshift( [ this.x, this.y ] );
+	
+	// cycle the circle target indicator radius
+	if( this.targetRadius < 8 ) {
+		this.targetRadius += 0.3;
+	} else {
+		this.targetRadius = 1;
+	}
+	
+	// speed up the firework
+	this.speed *= this.acceleration;
+	
+	// get the current velocities based on angle and speed
+	var vx = Math.cos( this.angle ) * this.speed,
+			vy = Math.sin( this.angle ) * this.speed;
+	// how far will the firework have traveled with velocities applied?
+	this.distanceTraveled = calculateDistance( this.sx, this.sy, this.x + vx, this.y + vy );
+	
+	// if the distance traveled, including velocities, is greater than the initial distance to the target, then the target has been reached
+	if( this.distanceTraveled >= this.distanceToTarget ) {
+		createParticles( this.tx, this.ty );
+		// remove the firework, use the index passed into the update function to determine which to remove
+		fireworks.splice( index, 1 );
+	} else {
+		// target not reached, keep traveling
+		this.x += vx;
+		this.y += vy;
+	}
+}
+
+// draw firework
+Firework.prototype.draw = function() {
+	ctx.beginPath();
+	// move to the last tracked coordinate in the set, then draw a line to the current x and y
+	ctx.moveTo( this.coordinates[ this.coordinates.length - 1][ 0 ], this.coordinates[ this.coordinates.length - 1][ 1 ] );
+	ctx.lineTo( this.x, this.y );
+	ctx.strokeStyle = 'hsl(' + hue + ', 100%, ' + this.brightness + '%)';
+	ctx.stroke();
+	
+	ctx.beginPath();
+	// draw the target for this firework with a pulsing circle
+	ctx.arc( this.tx, this.ty, this.targetRadius, 0, Math.PI * 2 );
+	ctx.stroke();
+}
+
+// create particle
+function Particle( x, y ) {
+	this.x = x;
+	this.y = y;
+	// track the past coordinates of each particle to create a trail effect, increase the coordinate count to create more prominent trails
+	this.coordinates = [];
+	this.coordinateCount = 5;
+	while( this.coordinateCount-- ) {
+		this.coordinates.push( [ this.x, this.y ] );
+	}
+	// set a random angle in all possible directions, in radians
+	this.angle = random( 0, Math.PI * 2 );
+	this.speed = random( 1, 10 );
+	// friction will slow the particle down
+	this.friction = 0.95;
+	// gravity will be applied and pull the particle down
+	this.gravity = 1;
+	// set the hue to a random number +-50 of the overall hue variable
+	this.hue = random( hue - 50, hue + 50 );
+	this.brightness = random( 50, 80 );
+	this.alpha = 1;
+	// set how fast the particle fades out
+	this.decay = random( 0.015, 0.03 );
+}
+
+// update particle
+Particle.prototype.update = function( index ) {
+	// remove last item in coordinates array
+	this.coordinates.pop();
+	// add current coordinates to the start of the array
+	this.coordinates.unshift( [ this.x, this.y ] );
+	// slow down the particle
+	this.speed *= this.friction;
+	// apply velocity
+	this.x += Math.cos( this.angle ) * this.speed;
+	this.y += Math.sin( this.angle ) * this.speed + this.gravity;
+	// fade out the particle
+	this.alpha -= this.decay;
+	
+	// remove the particle once the alpha is low enough, based on the passed in index
+	if( this.alpha <= this.decay ) {
+		particles.splice( index, 1 );
+	}
+}
+
+// draw particle
+Particle.prototype.draw = function() {
+	ctx. beginPath();
+	// move to the last tracked coordinates in the set, then draw a line to the current x and y
+	ctx.moveTo( this.coordinates[ this.coordinates.length - 1 ][ 0 ], this.coordinates[ this.coordinates.length - 1 ][ 1 ] );
+	ctx.lineTo( this.x, this.y );
+	ctx.strokeStyle = 'hsla(' + this.hue + ', 100%, ' + this.brightness + '%, ' + this.alpha + ')';
+	ctx.stroke();
+}
+
+// create particle group/explosion
+function createParticles( x, y ) {
+	// increase the particle count for a bigger explosion, beware of the canvas performance hit with the increased particles though
+	var particleCount = 30;
+	while( particleCount-- ) {
+		particles.push( new Particle( x, y ) );
+	}
+}
+
+// main demo loop
+function fireworksLoop() {
+	// this function will run endlessly with requestAnimationFrame
+//	requestAnimFrame( loop );
+	
+	// increase the hue to get different colored fireworks over time
+	//hue += 0.5;
+  
+  // create random color
+  hue= random(0, 360 );
+	
+	// normally, clearRect() would be used to clear the canvas
+	// we want to create a trailing effect though
+	// setting the composite operation to destination-out will allow us to clear the canvas at a specific opacity, rather than wiping it entirely
+	ctx.globalCompositeOperation = 'destination-out';
+	// decrease the alpha property to create more prominent trails
+	ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+	ctx.fillRect( 0, 0, cw, ch );
+	// change the composite operation back to our main mode
+	// lighter creates bright highlight points as the fireworks and particles overlap each other
+	ctx.globalCompositeOperation = 'lighter';
+	
+	// loop over each firework, draw it, update it
+	var i = fireworks.length;
+	while( i-- ) {
+		fireworks[ i ].draw();
+		fireworks[ i ].update( i );
+	}
+	
+	// loop over each particle, draw it, update it
+	var i = particles.length;
+	while( i-- ) {
+		particles[ i ].draw();
+		particles[ i ].update( i );
+	}
+	
+	// launch fireworks automatically to random coordinates, when the mouse isn't down
+	if( timerTick >= timerTotal ) {
+		if( !mousedown ) {
+			// start the firework at the bottom middle of the screen, then set the random target coordinates, the random y coordinates will be set within the range of the top half of the screen
+			fireworks.push( new Firework( cw / 2, ch, random( 0, cw ), random( 0, ch / 2 ) ) );
+			timerTick = 0;
+		}
+	} else {
+		timerTick++;
+	}
+	
+	// limit the rate at which fireworks get launched when mouse is down
+	if( limiterTick >= limiterTotal ) {
+		if( mousedown ) {
+			// start the firework at the bottom middle of the screen, then set the current mouse coordinates as the target
+			fireworks.push( new Firework( cw / 2, ch, mx, my ) );
+			limiterTick = 0;
+		}
+	} else {
+		limiterTick++;
+	}
+}
+
+// once the window loads, we are ready for some fireworks!
+//window.onload = loop;
+
+</script>
+
+</body>
+</html>
