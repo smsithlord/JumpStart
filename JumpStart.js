@@ -45,6 +45,7 @@ function jumpStart()
 	// Certain values are read-only after JumpStart has been initialized
 	this.initialized = false;
 	this.altContentAlreadyLoaded = false;
+	this.personalBrowser = null;
 	this.modelLoader = new jumpStartModelLoader();
 	this.objectLoader = null;
 	this.camera = null
@@ -345,6 +346,12 @@ jumpStart.prototype.spawnCursorPlane = function(userParams)
 		cursorPlane.rotateZ(params.rotate.z);
 	}
 
+	if( !this.webMode )
+	{
+		cursorPlane.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
+		cursorPlane.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
+	}
+
 	this.scene.add(cursorPlane);
 
 	return cursorPlane;
@@ -632,13 +639,43 @@ jumpStart.prototype.initiate = function()
 		this.worldScale *= 3.0;
 
 		this.enclosure.adjustedWidth = Math.round(this.enclosure.innerWidth * JumpStart.worldScale);
-		this.enclosure.adjustedHeight = Math.round(this.enclosure.innerWidth * JumpStart.worldScale);
+		this.enclosure.adjustedHeight = Math.round(this.enclosure.innerHeight * JumpStart.worldScale);
 		this.enclosure.adjustedDepth = Math.round(this.enclosure.innerDepth * JumpStart.worldScale);
 
 		this.enclosure.scaledWidth = Math.round(this.enclosure.innerWidth * (1 / JumpStart.worldScale));
-		this.enclosure.scaledHeight = Math.round(this.enclosure.innerWidth * (1 / JumpStart.worldScale));
+		this.enclosure.scaledHeight = Math.round(this.enclosure.innerHeight * (1 / JumpStart.worldScale));
 		this.enclosure.scaledDepth = Math.round(this.enclosure.innerDepth * (1 / JumpStart.worldScale));
 	}
+
+	var scaledRatio = this.enclosure.innerHeight / this.enclosure.adjustedHeight;
+	this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0) * scaledRatio, 0.0);
+
+	var width = this.enclosure.scaledWidth;
+	//if( this.options.legacyLoader )
+	//	width = this.enclosure.innerWidth;
+
+	var height = this.enclosure.scaledHeight;
+	//if( this.options.legacyLoader )
+	//	height = this.enclosure.innerHeight;
+
+	var depth = this.enclosure.scaledDepth;
+	//if( this.options.legacyLoader )
+	//	depth = this.enclosure.innerDepth;
+
+	// Offset us if we are in the personal browser
+	if( depth === 100 )
+	{
+		this.worldOffset.z = depth / (-2.0);
+
+		// Everything has been pushed back, but Altspace will hide anything that is outside
+		// of what it thinks are the bounds.  So our working depth is actually HALF and
+		// we must fudge the offset.
+		depth = depth / 2.0;
+		this.worldOffset.z += depth / 2.0;
+		this.personalBrowser = true;
+	}
+	else
+		this.personalBrowser = false;
 
 //	this.enclosure.bounds = {};
 //	this.enclosure.bounds.bottomCenter = new THREE.Vector3(0, (-this.enclosure.innerHeight / 2.0) * scaledRatio, 0);
@@ -661,9 +698,6 @@ jumpStart.prototype.initiate = function()
 	this.localUser.lookOrigin = new THREE.Vector3();
 	this.localUser.lookDirection = new THREE.Vector3();
 	this.localUser.firstUser = true;
-
-	var scaledRatio = this.enclosure.innerHeight / this.enclosure.adjustedHeight;
-	this.worldOffset = new THREE.Vector3(0.0, (-this.enclosure.innerHeight / 2.0) * scaledRatio, 0.0);
 
 	if ( this.webMode )
 	{
@@ -691,6 +725,8 @@ jumpStart.prototype.initiate = function()
 		this.camera.translateY(this.options.camera.translation.y);
 		this.camera.translateZ(this.options.camera.translation.z);
 
+		this.localUser.lookOrigin = new THREE.Vector3().copy(this.camera.position);
+
 		// OBJMTLLoader always uses PhongMaterial, so we need light in scene.
 		var ambient = new THREE.AmbientLight( 0xffffff );
 		this.scene.add( ambient );
@@ -708,15 +744,11 @@ jumpStart.prototype.initiate = function()
 	// Create some invisible planes for raycasting.
 	if( this.options.enabledCursorEvents.bottomPlane )
 	{
-		console.log("creating bottom plane");
-		var pos = new THREE.Vector3().copy(this.worldOffset);
-		pos.y += 0.5;
-
 		var bottomPlane = JumpStart.spawnCursorPlane({
-			"position": pos,
+			"position": new THREE.Vector3(0, 0, 0).add(this.worldOffset),
 			"rotate": new THREE.Vector3(-Math.PI / 2.0, 0, 0),
-			"width": this.enclosure.innerWidth,
-			"height": this.enclosure.innerDepth
+			"width": width,
+			"height": depth
 		});
 
 		// Save this for users to use
@@ -726,50 +758,50 @@ jumpStart.prototype.initiate = function()
 	if( this.options.enabledCursorEvents.topPlane )
 	{
 		var topPlane = JumpStart.spawnCursorPlane({
-			"position": new THREE.Vector3(this.worldOffset.x, -this.worldOffset.y, this.worldOffset.z),
+			"position": new THREE.Vector3(0, -2.0 * this.worldOffset.y, 0).add(this.worldOffset),
 			"rotate": new THREE.Vector3(Math.PI / 2.0, 0, 0),
-			"width": this.enclosure.innerWidth,
-			"height": this.enclosure.innerDepth
+			"width": width,
+			"height": depth
 		});
 	}
 
 	if( this.options.enabledCursorEvents.northPlane )
 	{
 		var northPlane = JumpStart.spawnCursorPlane({
-			"position": new THREE.Vector3(0, 0, this.worldOffset.y),
+			"position": new THREE.Vector3(0, -this.worldOffset.y, depth / (-2.0)).add(this.worldOffset),
 			"rotate": new THREE.Vector3(0, 0, 0),
-			"width": this.enclosure.innerWidth,
-			"height": this.enclosure.innerDepth
+			"width": width,
+			"height": height
 		});
 	}
 
 	if( this.options.enabledCursorEvents.southPlane )
 	{
 		var southPlane = JumpStart.spawnCursorPlane({
-			"position": new THREE.Vector3(0, 0, -this.worldOffset.y),
+			"position": new THREE.Vector3(0, -this.worldOffset.y, depth / 2.0).add(this.worldOffset),
 			"rotate": new THREE.Vector3(0, Math.PI, 0),
-			"width": this.enclosure.innerWidth,
-			"height": this.enclosure.innerDepth
+			"width": width,
+			"height": height
 		});
 	}
 
 	if( this.options.enabledCursorEvents.westPlane )
 	{
 		var westPlane = JumpStart.spawnCursorPlane({
-			"position": new THREE.Vector3(this.worldOffset.y, 0, 0),
+			"position": new THREE.Vector3(width / (-2.0), -this.worldOffset.y, 0).add(this.worldOffset),
 			"rotate": new THREE.Vector3(0, Math.PI / 2.0, 0),
-			"width": this.enclosure.innerWidth,
-			"height": this.enclosure.innerDepth
+			"width": depth,
+			"height": height
 		});
 	}
 
 	if( this.options.enabledCursorEvents.eastPlane )
 	{
 		var eastPlane = JumpStart.spawnCursorPlane({
-			"position": new THREE.Vector3(-this.worldOffset.y, 0, 0),
+			"position": new THREE.Vector3(width / (2.0), -this.worldOffset.y, 0).add(this.worldOffset),
 			"rotate": new THREE.Vector3(0, -Math.PI / 2.0, 0),
-			"width": this.enclosure.innerWidth,
-			"height": this.enclosure.innerDepth
+			"width": depth,
+			"height": height
 		});
 	}
 
@@ -1137,8 +1169,29 @@ jumpStart.prototype.run = function()
 	this.onTick();
 };
 
+var frameSamples = new Array();
+var fpsSlate = document.getElementById("fps");
 jumpStart.prototype.onTick = function()
 {
+	if( fpsSlate )
+	{
+		frameSamples.push(g_deltaTime);
+
+		var average = 0;
+		if( frameSamples.length > 10 )
+		{
+			var sum = 0;
+			var x;
+			for( x in frameSamples )
+				sum += frameSamples[x];
+
+			average = sum / frameSamples.length;
+			frameSamples = new Array();
+
+			fpsSlate.innerHTML = "<h2><b>" + Math.round(1.0 / average) + " fps</b></h2>";
+		}
+	}
+
 	function recursive(parentObject)
 	{
 		var sceneObject;
@@ -1480,7 +1533,11 @@ jumpStart.prototype.prepInstance = function(modelFile)
 			}
 			else
 			{
-				var altspaceTintColor = {"r": tintColor.r * 0.5, "g": tintColor.g * 0.5, "b": tintColor.b * 0.5};
+				var altspaceTintColor;
+				if( JumpStart.options.legacyLoader )
+					altspaceTintColor = {"r": tintColor.r * 0.5, "g": tintColor.g * 0.5, "b": tintColor.b * 0.5};
+				else
+					altspaceTintColor = {"r": tintColor.r, "g": tintColor.g, "b": tintColor.b};
 
 				this.userData.tintColor = altspaceTintColor;
 
@@ -1526,6 +1583,8 @@ jumpStart.prototype.prepInstance = function(modelFile)
 		}.bind(this)
 		*/
 	};
+
+	sceneObject.JumpStart.setTint(new THREE.Color(1.0, 1.0, 1.0));
 };
 
 jumpStart.prototype.prepEventListeners = function(sceneObject, inEventName)
@@ -1958,7 +2017,13 @@ jumpStart.prototype.onSoundCached = function(loadedSound, soundFileName)
 //	}
 };
 
-jumpStart.prototype.playSound = function(sound_file_name, volume_scale)
+jumpStart.prototype.killSound = function(sound)
+{
+	sound.src = "";
+	sound.load();
+};
+
+jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loop)
 {
 	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
 	{
@@ -1968,11 +2033,25 @@ jumpStart.prototype.playSound = function(sound_file_name, volume_scale)
 		return;
 	}
 
+	var loop;
+	if( typeof user_loop !== "undefined" )
+		loop = user_loop;
+	else
+		loop = false;
+
 	var volumeScale = (typeof volume_scale == 'undefined') ? 1.0 : volume_scale;
 
 	var cachedSound = this.cachedSounds[sound_file_name].cloneNode();
+	cachedSound.loop = loop;
 	cachedSound.volume = 1.0 * volumeScale;
 	cachedSound.play();
+
+	return cachedSound;
+};
+
+jumpStart.prototype.playSoundFast = function(sound_file_name, volume_scale)
+{
+	this.cachedSounds[sound_file_name].play();
 };
 
 function jumpStartModelLoader()

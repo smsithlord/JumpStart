@@ -121,7 +121,7 @@
 var myOptions =
 {
 	"debugMode": true,
-	"legacyLoader": true,
+	"legacyLoader": false,
 	"worldScale": 1.0,
 	"scaleWithEnclosure": true,
 	"enabledCursorEvents":
@@ -192,7 +192,8 @@ function shrinkObject()
 
 function hightlightOnObject()
 {
-	var myColor = new THREE.Color(1.5, 1.5, 1.5);
+//	var myColor = new THREE.Color(1.5, 1.5, 1.5);
+	var myColor = new THREE.Color(0.5, 0.5, 0.5);
 	this.JumpStart.setTint(myColor);
 }
 
