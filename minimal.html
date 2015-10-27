@@ -1,48 +1,47 @@
-<!-- Author: Elijah Newman-Gomez -->
+<!-- Powered by the JumpStart Game Engine -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-		<title>JumpStart Minimal</title>
+	<head>
+		<title>Minimal Project</title>
 
-		<script src="lib/three.js"></script>
-		<script src="lib/firebase.js"></script>
-		<script src="src/AltOBJMTLLoader.js"></script>
-		<script src="lib/OBJMTLLoader.js"></script>
-		<script src="lib/MTLLoader.js"></script>
-		<script src="src/sync/FirebaseSync.js"></script>
-		<link rel="stylesheet" type="text/css" href="myStyle.css">
-</head>
-<body>
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
 
-<div id="info">JumpStart Minimal</div>
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
 
-<!-- APPEND JUMPSTART TO YOUR BODY ELEMENT -->
-<script src="JumpStart.js"></script>
+		<!-- JumpStart Styles -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css" />
+	</head>
 
-<script>
+	<body>
 
-// Force the legacy loader if you get invisible meshes
-JumpStart.setOptions({"legacyLoader": true});
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
 
-function onReady()
-{
-	// JumpStart can only use models IT loads
-	JumpStart.loadModels("models/JumpStart/jewel.obj").then(function() {
-		// After model has loaded, spawn an object using it
-		// NOTE: The returned THREE.JS object is extended with a JumpStart sub-object
-		var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
+		<!-- Window-Level Event Callbacks -->
+		<script>
+		function onReady() {
 
-		// Give it a SPIN behavior
-		// NOTE: JumpStart event listeners go onto JumpStart sub-object
-		myInstance.JumpStart.onTick = function() {
-			this.rotateY(1.0 * g_deltaTime);
-		};
+			// Load your model
+			JumpStart.loadModels(["models/JumpStart/jewel.obj"]).then(function() {
 
-		// Now start the simulation
-		JumpStart.run();
-	});
-}
-</script>
+				// Spawn an instance of your model
+				var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
 
-</body>
+				// Make it spin
+				myInstance.JumpStart.onTick = function() {
+					this.rotateY(1.0 * g_deltaTime);
+				};
+
+				// Start the simulation
+				JumpStart.run();
+			});
+		}
+		</script>
+	</body>
 </html>

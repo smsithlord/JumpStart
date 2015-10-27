@@ -1,866 +1,746 @@
-<!--
-	Combo Breaker
-
-	Drop tokens of alternating colors into a connect-four game board.
-	Chains of 4 or more explode.  All chips above drop down.
-	See who can score the biggest combo.
-
-	TODO:
-		- Finish porting to JumpStart SDK Crutch
-		- Add scoreboard
-		- Add per-chip-owner point distribution of combo points.
-
-	Author: Elijah Newman-Gomez
--->
+<!-- Powered by the JumpStart Game Engine -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-		<title>JumpStart</title>
+	<head>
+		<title>Combo Breaker</title>
 
-		<script src="lib/three.js"></script>
-		<script src="lib/firebase.js"></script>
-		<script src="src/AltOBJMTLLoader.js"></script>
-		<script src="lib/OBJMTLLoader.js"></script>
-		<script src="lib/MTLLoader.js"></script>
-		<script src="src/sync/FirebaseSync.js"></script>
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
 		<link rel="stylesheet" type="text/css" href="myStyle.css">
-</head>
-<body>
+	</head>
 
-<div id="info">JumpStart</div>
+	<body>
 
-<!-- APPEND JUMPSTART TO YOUR BODY ELEMENT -->
-<script id="JumpStartDebugElements" type="text/html">
-<!-- THE FOLLOWING HTML/CSS IS ONLY INJECTED IF JUMPSTART IS IN DEBUG MODE!! -->
-	<style>
-		.JumpStartDebugIcon
-		{
-			width: 109px;
-			height: 109px;
-			cursor: pointer;
-			margin-top: 5px;
-			margin-bottom: 5px;
-			margin-left: 5px;
-			margin-right: 5px;
-			display: inline-block;
-		}
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
 
-		.JumpStartDebugIcon:hover
-		{
-			-webkit-filter: brightness(2);
-		}
+		<!-- Window-Level Event Callbacks -->
+		<script>
 
-		.JumpStartDevPane
-		{
-			width: 100%;
-			height: 400px;
-			border: 0;
-			overflow: hidden;
-			font-size: 35px;
-			font-weight: bold;
-			text-align: center;
-		}
-
-		.JumpStartFunctionEntry
-		{
-			width: 100%;
-			height: 100%;
-			overflow-y: auto;
-			font-size: 25px;
-			font-family: Arial;
-			font-weight: bold;
-			background-color: rgba(255, 255, 255, 0.5);
-		}
-
-		.JumpStartInput[type='button']
-		{
-			font-size: 35px;
-			font-face: Arial;
-			font-weight: bold;
-			margin: 10px;
-			cursor: pointer;
-		}
-
-		.JumpStartFunctionSelect
-		{
-			font-size: 25px;
-			font-face: Arial;
-			font-weight: bold;
-			margin-bottom: 10px;
-			cursor: pointer;
-			width: 100%;
-		}
-	</style>
-
-	<script id="JumpStartEditObjectPanel" type="text/html">
-		<div style="position: absolute; top: 100px; left: 0; right: 0; text-align: center;" id="JumpStartDebugPanel">
-			<div style="width: 900px; height: 600px; border: 2px solid #000; border-radius: 20px; background-color: rgba(0, 0, 0, 0.5); display: inline-block;">
-				<div class="JumpStartDebugIcon" style="background-image: url('debugui/ontick.png');" onclick="JumpStart.debugui.editListener('onTick');"></div>
-				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursorenter.png');" onclick="JumpStart.debugui.editListener('onCursorEnter');"></div>
-				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursorleave.png');" onclick="JumpStart.debugui.editListener('onCursorLeave');"></div>
-				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursordown.png');" onclick="JumpStart.debugui.editListener('onCursorDown');"></div>
-				<div class="JumpStartDebugIcon" style="background-image: url('debugui/oncursorup.png');" onclick="JumpStart.debugui.editListener('onCursorUp');"></div>
-				<div class="JumpStartDebugIcon" style="background-image: url('debugui/onspawn.png');" onclick="JumpStart.debugui.editListener('onSpawn');"></div>
-				<div class="JumpStartDebugIcon" style="background-image: url('debugui/globals.png');"></div>
-				<br clear='all' />
-				<div class="JumpStartDevPane">
-					<div style="display: inline-block; text-align: left;">
-						<ol><li>Choose a listener (above)</li>
-						<li>Code your logic</li>
-						<li>OK to test your work</li>
-						<li>Export to save your app to notepad</li></ol>
-					</div>
-				</div>
-				<div style="float: right;">
-					<input type="button" class="JumpStartInput" value=" Cancel " onclick="JumpStart.debugui.cancelChanges();" />
-					<input type="button" class="JumpStartInput" value=" Apply " onclick="JumpStart.debugui.applyChanges();" />
-					<input type="button" class="JumpStartInput" value=" OK " onclick="JumpStart.debugui.okChanges();" />
-				</div>
-			</div>
-		</div>
-	</script>
-
-	<script id="JumpStartFunctionEdit" type="text/html">
-		<select class="JumpStartFunctionSelect"></select>
-		<textarea class="JumpStartFunctionEntry"></textarea>
-	</script>
-</script>
-
-<script src="JumpStart.js"></script>
-
-<script>
-
-// (OPTIONAL) CONFIGURE JUMPSTART
-var myOptions =
-{
-	"debugMode": false,
-	"legacyLoader": true,
-	"worldScale": 1.0,
-	"scaleWithEnclosure": true,
-	"enabledCursorEvents":
-	{
-		"cursorDown": true,
-		"cursorUp": true,
-		"cursorEnter": true,
-		"cursorLeave": true,
-		"cursorMove": true,
-		"bottomPlane": false,
-		"topPlane": false,
-		"northPlane": false,
-		"southPlane": false,
-		"eastPlane": false,
-		"westPlane": false
-	},
-	"camera":
-	{
-		"lookAtOrigin": true,
-		"position": new THREE.Vector3(-5.0, 10.0, 30.0),
-		//"position": new THREE.Vector3(1.0, 1.0, 2.0),
-		"translation": new THREE.Vector3(40.0, 30.0, 180.0)
-	},
-	"firebase":
-	{
-		"rootUrl": "https://combo-breaker.firebaseio.com/",
-		"appId": "combo-breaker",
-		"params": { "AUTOSYNC": true, "TRACE": false }
-	}
-};
-JumpStart.setOptions(myOptions);
-
-
-// DEFINE JUMPSTART'S TWO CALLBACKS
-
-// PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
-function onPrecache()
-{
-	// CLear the database...
-//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
-//	allDataRef.remove();
-
-	// Precache anything that your app needs.
-	var myModels = ["models/FourInRow/slot.obj", "models/FourInRow/frame.obj", "models/FourInRow/pointer.obj", "models/FourInRow/chip.obj", "models/FourInRow/chip2.obj"];
-	JumpStart.loadModels(myModels).then(function() {
-
-		// Finally call JumpStart.doneCaching() to signify you are done.
-		// Your onReady global function wll be called next.
-		JumpStart.doneCaching();
-	});
-}
-
-function onCursorDown()
-{
-	// Drop the chip token!!
-	if( g_chipPointer && g_chipPointer.JumpStart.hasChip && g_chipToken )
-	{
-		// First make sure that the col is not filled up
-		var x, testChip;
-		for( x in JumpStart.syncedInstances )
-		{
-			if( JumpStart.syncedInstances[x] === g_chipPointer )
-				continue;
-
-			testChip = JumpStart.syncedInstances[x];
-
-			if( g_chipPointer.position.x === testChip.position.x && g_chipPointer.position.y - testChip.position.y < g_BlockWidth * 2 )
+			var myOptions =
 			{
-				console.log("Col is full!");
-				return;
-			}
-		}
-
-		// Now drop the token!
-		g_scene.remove(g_chipToken);
-
-		g_chipPointer.JumpStart.hasChip = false;
-
-		var modelName = g_chipPointer.JumpStart.nextModel;
-		g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
-
-		if( g_chipPointer.JumpStart.nextModel === modelName )
-			g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip2.obj";
-
-		g_chipPointer.JumpStart.sync();
-
-		// Now spawn a new, live falling chip!
-		var liveChip = JumpStart.spawnInstance(modelName);
-		liveChip.JumpStart.onTick["fallingToken"] = fallingToken;
-		liveChip.JumpStart.onNetworkRemoved["lifeIsShort"] = lifeIsShort;
-		liveChip.position.copy(g_chipPointer.position);
-		liveChip.userData.dependent = true;	// not synced
-
-		liveChip.JumpStart.makePhysics();
-		liveChip.JumpStart.freefallRot.set(0, 0, 0);
-
-		liveChip.JumpStart.sync();
-	}
-}
-
-function lifeIsShort()
-{
-// Reset the object to a fresh free-fall
-	this.JumpStart.makePhysics();
-
-	var colorDirection = 1.0;
-	if( this.JumpStart.modelFile === "models/FourInRow/chip2.obj" )
-		colorDirection = -1.0;
-
-	// Variation
-	var force = new THREE.Vector3(30.0 * ((Math.random() > 0.5) ? -1.0 : 1.0), 50.0 * Math.random(), 20 * ((Math.random() > 0.5) ? -1.0 : 1.0) * colorDirection);
-
-	// Min values plus variation
-	force.multiplyScalar(Math.random()).add(new THREE.Vector3(0.0, 50.0, 20.0 * colorDirection));
-
-	// Apply it
-	this.JumpStart.applyForce(force);
-
-	// So we know when to stop falling
-	this.JumpStart.onTick = {};
-	this.JumpStart.onTick["landOnFloor"] = landOnFloor;
-}
-
-function CheckForFour()
-{
-	var numChips = 0;
-
-	var z;
-
-	var otherChip;
-	var y;
-
-	var rowDifference;
-	var colDifference;
-	var chipMatrix;
-
-	var chip;
-	var x;
-	var check = 0;
-
-	// This will be a list of all chips that need to spew
-	var spewList = {};
-
-	for( x in JumpStart.syncedInstances )
-	{
-		check++;
-		chip = JumpStart.syncedInstances[x];
-
-		if( chip === g_chipPointer || (chip.JumpStart.hasOwnProperty("physicsState") && chip.JumpStart.physicsState === 1) )
-			continue;
-
-		numChips++;
-
-		chipMatrix = [
-			[null, null, null, null, null, null, null],
-			[null, null, null, null, null, null, null],
-			[null, null, null, null, null, null, null],
-			[null, null, null, null, null, null, null],
-			[null, null, null, null, null, null, null],
-			[null, null, null, null, null, null, null],
-			[null, null, null, null, null, null, null]
-		];
-
-		for( y in JumpStart.syncedInstances )
-		{
-			otherChip = JumpStart.syncedInstances[y];
-
-			if( otherChip === g_chipPointer || (otherChip.JumpStart.hasOwnProperty("physicsState") && otherChip.JumpStart.physicsState === 1) || otherChip.position.z !== chip.position.z )
-				continue;
-
-			// THIS IS A VALID CHIP TO TEST AGAINST
-
-			// Are we within 3 rows/cols of it?
-			rowDifference = Math.round((otherChip.position.y - chip.position.y) / g_BlockWidth);
-
-			if( rowDifference > 3 || rowDifference < -3 )
-				continue;
-
-			colDifference = Math.round((otherChip.position.x - chip.position.x) / g_BlockWidth);
-
-			if( colDifference > 3 || colDifference < -3 )
-				continue;
-
-			if( rowDifference === 0 && colDifference === 0 )
-				continue;
-
-			// See if we are a match
-			if( rowDifference === 0 || colDifference === 0 || Math.abs(colDifference) === Math.abs(rowDifference) )
-			{
-				if( otherChip.JumpStart.modelFile === chip.JumpStart.modelFile )
+				"titleImageURL": "misc/combobreakertitle.png",
+				"legacyLoader": false,
+				"worldScale": 1.0,
+				"scaleWithEnclosure": false,
+				"showCrosshair": false,
+				"showCursorPlanes": false,
+				"camera":
 				{
-
-					// WE ARE A MATCH!!
-					chipMatrix[3 - rowDifference][3 + colDifference] = otherChip;
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+					"translation": new THREE.Vector3(40.0, 120.0, 650.0)
+				},
+				"firebase":
+				{
+					"rootUrl": "https://combo-breaker.firebaseio.com/",
+					"appId": "combo-breaker",
+					"suppressPersonalBrowser": true
 				}
-			}
-		}
+			};
 
-		// Test Four In Row Cases
-		var caseHoriz = new Array();
-		var caseVert = new Array();
-		var caseSlopePos = new Array();
-		var caseSlopeNeg = new Array();
+			JumpStart.setOptions(myOptions);
 
-		var row, col, testObject;
-		for( row = -3; row < 4; row++ )
-		{
-			for( col = -3; col < 4; col++ )
+			// Window-level callback for onPrecache event
+			function onPrecache()
 			{
-				if( row === 0 && col === 0 )
-					continue;
-
-				testObject = chipMatrix[3 - row][3 + col];
-
-				if( col === 0 )
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
 				{
-					if( testObject )
-						caseVert.push(testObject);
-					else
-						caseVert = new Array();
+					JumpStart.doneCaching();
+					return;
 				}
-				else if( row === 0 )
+				
+				// CLear the database...
+			//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+			//	allDataRef.remove();
+
+				// Precache anything that your app needs.
+				var myModels = ["models/FourInRow/slot.obj", "models/FourInRow/frame.obj", "models/FourInRow/pointer.obj", "models/FourInRow/chip.obj", "models/FourInRow/chip2.obj"];
+				JumpStart.loadModels(myModels).then(function() {
+
+					// Finally call JumpStart.doneCaching() to signify you are done.
+					// Your onReady global function wll be called next.
+					JumpStart.doneCaching();
+				});
+			}
+
+			function onCursorDown()
+			{
+				// Drop the chip token!!
+				if( g_chipPointer && g_chipPointer.JumpStart.hasChip && g_chipToken )
 				{
-					if( testObject )
-						caseHoriz.push(testObject);
-					else
-						caseHoriz = new Array();
-				}
-
-				if( row > 0 )
-				{
-					if( col < 0 && Math.abs(col) === Math.abs(row) )
-					{
-						if( testObject )
-							caseSlopeNeg.push(testObject);
-						else
-							caseSlopeNeg = new Array();
-					}
-					else if( col > 0 && Math.abs(col) === Math.abs(row) )
-					{
-						if( testObject )
-							caseSlopePos.push(testObject);
-						else
-							caseSlopePos = new Array();
-					}
-				}
-				else if( row < 0 )
-				{
-					if( col < 0 && Math.abs(col) === Math.abs(row) )
-					{
-						if( testObject )
-							caseSlopePos.push(testObject);
-						else
-							caseSlopePos = new Array();
-					}
-					else if( col > 0 && Math.abs(col) === Math.abs(row) )
-					{
-						if( testObject )
-							caseSlopeNeg.push(testObject);
-						else
-							caseSlopeNeg = new Array();
-					}
-				}
-			}
-		}
-
-		if( caseHoriz.length >= 3 )
-		{
-			if( !chip.userData.hasOwnProperty("isVertMatch") )
-				chip.userData.isVertMatch = false;
-
-			spewList["match" + chip.id] = chip;
-			for( z in caseHoriz )
-			{
-				if( !caseHoriz[z].userData.hasOwnProperty("isVertMatch") )
-					caseHoriz[z].userData.isVertMatch = false;
-
-				spewList["match" + caseHoriz[z].id] = caseHoriz[z];
-			}
-		}
-
-		if( caseVert.length >= 3 )
-		{
-			chip.userData.isVertMatch = true;
-			spewList["match" + chip.id] = chip;
-
-			for( z in caseVert )
-			{
-				caseVert[z].userData.isVertMatch = true;
-				spewList["match" + caseVert[z].id] = caseVert[z];
-			}
-		}
-
-		if( caseSlopePos.length >= 3 )
-		{
-			if( !chip.userData.hasOwnProperty("isVertMatch") )
-				chip.userData.isVertMatch = false;
-
-			spewList["match" + chip.id] = chip;
-			for( z in caseSlopePos )
-			{
-				if( !caseSlopePos[z].userData.hasOwnProperty("isVertMatch") )
-					caseSlopePos[z].userData.isVertMatch = false;
-
-				spewList["match" + caseSlopePos[z].id] = caseSlopePos[z];
-			}
-		}
-
-		if( caseSlopeNeg.length === 3 )
-		{
-			if( !chip.userData.hasOwnProperty("isVertMatch") )
-				chip.userData.isVertMatch = false;
-
-			spewList["match" + chip.id] = chip;
-			for( z in caseSlopeNeg )
-			{
-				if( !caseSlopeNeg[z].userData.hasOwnProperty("isVertMatch") )
-					caseSlopeNeg[z].userData.isVertMatch = false;
-
-				spewList["match" + caseSlopeNeg[z].id] = caseSlopeNeg[z];
-			}
-		}
-	}
-
-	var spewCount = 0;
-	var x;
-	for( x in spewList )
-	{
-		spewCount++;
-
-		numChips--;
-/*
-		// Reset the object to a fresh free-fall
-		spewList[x].JumpStart.makePhysics();
-
-		var colorDirection = 1.0;
-		if( spewList[x].JumpStart.modelFile === "models/FourInRow/chip2.obj" )
-			colorDirection = -1.0;
-
-		// Variation
-		var force = new THREE.Vector3(30.0 * ((Math.random() > 0.5) ? -1.0 : 1.0), 50.0 * Math.random(), 20 * ((Math.random() > 0.5) ? -1.0 : 1.0) * colorDirection);
-
-		// Min values plus variation
-		force.multiplyScalar(Math.random()).add(new THREE.Vector3(0.0, 50.0, 20.0 * colorDirection));
-
-		// Apply it
-		spewList[x].JumpStart.applyForce(force);
-
-		// So we know when to stop falling
-		spewList[x].JumpStart.onTick = {};
-		spewList[x].JumpStart.onTick["landOnFloor"] = landOnFloor;
-*/
-//			spewList[x].userData.dependent = true;
-//			spewList[x].JumpStart.sync();
-
-		JumpStart.unsyncObject(spewList[x]);
-
-			// Now check if the chip above us needs to fall.
-			ToppleRecursive(spewList[x]);
-	}
-
-	if( numChips >= 42 )
-	{
-		console.log("OOPS! TOO MANY CHIPS ON BOARD!  NO MORE ROOM! " + numChips);
-	}
-
-	return (spewCount > 0 );
-}
-
-function ToppleRecursive(chip)
-{
-	// Find a chip directly above us...
-	var y, otherChip;
-	for( y in JumpStart.syncedInstances )
-	{
-		otherChip = JumpStart.syncedInstances[y];
-		if( otherChip === g_chipPointer || (otherChip.JumpStart.hasOwnProperty("physicsState") && otherChip.JumpStart.physicsState === 1) || otherChip.position.z !== chip.position.z )
-			continue;
-
-		// THIS IS A VALID CHIP TO TEST AGAINST
-		if( otherChip.userData.hasOwnProperty("isVertMatch") && otherChip.userData.isVertMatch )
-			continue;
-
-		rowDifference = Math.round((otherChip.position.y - chip.position.y) / g_BlockWidth);
-
-		if( rowDifference !== 1 )
-			continue;
-
-		colDifference = Math.round((otherChip.position.x - chip.position.x) / g_BlockWidth);
-
-		if( colDifference !== 0 )
-			continue;
-
-		otherChip.JumpStart.makePhysics();
-		otherChip.JumpStart.freefallRot.set(0, 0, 0);
-		otherChip.JumpStart.onTick["fallingToken"] = fallingToken;
-
-		otherChip.userData.dependent = true;
-		otherChip.JumpStart.sync();
-		ToppleRecursive(otherChip);
-	}
-}
-
-// PURPOSE: Gets called every time the scene is about to be rendered.
-function onTick()
-{
-	// do work
-}
-
-</script>
-
-
-<script>
-
-// ALL YOUR NON-JUMPSTART CODE GOES HERE
-// TODO: Make calling the JumpStart.run() command OPTIONAL!! (swap it for a JumpStart.preventDefault())
-
-var g_BlockWidth = 33.0;	// Actual 3ds Max units
-var g_OffsetY = 28.0;
-var g_chipPointer = null;
-var g_chipToken = null;
-
-function onReady()
-{
-	// All users locally create non-synced objects
-
-	// Create the game board
-	var instance
-	var offset = new THREE.Vector3();
-	var col, row, yOffset, offset, instance;
-	for( row = 0; row < 6; row++ )
-	{
-		yOffset = row * g_BlockWidth;
-		for( col = -3; col < 4; col++ )
-		{
-			offset.set(col * g_BlockWidth, yOffset + g_OffsetY, 0);
-			instance = JumpStart.spawnInstance("models/FourInRow/slot.obj");
-			instance.JumpStart.blocksLOS = false;
-			instance.position.add(offset);
-		}
-	}
-
-	// Create the frame
-	instance = JumpStart.spawnInstance("models/FourInRow/frame.obj");
-	instance.JumpStart.blocksLOS = false;
-	instance.position.y += g_OffsetY;
-
-	// Create the invisible planes for the cursor to collide with (1 on each side)
-	var cursorPlaneNorth = JumpStart.spawnCursorPlane({
-		"position": new THREE.Vector3(0, g_OffsetY + g_BlockWidth * 4.0, 0).add(g_worldOffset),
-		"offset": new THREE.Vector3(0, 0, 10.0),
-		"rotate": new THREE.Vector3(0, 0, 0),
-		"width": g_BlockWidth * 7.0,
-		"height": g_BlockWidth * 9.0
-	});
-
-	var cursorPlaneSouth = JumpStart.spawnCursorPlane({
-		"position": new THREE.Vector3(0, g_OffsetY + g_BlockWidth * 4.0, 0).add(g_worldOffset),
-		"offset": new THREE.Vector3(0, 0, 10.0),
-		"rotate": new THREE.Vector3(0, Math.PI, 0),
-		"width": g_BlockWidth * 7.0,
-		"height": g_BlockWidth * 9.0
-	});
-
-	// The first user
-	if( g_localUser.firstUser )
-	{
-		// Create the ONE & ONLY chip pointer
-		spawnPointer();
-	}
-
-	// If no chip pointer is spawned with 5 seconds, make one ourselves
-	if( g_chipPointer === null )
-		setTimeout(function()
-		{
-			if( g_chipPointer )
-				return;
-
-			g_chipPointer = JumpStart.spawnInstance("models/FourInRow/pointer.obj");
-			g_chipPointer.position.copy(g_worldOffset).add(new THREE.Vector3(0, g_BlockWidth * 7.0, 0));
-
-			// Extending the JumpStart object with your own properties auto-syncs them
-			g_chipPointer.JumpStart.hasChip = true;
-			g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
-
-			g_chipPointer.JumpStart.onTick["chipPointerTick"] = chipPointerTick;
-			g_chipPointer.JumpStart.onSpawn["chipPointerSpawn"] = chipPointerSpawn;
-
-			g_chipPointer.JumpStart.sync();
-		}, 5000);
-
-	// START SIMULATION
-	JumpStart.run();
-}
-
-function spawnPointer()
-{
-	g_chipPointer = JumpStart.spawnInstance("models/FourInRow/pointer.obj");
-	g_chipPointer.position.copy(g_worldOffset).add(new THREE.Vector3(0, g_BlockWidth * 7.0, 0));
-
-	// Extending the JumpStart object with your own properties auto-syncs them
-	g_chipPointer.JumpStart.hasChip = true;
-	g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
-
-	g_chipPointer.JumpStart.onTick["chipPointerTick"] = chipPointerTick;
-	g_chipPointer.JumpStart.onSpawn["chipPointerSpawn"] = chipPointerSpawn;
-
-	g_chipPointer.JumpStart.sync();
-}
-
-function chipPointerTick()
-{
-	if( this.JumpStart.hasChip && g_lookHit && g_lookHit.object.hasOwnProperty("isCursorPlane") )
-	{
-		var scaledPoint = new THREE.Vector3().copy(g_lookHit.point).multiplyScalar(1/g_worldScale);
-
-		var posX = scaledPoint.x;
-		posX += g_BlockWidth / 2.0;
-
-		var remainderX = posX % g_BlockWidth;
-
-		if( remainderX > 0 )
-			posX -= remainderX;
-		else
-			posX -= g_BlockWidth + remainderX;
-
-		if( Math.abs(posX) <= g_BlockWidth * 3 )
-			this.position.x = posX;
-	}
-//console.log(this.JumpStart.hasChip);
-
-	if( this.JumpStart.hasChip && !g_chipToken )
-		spawnChipToken();
-	else if( !this.JumpStart.hasChip && g_chipToken )
-	{
-		g_scene.remove(g_chipToken);
-		g_chipToken = null;
-	}
-}
-
-function chipPointerSpawn(isLocal, isInitial)
-{
-	g_chipPointer = this;
-
-	if( !JumpStart.webMode )
-		g_chipPointer.position.set(0, g_BlockWidth * 7.0 * (1 / g_worldScale), 0);
-
-/*
-	this.JumpStart.addDataListener("hasChip", function(oldValue, value, isLocal) {
-		console.log("DROP THE TOKEN!!");
-	});
-*/
-}
-
-function spawnChipToken()
-{
-	g_chipToken = JumpStart.spawnInstance(g_chipPointer.JumpStart.nextModel);
-	g_chipToken.position.copy(g_chipPointer.position);
-
-	g_chipToken.JumpStart.onTick = function() {
-		this.position.copy(g_chipPointer.position);
-	};
-}
-
-function controlledFall()
-{
-	this.position.y -= 10.0 * g_deltaTime;
-}
-/*
-function chipTokenSpawn()
-{
-	this.JumpStart.addDataListener("isDropping", function(oldValue, value, isLocal) {
-		if( isLocal )
-			this.isUnderling = true;
-	});
-}
-*/
-
-function landOnFloor()
-{
-	if( this.position.y < g_worldOffset.y )
-	{
-		this.position.y = g_worldOffset.y;
-		this.JumpStart.appliedForce.set(0, 0, 0);
-		this.JumpStart.velocity.set(0, 0, 0);
-		this.JumpStart.physicsState = 0;
-		this.rotation.set((Math.PI / 2.0), 0, 0);
-
-		// remove ALL tick listeners
-		//delete this.JumpStart.onTick["landOnFloor"];
-		this.JumpStart.onTick = {};
-		this.JumpStart.onTick = function()
-		{
-			if( !this.userData.hasOwnProperty("lifeSpan") )
-				this.userData.lifeSpan = 10.0;
-
-			this.userData.lifeSpan -= g_deltaTime;
-
-			if( this.userData.lifeSpan <= 0 )
-				g_scene.remove(this);
-		}
-	}
-}
-
-function fallingToken()
-{ 
-	// Check for collision against floor
-	if( this.position.y < g_worldOffset.y + g_OffsetY )
-	{
-		this.position.y = g_worldOffset.y + g_OffsetY;
-
-		this.JumpStart.velocity.set(0, 0, 0);
-		this.JumpStart.physicsState = 0;
-
-		// remove the tick listener
-		delete this.JumpStart.onTick["fallingToken"];
-
-		// If this object is our sync depedent, we have extra work to do!!
-		if( this.userData.dependent )
-		{
-			var alreadySynced = false;
-
-			var allChipsStopped = true;
-			var x, testChip;
-			for( x in JumpStart.syncedInstances)
-			{
-				testChip = JumpStart.syncedInstances[x];
-				if( testChip === g_chipPointer || testChip.position.z !== g_chipPointer.position.z )
-					continue;
-
-				if( testChip.JumpStart.onTick.hasOwnProperty("fallingToken") )
-				{
-					allChipsStopped = false;
-					break;
-				}
-			}
-
-			// Check for four in a row
-			if( allChipsStopped )
-				alreadySynced = CheckForFour();
-
-			// If we did not find four in a row, we have to sync ourselves still
-			if( !alreadySynced )
-				this.JumpStart.sync();
-
-			// Indicate that we need a new chip spawned
-			if( allChipsStopped )
-			{
-				g_chipPointer.JumpStart.hasChip = true;
-				g_chipPointer.JumpStart.sync();
-			}
-		}
-	}
-	else
-	{
-		// Check for collision against another ship in-play
-		var x, testChip;
-		for( x in JumpStart.syncedInstances )
-		{
-			testChip = JumpStart.syncedInstances[x];
-
-			if( testChip === this || testChip === g_chipPointer || testChip.JumpStart.onTick.hasOwnProperty("fallingToken") || testChip.JumpStart.onTick.hasOwnProperty("landOnFloor") )
-				continue;
-
-			if( this.position.x === testChip.position.x && this.position.y - testChip.position.y < g_BlockWidth && this.position.y > testChip.position.y )
-			{
-				this.position.y = testChip.position.y + g_BlockWidth;
-
-				this.JumpStart.velocity.set(0, 0, 0);
-				this.JumpStart.physicsState = 0;
-
-				// remove the tick listener
-				delete this.JumpStart.onTick["fallingToken"];
-
-				// If this object is our sync depedent, we have extra work to do!!
-				if( this.userData.dependent )
-				{
-					var alreadySynced = false;
-
-					var allChipsStopped = true;
+					// First make sure that the col is not filled up
 					var x, testChip;
-					for( x in JumpStart.syncedInstances)
+					for( x in JumpStart.syncedInstances )
 					{
-						testChip = JumpStart.syncedInstances[x];
-						if( testChip === g_chipPointer || testChip.position.z !== g_chipPointer.position.z )
+						if( JumpStart.syncedInstances[x] === g_chipPointer )
 							continue;
 
-						if( testChip.JumpStart.onTick.hasOwnProperty("fallingToken") )
+						testChip = JumpStart.syncedInstances[x];
+
+/*
+						if( g_chipPointer.position.x === testChip.position.x && g_chipPointer.position.y - testChip.position.y < g_BlockWidth * 2 )
 						{
-							allChipsStopped = false;
-							break;
+							console.log("Col is full!");
+							return;
+						}
+*/
+					}
+
+					// Now drop the token!
+					g_scene.remove(g_chipToken);
+
+					g_chipPointer.JumpStart.hasChip = false;
+
+					var modelName = g_chipPointer.JumpStart.nextModel;
+					g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
+
+					if( g_chipPointer.JumpStart.nextModel === modelName )
+						g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip2.obj";
+
+					g_chipPointer.JumpStart.sync();
+
+					// Now spawn a new, live falling chip!
+					var liveChip = JumpStart.spawnInstance(modelName);
+					liveChip.JumpStart.onTick["fallingToken"] = fallingToken;
+					liveChip.JumpStart.onNetworkRemoved["lifeIsShort"] = lifeIsShort;
+					liveChip.position.copy(g_chipPointer.position);
+					liveChip.userData.dependent = true;	// not synced
+
+					liveChip.JumpStart.makePhysics();
+					liveChip.JumpStart.freefallRot.set(0, 0, 0);
+
+					liveChip.JumpStart.sync();
+				}
+			}
+
+			function onTick()
+			{
+				if( g_localUser && g_localUser.lookOrigin && g_localUser.lookOrigin.z < 0 && (!document.body.hasOwnProperty("mirrored") || !document.body.mirrored) )
+				{
+					document.body.style.webkitTransform = "scaleX(-1)";
+					document.body.style.filter = "FlipH";
+					document.body.mirrored = true;
+				}
+				else if( g_localUser.lookOrigin.z >= 0 && document.body.hasOwnProperty("mirrored") && document.body.mirrored )
+				{
+					document.body.style.webkitTransform = "none";
+					document.body.style.filter = "none";
+					document.body.mirrored = false;
+				}
+			}
+
+			var g_BlockWidth = 33.0;	// Actual 3ds Max units
+			var g_OffsetY = 28.0;
+			var g_chipPointer = null;
+			var g_chipToken = null;
+
+			function onReady()
+			{
+				if( !JumpStart.requestedRoomId )
+					return;
+
+				// Do nothing if we are not in an enclosure yet.
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
+					{
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
+
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+
+				// All users locally create non-synced objects
+
+				// Create the game board
+				var instance
+				var offset = new THREE.Vector3();
+				var col, row, yOffset, offset, instance;
+				for( row = 0; row < 6; row++ )
+				{
+					yOffset = row * g_BlockWidth;
+					for( col = -3; col < 4; col++ )
+					{
+						offset.set(col * g_BlockWidth, yOffset + g_OffsetY, 0);
+						instance = JumpStart.spawnInstance("models/FourInRow/slot.obj");
+						instance.JumpStart.blocksLOS = false;
+						instance.position.add(offset);
+					}
+				}
+
+				// Create the frame
+				instance = JumpStart.spawnInstance("models/FourInRow/frame.obj");
+				instance.JumpStart.blocksLOS = false;
+				instance.position.y += g_OffsetY;
+
+				// Create the invisible planes for the cursor to collide with (1 on each side)
+				var cursorPlaneNorth = JumpStart.spawnCursorPlane({
+					"position": new THREE.Vector3(0, g_OffsetY + g_BlockWidth * 4.0, 0).add(g_worldOffset),
+					"offset": new THREE.Vector3(0, 0, 10.0),
+					"rotate": new THREE.Vector3(0, 0, 0),
+					"width": g_BlockWidth * 7.0,
+					"height": g_BlockWidth * 9.0
+				});
+
+				var cursorPlaneSouth = JumpStart.spawnCursorPlane({
+					"position": new THREE.Vector3(0, g_OffsetY + g_BlockWidth * 4.0, 0).add(g_worldOffset),
+					"offset": new THREE.Vector3(0, 0, 10.0),
+					"rotate": new THREE.Vector3(0, Math.PI, 0),
+					"width": g_BlockWidth * 7.0,
+					"height": g_BlockWidth * 9.0
+				});
+
+				// The first user
+				if( g_localUser.firstUser )
+				{
+					// Create the ONE & ONLY chip pointer
+					spawnPointer();
+				}
+
+				// If no chip pointer is spawned with 5 seconds, make one ourselves
+				if( g_chipPointer === null )
+					setTimeout(function()
+					{
+						if( g_chipPointer )
+							return;
+
+						g_chipPointer = JumpStart.spawnInstance("models/FourInRow/pointer.obj");
+						g_chipPointer.position.copy(g_worldOffset).add(new THREE.Vector3(0, g_BlockWidth * 7.0, 0));
+
+						// Extending the JumpStart object with your own properties auto-syncs them
+						g_chipPointer.JumpStart.hasChip = true;
+						g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
+
+						g_chipPointer.JumpStart.onTick["chipPointerTick"] = chipPointerTick;
+						g_chipPointer.JumpStart.onSpawn["chipPointerSpawn"] = chipPointerSpawn;
+
+						g_chipPointer.JumpStart.sync();
+
+						// START SIMULATION
+						JumpStart.run();
+					}, 2000);
+				else
+					JumpStart.run();
+			}
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+			function lifeIsShort()
+			{
+			// Reset the object to a fresh free-fall
+				this.JumpStart.makePhysics();
+
+				var colorDirection = 1.0;
+				if( this.JumpStart.modelFile === "models/FourInRow/chip2.obj" )
+					colorDirection = -1.0;
+
+				// Variation
+				var force = new THREE.Vector3(30.0 * ((Math.random() > 0.5) ? -1.0 : 1.0), 50.0 * Math.random(), 20 * ((Math.random() > 0.5) ? -1.0 : 1.0) * colorDirection);
+
+				// Min values plus variation
+				force.multiplyScalar(Math.random()).add(new THREE.Vector3(0.0, 50.0, 20.0 * colorDirection));
+				force.multiplyScalar(0.2);
+
+				// Apply it
+				this.JumpStart.applyForce(force);
+
+				// So we know when to stop falling
+				this.JumpStart.onTick = {};
+				this.JumpStart.onTick["landOnFloor"] = landOnFloor;
+			}
+
+			function CheckForFour()
+			{
+				var numChips = 0;
+
+				var z;
+
+				var otherChip;
+				var y;
+
+				var rowDifference;
+				var colDifference;
+				var chipMatrix;
+
+				var chip;
+				var x;
+				var check = 0;
+
+				// This will be a list of all chips that need to spew
+				var spewList = {};
+
+				for( x in JumpStart.syncedInstances )
+				{
+					check++;
+					chip = JumpStart.syncedInstances[x];
+
+					if( chip === g_chipPointer || (chip.JumpStart.hasOwnProperty("physicsState") && chip.JumpStart.physicsState === 1) )
+						continue;
+
+					numChips++;
+
+					chipMatrix = [
+						[null, null, null, null, null, null, null],
+						[null, null, null, null, null, null, null],
+						[null, null, null, null, null, null, null],
+						[null, null, null, null, null, null, null],
+						[null, null, null, null, null, null, null],
+						[null, null, null, null, null, null, null],
+						[null, null, null, null, null, null, null]
+					];
+
+					for( y in JumpStart.syncedInstances )
+					{
+						otherChip = JumpStart.syncedInstances[y];
+
+						if( otherChip === g_chipPointer || (otherChip.JumpStart.hasOwnProperty("physicsState") && otherChip.JumpStart.physicsState === 1) || otherChip.position.z !== chip.position.z )
+							continue;
+
+						// THIS IS A VALID CHIP TO TEST AGAINST
+
+						// Are we within 3 rows/cols of it?
+						rowDifference = Math.round((otherChip.position.y - chip.position.y) / g_BlockWidth);
+
+						if( rowDifference > 3 || rowDifference < -3 )
+							continue;
+
+						colDifference = Math.round((otherChip.position.x - chip.position.x) / g_BlockWidth);
+
+						if( colDifference > 3 || colDifference < -3 )
+							continue;
+
+						if( rowDifference === 0 && colDifference === 0 )
+							continue;
+
+						// See if we are a match
+						if( rowDifference === 0 || colDifference === 0 || Math.abs(colDifference) === Math.abs(rowDifference) )
+						{
+							if( otherChip.JumpStart.modelFile === chip.JumpStart.modelFile )
+							{
+
+								// WE ARE A MATCH!!
+								chipMatrix[3 - rowDifference][3 + colDifference] = otherChip;
+							}
 						}
 					}
 
-					// Check for four in a row
-					if( allChipsStopped )
-						alreadySynced = CheckForFour();
+					// Test Four In Row Cases
+					var caseHoriz = new Array();
+					var caseVert = new Array();
+					var caseSlopePos = new Array();
+					var caseSlopeNeg = new Array();
 
-					// If we did not find four in a row, we have to sync ourselves still
-					if( !alreadySynced )
-						this.JumpStart.sync();
-
-					// Indicate that we need a new chip spawned
-					if( allChipsStopped )
+					var row, col, testObject;
+					for( row = -3; row < 4; row++ )
 					{
-						g_chipPointer.JumpStart.hasChip = true;
-						g_chipPointer.JumpStart.sync();
+						for( col = -3; col < 4; col++ )
+						{
+							if( row === 0 && col === 0 )
+								continue;
+
+							testObject = chipMatrix[3 - row][3 + col];
+
+							if( col === 0 )
+							{
+								if( testObject )
+									caseVert.push(testObject);
+								else
+									caseVert = new Array();
+							}
+							else if( row === 0 )
+							{
+								if( testObject )
+									caseHoriz.push(testObject);
+								else
+									caseHoriz = new Array();
+							}
+
+							if( row > 0 )
+							{
+								if( col < 0 && Math.abs(col) === Math.abs(row) )
+								{
+									if( testObject )
+										caseSlopeNeg.push(testObject);
+									else
+										caseSlopeNeg = new Array();
+								}
+								else if( col > 0 && Math.abs(col) === Math.abs(row) )
+								{
+									if( testObject )
+										caseSlopePos.push(testObject);
+									else
+										caseSlopePos = new Array();
+								}
+							}
+							else if( row < 0 )
+							{
+								if( col < 0 && Math.abs(col) === Math.abs(row) )
+								{
+									if( testObject )
+										caseSlopePos.push(testObject);
+									else
+										caseSlopePos = new Array();
+								}
+								else if( col > 0 && Math.abs(col) === Math.abs(row) )
+								{
+									if( testObject )
+										caseSlopeNeg.push(testObject);
+									else
+										caseSlopeNeg = new Array();
+								}
+							}
+						}
+					}
+
+					if( caseHoriz.length >= 3 )
+					{
+						if( !chip.userData.hasOwnProperty("isVertMatch") )
+							chip.userData.isVertMatch = false;
+
+						spewList["match" + chip.id] = chip;
+						for( z in caseHoriz )
+						{
+							if( !caseHoriz[z].userData.hasOwnProperty("isVertMatch") )
+								caseHoriz[z].userData.isVertMatch = false;
+
+							spewList["match" + caseHoriz[z].id] = caseHoriz[z];
+						}
+					}
+
+					if( caseVert.length >= 3 )
+					{
+						chip.userData.isVertMatch = true;
+						spewList["match" + chip.id] = chip;
+
+						for( z in caseVert )
+						{
+							caseVert[z].userData.isVertMatch = true;
+							spewList["match" + caseVert[z].id] = caseVert[z];
+						}
+					}
+
+					if( caseSlopePos.length >= 3 )
+					{
+						if( !chip.userData.hasOwnProperty("isVertMatch") )
+							chip.userData.isVertMatch = false;
+
+						spewList["match" + chip.id] = chip;
+						for( z in caseSlopePos )
+						{
+							if( !caseSlopePos[z].userData.hasOwnProperty("isVertMatch") )
+								caseSlopePos[z].userData.isVertMatch = false;
+
+							spewList["match" + caseSlopePos[z].id] = caseSlopePos[z];
+						}
+					}
+
+					if( caseSlopeNeg.length === 3 )
+					{
+						if( !chip.userData.hasOwnProperty("isVertMatch") )
+							chip.userData.isVertMatch = false;
+
+						spewList["match" + chip.id] = chip;
+						for( z in caseSlopeNeg )
+						{
+							if( !caseSlopeNeg[z].userData.hasOwnProperty("isVertMatch") )
+								caseSlopeNeg[z].userData.isVertMatch = false;
+
+							spewList["match" + caseSlopeNeg[z].id] = caseSlopeNeg[z];
+						}
+					}
+				}
+
+				var spewCount = 0;
+				var x;
+				for( x in spewList )
+				{
+					spewCount++;
+					numChips--;
+					JumpStart.unsyncObject(spewList[x]);
+
+						// Now check if the chip above us needs to fall.
+						ToppleRecursive(spewList[x]);
+				}
+
+				if( numChips >= 42 )
+				{
+					console.log("OOPS! TOO MANY CHIPS ON BOARD!  NO MORE ROOM! " + numChips);
+				}
+
+				return (spewCount > 0 );
+			}
+
+			function ToppleRecursive(chip)
+			{
+				// Find a chip directly above us...
+				var y, otherChip;
+				for( y in JumpStart.syncedInstances )
+				{
+					otherChip = JumpStart.syncedInstances[y];
+					if( otherChip === g_chipPointer || (otherChip.JumpStart.hasOwnProperty("physicsState") && otherChip.JumpStart.physicsState === 1) || otherChip.position.z !== chip.position.z )
+						continue;
+
+					// THIS IS A VALID CHIP TO TEST AGAINST
+					if( otherChip.userData.hasOwnProperty("isVertMatch") && otherChip.userData.isVertMatch )
+						continue;
+
+					rowDifference = Math.round((otherChip.position.y - chip.position.y) / g_BlockWidth);
+
+					if( rowDifference !== 1 )
+						continue;
+
+					colDifference = Math.round((otherChip.position.x - chip.position.x) / g_BlockWidth);
+
+					if( colDifference !== 0 )
+						continue;
+
+					otherChip.JumpStart.makePhysics();
+					otherChip.JumpStart.freefallRot.set(0, 0, 0);
+					otherChip.JumpStart.onTick["fallingToken"] = fallingToken;
+
+					otherChip.userData.dependent = true;
+					otherChip.JumpStart.sync();
+					ToppleRecursive(otherChip);
+				}
+			}
+
+			function spawnPointer()
+			{
+				g_chipPointer = JumpStart.spawnInstance("models/FourInRow/pointer.obj");
+				g_chipPointer.position.copy(g_worldOffset).add(new THREE.Vector3(0, g_BlockWidth * 7.0, 0));
+
+				// Extending the JumpStart object with your own properties auto-syncs them
+				g_chipPointer.JumpStart.hasChip = true;
+				g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
+
+				g_chipPointer.JumpStart.onTick["chipPointerTick"] = chipPointerTick;
+				g_chipPointer.JumpStart.onSpawn["chipPointerSpawn"] = chipPointerSpawn;
+
+				g_chipPointer.JumpStart.sync();
+			}
+
+			function chipPointerTick()
+			{
+				if( this.JumpStart.hasChip && g_lookHit && g_lookHit.object.hasOwnProperty("isCursorPlane") )
+				{
+					var scaledPoint = new THREE.Vector3().copy(g_lookHit.point).multiplyScalar(1/g_worldScale);
+
+					var posX = scaledPoint.x;
+					posX += g_BlockWidth / 2.0;
+
+					var remainderX = posX % g_BlockWidth;
+
+					if( remainderX > 0 )
+						posX -= remainderX;
+					else
+						posX -= g_BlockWidth + remainderX;
+
+					if( Math.abs(posX) <= g_BlockWidth * 3 )
+						this.position.x = posX;
+				}
+			//console.log(this.JumpStart.hasChip);
+
+				if( this.JumpStart.hasChip && !g_chipToken )
+					spawnChipToken();
+				else if( !this.JumpStart.hasChip && g_chipToken )
+				{
+					g_scene.remove(g_chipToken);
+					g_chipToken = null;
+				}
+			}
+
+			function chipPointerSpawn(isLocal, isInitial)
+			{
+				g_chipPointer = this;
+
+				if( !JumpStart.webMode )
+					g_chipPointer.position.set(0, g_BlockWidth * 7.0 * (1 / g_worldScale), 0);
+
+			/*
+				this.JumpStart.addDataListener("hasChip", function(oldValue, value, isLocal) {
+					console.log("DROP THE TOKEN!!");
+				});
+			*/
+			}
+
+			function spawnChipToken()
+			{
+				g_chipToken = JumpStart.spawnInstance(g_chipPointer.JumpStart.nextModel);
+				g_chipToken.position.copy(g_chipPointer.position);
+
+				g_chipToken.JumpStart.onTick = function() {
+					this.position.copy(g_chipPointer.position);
+				};
+			}
+
+			function controlledFall()
+			{
+				this.position.y -= 10.0 * g_deltaTime;
+			}
+			/*
+			function chipTokenSpawn()
+			{
+				this.JumpStart.addDataListener("isDropping", function(oldValue, value, isLocal) {
+					if( isLocal )
+						this.isUnderling = true;
+				});
+			}
+			*/
+
+			function landOnFloor()
+			{
+				if( this.position.y < g_worldOffset.y )
+				{
+					this.position.y = g_worldOffset.y;
+					this.JumpStart.appliedForce.set(0, 0, 0);
+					this.JumpStart.velocity.set(0, 0, 0);
+					this.JumpStart.physicsState = 0;
+					this.rotation.set((Math.PI / 2.0), 0, 0);
+
+					// remove ALL tick listeners
+					//delete this.JumpStart.onTick["landOnFloor"];
+					this.JumpStart.onTick = {};
+					this.JumpStart.onTick = function()
+					{
+						if( !this.userData.hasOwnProperty("lifeSpan") )
+							this.userData.lifeSpan = 10.0;
+
+						this.userData.lifeSpan -= g_deltaTime;
+
+						if( this.userData.lifeSpan <= 0 )
+							g_scene.remove(this);
 					}
 				}
 			}
-		}
-	}
-}
 
-</script>
+			function fallingToken()
+			{ 
+				// Check for collision against floor
+				if( this.position.y < g_worldOffset.y + g_OffsetY )
+				{
+					this.position.y = g_worldOffset.y + g_OffsetY;
 
-<script>
-document.addEventListener("keydown", function(e) {
-	//console.log(e.keyCode);
-	if( e.keyCode === 16 )
-	{
-		if( JumpStart.webMode && JumpStart.crosshair )
-			JumpStart.camera.lookAt(JumpStart.crosshair.position  );
-	}
-});
-</script>
+					this.JumpStart.velocity.set(0, 0, 0);
+					this.JumpStart.physicsState = 0;
 
-</body>
+					// remove the tick listener
+					delete this.JumpStart.onTick["fallingToken"];
+
+					// If this object is our sync depedent, we have extra work to do!!
+					if( this.userData.dependent )
+					{
+						var alreadySynced = false;
+
+						var allChipsStopped = true;
+						var x, testChip;
+						for( x in JumpStart.syncedInstances)
+						{
+							testChip = JumpStart.syncedInstances[x];
+							if( testChip === g_chipPointer || testChip.position.z !== g_chipPointer.position.z )
+								continue;
+
+							if( testChip.JumpStart.onTick.hasOwnProperty("fallingToken") )
+							{
+								allChipsStopped = false;
+								break;
+							}
+						}
+
+						// Check for four in a row
+						if( allChipsStopped )
+							alreadySynced = CheckForFour();
+
+						// If we did not find four in a row, we have to sync ourselves still
+						if( !alreadySynced )
+							this.JumpStart.sync();
+
+						// Indicate that we need a new chip spawned
+						if( allChipsStopped )
+						{
+							g_chipPointer.JumpStart.hasChip = true;
+							g_chipPointer.JumpStart.sync();
+						}
+					}
+				}
+				else
+				{
+					// Check for collision against another ship in-play
+					var x, testChip;
+					for( x in JumpStart.syncedInstances )
+					{
+						testChip = JumpStart.syncedInstances[x];
+
+						if( testChip === this || testChip === g_chipPointer || testChip.JumpStart.onTick.hasOwnProperty("fallingToken") || testChip.JumpStart.onTick.hasOwnProperty("landOnFloor") )
+							continue;
+
+						if( this.position.x === testChip.position.x && this.position.y - testChip.position.y < g_BlockWidth && this.position.y > testChip.position.y )
+						{
+							this.position.y = testChip.position.y + g_BlockWidth;
+
+							this.JumpStart.velocity.set(0, 0, 0);
+							this.JumpStart.physicsState = 0;
+
+							// remove the tick listener
+							delete this.JumpStart.onTick["fallingToken"];
+
+							// If this object is our sync depedent, we have extra work to do!!
+							if( this.userData.dependent )
+							{
+								var alreadySynced = false;
+
+								var allChipsStopped = true;
+								var x, testChip;
+								for( x in JumpStart.syncedInstances)
+								{
+									testChip = JumpStart.syncedInstances[x];
+									if( testChip === g_chipPointer || testChip.position.z !== g_chipPointer.position.z )
+										continue;
+
+									if( testChip.JumpStart.onTick.hasOwnProperty("fallingToken") )
+									{
+										allChipsStopped = false;
+										break;
+									}
+								}
+
+								// Check for four in a row
+								if( allChipsStopped )
+									alreadySynced = CheckForFour();
+
+								// If we did not find four in a row, we have to sync ourselves still
+								if( !alreadySynced )
+									this.JumpStart.sync();
+
+								// Indicate that we need a new chip spawned
+								if( allChipsStopped )
+								{
+									g_chipPointer.JumpStart.hasChip = true;
+									g_chipPointer.JumpStart.sync();
+								}
+							}
+						}
+					}
+				}
+			}
+		</script>
+	</body>
 </html>

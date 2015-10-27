@@ -1,243 +1,1712 @@
-<!-- Author: Elijah Newman-Gomez -->
+<!-- Powered by the JumpStart Game Engine -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-		<title>JumpStart</title>
+	<head>
+		<title>Line Racers</title>
 
-		<script src="lib/three.js"></script>
-		<script src="lib/firebase.js"></script>
-		<script src="src/AltOBJMTLLoader.js"></script>
-		<script src="lib/OBJMTLLoader.js"></script>
-		<script src="lib/MTLLoader.js"></script>
-		<script src="src/sync/FirebaseSync.js"></script>
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
 		<link rel="stylesheet" type="text/css" href="myStyle.css">
-</head>
-<body>
+	</head>
 
-<style>
-#highscores
-{
-	font-family: Arial;
-	font-size: 40px;
-	font-weight: bold;
-}
+	<body>
 
-#highscores td
-{
-	padding-left: 20px;
-	padding-right: 20px;
-}
-</style>
-
-<div style="width: 100%; position: fixed;">
-<center>
-	<img src="misc/lineracerstitle.png" />
-	<div id="fps" style="position: fixed; top: 0; left: 0;"></div>
-	<div id="info"></div>
-	<div><table id="highscores"></table></div>
-</center>
-</div>
-
-<canvas id="canvas" style="display: inline-block; position: fixed; bottom: 0; left: 0;">Canvas is not supported in your browser.</canvas>
-
-<script src="JumpStart.js"></script>
-
-<script>
-var myOptions =
-{
-	"debugMode": false,
-	"legacyLoader": true,
-	"worldScale": 1.0,
-	"enabledCursorEvents":
-	{
-		"cursorDown": true,
-		"cursorUp": true,
-		"cursorEnter": true,
-		"cursorLeave": true,
-		"cursorMove": true
-	},
-	"camera":
-	{
-		"lookAtOrigin": true,
-		"position": new THREE.Vector3(-5.0, 10.0, 30.0),
-		"translation": new THREE.Vector3(40.0, 30.0, 180.0)
-	},
-	"firebase":
-	{
-		"rootUrl": "https://lineracers.firebaseio.com/",
-		"appId": "lineracers",
-		"params": { "AUTOSYNC": true, "TRACE": false }
-	}
-};
-JumpStart.setOptions(myOptions);
-
-function onCursorDown()
-{
-	if( startButton )
-		spawnCar.call(startButton);
-}
-
-function onPrecache()
-{
-//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
-//	allDataRef.remove();
-
-	var myModels = [
-		"models/LineRacers/star.obj",
-		"models/LineRacers/gold.obj",
-		"models/LineRacers/r.obj",
-		"models/LineRacers/a.obj",
-		"models/LineRacers/c.obj",
-		"models/LineRacers/e.obj",
-		"models/LineRacers/carstand.obj",
-		"models/LineRacers/carstand_offsets.obj",
-		"models/LineRacers/car_offsets.obj",
-		"models/LineRacers/explosion.obj",
-		"models/LineRacers/rearright.obj",
-		"models/LineRacers/rearleft.obj",
-		"models/LineRacers/frontright.obj",
-		"models/LineRacers/frontleft.obj",
-		"models/LineRacers/dead.obj",
-		"models/LineRacers/car.obj",
-		"models/LineRacers/pixel.obj",
-		"models/LineRacers/driver.obj",
-		"models/LineRacers/body.obj",
-
-		"models/LineRacers/rearright1.obj",
-		"models/LineRacers/rearleft1.obj",
-		"models/LineRacers/frontright1.obj",
-		"models/LineRacers/frontleft1.obj",
-		"models/LineRacers/dead1.obj",
-		"models/LineRacers/car1.obj",
-		"models/LineRacers/pixel1.obj",
-		"models/LineRacers/driver1.obj",
-		"models/LineRacers/body1.obj",
-
-		"models/LineRacers/rearright2.obj",
-		"models/LineRacers/rearleft2.obj",
-		"models/LineRacers/frontright2.obj",
-		"models/LineRacers/frontleft2.obj",
-		"models/LineRacers/dead2.obj",
-		"models/LineRacers/car2.obj",
-		"models/LineRacers/pixel2.obj",
-		"models/LineRacers/driver2.obj",
-		"models/LineRacers/body2.obj"
-	];
-
-//	JumpStart.precacheSound("sounds/LineRacers/trumpet");
-	JumpStart.precacheSound("sounds/LineRacers/crash");
-	JumpStart.precacheSound("sounds/LineRacers/ching");
-	JumpStart.precacheSound("sounds/LineRacers/carstart");
-	JumpStart.precacheSound("sounds/LineRacers/cashout");
-	JumpStart.precacheSound("sounds/LineRacers/explosion");
-	JumpStart.precacheSound("sounds/LineRacers/idle");
-
-	JumpStart.loadModels(myModels).then(function() {
-		JumpStart.doneCaching();
-	});
-}
-
-</script>
-
-
-<script>
-var g_cars = new Array();
-
-var g_starGlobalOffsetCount = 0;
-var g_starSpot = 0;
-var g_starRotOffset = 0;
-var g_stars = new Array();
-function giveStar()
-{
-	if( !dead )
-		return;
-
-	chingLoop.play();
-
-	var carColor = 0;
-	if( g_myCar )
-		g_myCar.JumpStart.carColor;
-
-	if( carColor == 0 )
-		carColor = "";
-
-	setTimeout(function()
-	{
-		if( !dead )
-			return;
-							
-		var star = JumpStart.spawnInstance("models/LineRacers/star.obj", {"parent": dead});
-		var whole = Math.floor((g_stars.length + g_starGlobalOffsetCount) / 8);
-
-		if( g_stars.length % 8 === 0 )
-		{
-			g_starSpot = 0;
-			g_starRotOffset = 0;
-		}
-		else
-			g_starSpot++;
-
-		star.rotateY(((Math.PI / -4.0) * whole));
-
-		if( whole > 0 && (g_starSpot === 2 || g_starSpot === 5) )
-		{
-			g_starRotOffset ++;
-			g_starGlobalOffsetCount++;
-		}
-
-		star.rotateZ((Math.PI / 2.0) + ((Math.PI / -4.0) * g_stars.length) + (g_starRotOffset * (Math.PI / -4.0)));
-
-		star.translateY(20.0);
-		star.userData.dustTimer = 10.0 * (g_stars.length / 8.0);
-
-		star.JumpStart.onTick = function()
-		{
-			this.userData.dustTimer--;
-
-			if( this.userData.dustTimer <= 0 )
+		<style>
+			#highscores
 			{
-				this.userData.dustTimer = 10.0 * (g_stars.length / 8.0);
-				// Make fairy dust
-				var pos = new THREE.Vector3();
+				font-family: Arial;
+				font-size: 40px;
+				font-weight: bold;
+			}
 
-				var i, particle;
-				for( i = 0; i < 1; i++ )
+			#highscores td
+			{
+				padding-left: 20px;
+				padding-right: 20px;
+			}
+		</style>
+
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
+
+		<center>
+			<br /><br /><br /><br />
+			<div><table id="highscores"></table></div>
+		</center>
+
+		<div id="attractImageParent" style="width: 100%; top: 250px; position: fixed; display: none;">
+			<center>
+				<img id="attractImage" src="misc/lineracers.jpg" style="width: 60%; display: block;" />
+			</center>
+		</div>
+
+		<!-- Window-Level Event Callbacks -->
+		<script>
+			var myOptions =
+			{
+				"titleImageURL": "misc/lineracerstitle.png",
+				"legacyLoader": false,
+				"worldScale": 1.3,
+				"scaleWithEnclosure": true,
+				"showCrosshair": false,
+				"showCursorPlanes": false,
+				"camera":
 				{
-					particle = JumpStart.spawnInstance("models/LineRacers/gold.obj");
-					particle.JumpStart.blocksLOS = false;
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(20.0, 70.0, 300.0),
+					"translation": new THREE.Vector3(0.0, 20.0, 50.0)
+				},
+				"firebase":
+				{
+					"rootUrl": "https://lineracers.firebaseio.com/",
+					"appId": "lineracers",
+					"suppressPersonalBrowser": true
+				}
+			};
 
-					if( !JumpStart.webMode )
+			JumpStart.setOptions(myOptions);
+
+			// Window-level callback for onPrecache event
+			function onPrecache()
+			{
+//				var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+//				allDataRef.remove();
+//				return;
+
+//				if( window.innerDepth === 300 ) //|| window.innerDepth == 1024 )
+//					document.getElementById("attractImageParent").style.top = "170px";
+
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+
+				var myModels = [
+					"models/LineRacers/arrow.obj",
+					"models/LineRacers/dont.obj",
+					"models/LineRacers/crashtext.obj",
+					"models/LineRacers/star.obj",
+					"models/LineRacers/gold.obj",
+					"models/LineRacers/r.obj",
+					"models/LineRacers/a.obj",
+					"models/LineRacers/c.obj",
+					"models/LineRacers/e.obj",
+					"models/LineRacers/carstand.obj",
+					"models/LineRacers/carstand_offsets.obj",
+					"models/LineRacers/car_offsets.obj",
+					"models/LineRacers/explosion.obj",
+					"models/LineRacers/rearright.obj",
+					"models/LineRacers/rearleft.obj",
+					"models/LineRacers/frontright.obj",
+					"models/LineRacers/frontleft.obj",
+					"models/LineRacers/dead.obj",
+					"models/LineRacers/car.obj",
+					"models/LineRacers/pixel.obj",
+					"models/LineRacers/driver.obj",
+					"models/LineRacers/body.obj",
+
+					"models/LineRacers/rearright1.obj",
+					"models/LineRacers/rearleft1.obj",
+					"models/LineRacers/frontright1.obj",
+					"models/LineRacers/frontleft1.obj",
+					"models/LineRacers/dead1.obj",
+					"models/LineRacers/car1.obj",
+					"models/LineRacers/pixel1.obj",
+					"models/LineRacers/driver1.obj",
+					"models/LineRacers/body1.obj",
+
+					"models/LineRacers/rearright2.obj",
+					"models/LineRacers/rearleft2.obj",
+					"models/LineRacers/frontright2.obj",
+					"models/LineRacers/frontleft2.obj",
+					"models/LineRacers/dead2.obj",
+					"models/LineRacers/car2.obj",
+					"models/LineRacers/pixel2.obj",
+					"models/LineRacers/driver2.obj",
+					"models/LineRacers/body2.obj"
+				];
+
+				JumpStart.precacheSound("sounds/LineRacers/trumpet");
+				JumpStart.precacheSound("sounds/LineRacers/crash");
+				JumpStart.precacheSound("sounds/LineRacers/ching");
+				JumpStart.precacheSound("sounds/LineRacers/carstart");
+				JumpStart.precacheSound("sounds/LineRacers/cashout");
+				JumpStart.precacheSound("sounds/LineRacers/explosion");
+				JumpStart.precacheSound("sounds/LineRacers/idle");
+				JumpStart.precacheSound("sounds/LineRacers/accelerate");
+
+				JumpStart.loadModels(myModels).then(function() {
+					JumpStart.doneCaching();
+				});
+			}
+
+			function onCursorDown()
+			{
+				if( startButton )
+					spawnCar.call(startButton);
+				else if( g_myCar && g_myCar.userData.boost === 0 )
+				{
+					g_myCar.userData.boost = 2.0;
+					JumpStart.playSound("sounds/LineRacers/accelerate", 0.5, false);
+				}
+			}
+
+			var g_cars = new Array();
+			var g_starGlobalOffsetCount = 0;
+			var g_starSpot = 0;
+			var g_starRotOffset = 0;
+			var g_stars = new Array();
+			var g_myCar = null;
+			var g_arrow = null;
+			var g_attract = document.body;
+			var g_highScores = null;
+			var g_crash = null;
+			var g_crashText = null;
+			var dead = null;
+
+			var chingLoop = null;
+			var engineLoop = null;
+			var startButton = null;
+
+			function onReady()
+			{
+				// Do nothing if we are not in an enclosure yet.
+				if( !JumpStart.requestedRoomId )
+					return;
+
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
 					{
-						//particle.scale.copy(dead.scale);
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
 
-						if( dead )
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+
+			//	console.log(JumpStart.webMode);
+				if( JumpStart.webMode )
+					document.getElementById("attractImageParent").style.display = "none";
+				
+				g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
+
+				// first user
+				if( g_localUser.firstUser )
+				{
+
+				}
+
+				createStartButton();
+
+				// START SIMULATION
+				JumpStart.run();
+			}
+
+			function onTick()
+			{
+			//	fireworksLoop();	// Lags game to a consistent 60fps in Altspace.
+
+				if( g_localUser && g_localUser.lookOrigin && g_localUser.lookOrigin.z < 0 && (!g_attract.hasOwnProperty("mirrored") || !g_attract.mirrored) )
+				{
+					g_attract.style.webkitTransform = "scaleX(-1)";
+					g_attract.style.filter = "FlipH";
+					g_attract.mirrored = true;
+				}
+				else if( g_localUser.lookOrigin.z >= 0 && g_attract.hasOwnProperty("mirrored") && g_attract.mirrored )
+				{
+					g_attract.style.webkitTransform = "none";
+					g_attract.style.filter = "none";
+					g_attract.mirrored = false;
+				}
+
+				// Adjust audio levels
+				if( g_myCar && engineLoop )
+				{
+					var maxDistance = 1000;
+
+					var flexVolume = g_localUser.lookOrigin.distanceTo(g_myCar.position) / maxDistance;
+					if( flexVolume > 1.0 )
+						flexVolume = 1.0;
+
+					engineLoop.volume = 1.0 - flexVolume;
+				}
+			}
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+			function giveStar()
+			{
+				if( !dead )
+					return;
+
+				chingLoop.play();
+
+				var carColor = 0;
+				if( g_myCar )
+					g_myCar.JumpStart.carColor;
+
+				if( carColor == 0 )
+					carColor = "";
+
+				setTimeout(function()
+				{
+					if( !dead )
+						return;
+										
+					var star = JumpStart.spawnInstance("models/LineRacers/star.obj", {"parent": dead});
+					star.JumpStart.blocksLOS = false;
+					var whole = Math.floor((g_stars.length + g_starGlobalOffsetCount) / 8);
+
+					if( g_stars.length % 8 === 0 )
+					{
+						g_starSpot = 0;
+						g_starRotOffset = 0;
+						g_starGlobalOffsetCount = 0;
+					}
+					else
+						g_starSpot++;
+
+					star.rotateY(((Math.PI / -4.0) * whole));
+
+					if( whole > 0 && (g_starSpot === 2 || g_starSpot === 5) )
+					{
+						g_starRotOffset++;
+						g_starGlobalOffsetCount++;
+					}
+
+					star.rotateZ((Math.PI / 2.0) + ((Math.PI / -4.0) * g_stars.length) + (g_starRotOffset * (Math.PI / -4.0)));
+
+					star.translateY(20.0);
+					star.userData.dustTimer = 0.7 * (g_stars.length / 8.0);
+
+					star.JumpStart.onTick = function()
+					{
+						this.userData.dustTimer -= 1.0 * g_deltaTime;
+
+						if( this.userData.dustTimer <= 0 )
 						{
-							particle.scale.set(1, 1, 1);
-							particle.position.copy(dead.position);
-							particle.rotation.copy(dead.rotation);
+							this.userData.dustTimer = 0.7 * (g_stars.length / 8.0);
+							// Make fairy dust
+							var pos = new THREE.Vector3();
 
-							particle.translateX(this.position.x * dead.scale.x);
-							particle.translateY(this.position.y * dead.scale.y);
-							particle.translateZ(this.position.z * dead.scale.z);
+							var i, particle;
+							for( i = 0; i < 1; i++ )
+							{
+								particle = JumpStart.spawnInstance("models/LineRacers/gold.obj");
+								particle.JumpStart.blocksLOS = false;
 
-							particle.rotation.x += this.rotation.x;
-							particle.rotation.y += this.rotation.y;
-							particle.rotation.z += this.rotation.z;
+								if( !JumpStart.webMode )
+								{
+									//particle.scale.copy(dead.scale);
+
+									if( dead )
+									{
+										particle.scale.set(1, 1, 1);
+										particle.position.copy(dead.position);
+										particle.rotation.copy(dead.rotation);
+
+										particle.translateX(this.position.x * dead.scale.x);
+										particle.translateY(this.position.y * dead.scale.y);
+										particle.translateZ(this.position.z * dead.scale.z);
+
+										particle.rotation.x += this.rotation.x;
+										particle.rotation.y += this.rotation.y;
+										particle.rotation.z += this.rotation.z;
+									}
+									else
+									{
+										particle.scale.set(1, 1, 1);
+										particle.position.copy(this.position);
+										particle.rotation.copy(this.rotation);
+									}
+								}
+								else
+								{
+									pos.setFromMatrixPosition( this.matrixWorld );
+
+									particle.position.copy(pos);
+									particle.rotation.copy(this.rotation);
+								}
+
+								var scale = Math.random();
+								if( scale < 0.5 )
+									scale = 0.5;
+
+								particle.scale.multiplyScalar(scale);
+
+								var randoX = 3.0 * Math.random();
+								if( Math.random() > 0.5 )
+									randoX *= -1.0;
+
+								var randoY = 3.0 * Math.random();
+								if( Math.random() > 0.5 )
+									randoY *= -1.0;
+
+								var randoZ = 3.0 * Math.random();
+								if( Math.random() > 0.5 )
+									randoZ *= -1.0;
+
+								particle.translateX(randoX);
+								particle.translateY(randoY);
+								particle.translateZ(randoZ);
+
+								particle.userData.life = 0.3;
+								particle.scale.multiplyScalar(4.0);
+
+								particle.JumpStart.onTick = function()
+								{
+									if( this.userData.hasOwnProperty("will") )
+										this.userData.will -= 1.0 * g_deltaTime;
+
+									if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+									{
+										var randoPitch = 1.0 * Math.random();
+										if( Math.random() > 0.5 )
+											randoPitch *= -1.0;
+
+										var randoYaw = 1.0 * Math.random();
+										if( Math.random() > 0.5 )
+											randoYaw *= -1.0;
+
+										var randoRoll = 1.0 * Math.random();
+										if( Math.random() > 0.5 )
+											randoRoll *= -1.0;
+
+										this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+										this.userData.will = 3.0 * Math.random();
+									}
+
+									this.userData.life -= g_deltaTime;
+									if( this.userData.life <= 0 )
+									{
+										//g_scene.remove(this);
+										//return;
+
+										this.scale.x -= 1.0 * g_deltaTime;
+										this.scale.y -= 1.0 * g_deltaTime;
+										this.scale.z -= 1.0 * g_deltaTime;
+									}
+
+									this.rotateX(this.userData.direction.x * g_deltaTime);
+									this.rotateY(this.userData.direction.y * g_deltaTime);
+									this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+									this.translateZ(15.0 * g_deltaTime);
+									this.position.y += 10.0 * g_deltaTime;
+
+									if( this.scale.x <= 0.1 )
+										g_scene.remove(this);
+								};
+							}
 						}
+					};
+
+					g_stars.push(star);
+				}, 500);
+			}
+
+			function deadSpawn(isLocal, isInitial)
+			{
+				if( !isLocal )
+					JumpStart.playSound("sounds/LineRacers/trumpet", 0.5, false);
+			}
+
+			function bobLetter()
+			{
+				var amount = (4.0 * g_deltaTime) * this.userData.bobDirection;
+				this.translateY(amount);
+
+				var difference = this.position.y - this.userData.bobOrigin;
+				if( (difference > 0 && difference > 2.0) ||
+					(difference < 0 && difference < -2.0) )
+				{
+					if( difference >= 0 )
+						this.position.y = this.userData.bobOrigin + 2.0;
+					else
+						this.position.y = this.userData.bobOrigin - 2.0;
+
+					this.userData.bobDirection *= -1.0;
+				}
+			}
+
+			function startButtonTick()
+			{
+				if( !g_crosshair || !g_localUser.lookOrigin )
+					return;
+
+				if( !g_localUser.lookHit || !g_localUser.lookHit.object || g_localUser.lookHit.object !== g_floorPlane )
+				{
+					if( !this.userData.hasOwnProperty("hidden") || !this.userData.hidden)
+					{
+						this.userData.hidden = true;
+
+						if( !this.userData.hasOwnProperty("originalScale") )
+							this.userData.originalScale = new THREE.Vector3();
+
+						this.userData.originalScale.copy(this.scale);
+						this.scale.set(0.0001, 0.0001, 0.0001);
+
+						if( g_arrow )
+						{
+							g_scene.remove(g_arrow);
+							g_arrow = null;
+						}
+
+						if( g_crash )
+						{
+							g_scene.remove(g_crash);
+						}
+
+						if( g_crashText )
+						{
+							g_scene.remove(g_crashText);
+						}
+					}
+
+					return;
+				}
+
+				if( !this.userData.hasOwnProperty("hidden") || this.userData.hidden )
+				{
+					if( this.userData.hasOwnProperty("originalScale") )
+						this.scale.copy(this.userData.originalScale);
+
+					this.userData.hidden = false;
+
+					g_arrow = JumpStart.spawnInstance("models/LineRacers/arrow.obj");
+					g_arrow.JumpStart.blocksLOS = false;
+					g_arrow.JumpStart.onTick = function()
+					{
+						this.position.copy(g_crosshair.position);
+						this.position.y = g_worldOffset.y;
+
+						if( g_myCar )
+							this.rotation.copy(g_myCar.rotation);
+					};
+
+					g_arrow.position.copy(g_crosshair.position);
+					g_arrow.position.y = g_worldOffset.y;
+
+					if( g_myCar )
+						g_arrow.rotation.copy(g_myCar.rotation);
+				}
+
+				this.position.copy(g_crosshair.position);
+				this.lookAt(g_localUser.lookOrigin);
+				this.rotation.x = 0;
+				this.rotation.z = 0;
+			/*
+				g_crosshair.userData.hidden = true;
+
+				if( !g_crosshair.userData.hasOwnProperty("originalScale") )
+					g_crosshair.userData.originalScale = new THREE.Vector3();
+
+				g_crosshair.userData.originalScale.copy(g_crosshair.scale);
+				g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
+			*/
+			/*
+			}
+			else if( g_localUser.lookHit && g_localUser.lookHit.object !== g_floorPlane )
+			{
+				if( g_crosshair.userData.hasOwnProperty("hidden") && g_crosshair.userData.hidden )
+				{
+					g_crosshair.scale.copy(g_crosshair.userData.originalScale);
+					g_crosshair.userData.hidden = false;
+					if( g_arrow )
+					{
+						g_scene.remove(g_arrow);
+						g_arrow = null;
+					}
+				}
+			}
+			*/
+			}
+
+
+			function createStartButton()
+			{
+				// choose a color
+				var colorIndex;
+				if( g_cars.length > 0 )
+					colorIndex = Number(g_cars[g_cars.length-1].JumpStart.carColor) + 1;
+				else
+				{
+					colorIndex = Math.round(Math.random() * 2.0);
+				}
+
+				if( colorIndex > 2 )
+					colorIndex = 0;
+
+				var carColor = colorIndex;
+				if( carColor == 0 )
+					carColor = "";
+
+				startButton = JumpStart.spawnInstance("models/LineRacers/carstand.obj");
+				startButton.userData.carColor = colorIndex;
+//				startButton.JumpStart.onCursorDown["onCursorDown"] = onCursorDown;
+				startButton.JumpStart.onTick["startButtonTick"] = startButtonTick;
+				startButton.JumpStart.blocksLOS = false;
+
+				// Make the start button re-position itself IMMIDATELY
+				startButtonTick.call(startButton);
+
+				// attach all our parts
+				var verts;
+				var x;
+				for( x in JumpStart.models )
+				{
+					if( JumpStart.models[x].fileName === "models/LineRacers/carstand_offsets.obj" )
+					{
+						verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
+						break;
+					}
+				}
+
+				var dummyCar = JumpStart.spawnInstance("models/LineRacers/car" + carColor + ".obj", {"parent": startButton});
+				//dummyCar.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+				dummyCar.position.copy(verts[1]);
+				dummyCar.JumpStart.blocksLOS = false;
+
+				var letterR = JumpStart.spawnInstance("models/LineRacers/r.obj", {"parent": startButton});
+				//letterR.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+				letterR.position.copy(verts[0]);
+				letterR.JumpStart.blocksLOS = false;
+				letterR.userData.bobDirection = 1.0;
+				letterR.userData.bobOrigin = letterR.position.y;
+				letterR.JumpStart.onTick = bobLetter;
+
+				var letterA = JumpStart.spawnInstance("models/LineRacers/a.obj", {"parent": startButton});
+				//letterA.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+				letterA.position.copy(verts[2]);
+				letterA.JumpStart.blocksLOS = false;
+				letterA.userData.bobDirection = -1.0;
+				letterA.userData.bobOrigin = letterA.position.y;
+				letterA.JumpStart.onTick = bobLetter;
+
+				var letterC = JumpStart.spawnInstance("models/LineRacers/c.obj", {"parent": startButton});
+				//letterC.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+				letterC.position.copy(verts[4]);
+				letterC.JumpStart.blocksLOS = false;
+				letterC.userData.bobDirection = 1.0;
+				letterC.userData.bobOrigin = letterC.position.y;
+				letterC.JumpStart.onTick = bobLetter;
+
+				var letterE = JumpStart.spawnInstance("models/LineRacers/e.obj", {"parent": startButton});
+				//letterE.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+				letterE.position.copy(verts[3]);
+				letterE.JumpStart.blocksLOS = false;
+				letterE.userData.bobDirection = -1.0;
+				letterE.userData.bobOrigin = letterE.position.y;
+				letterE.JumpStart.onTick = bobLetter;
+			}
+
+			function spawnCar()
+			{
+				if( !startButton )
+					return;
+
+				var colorIndex = startButton.userData.carColor;
+
+				var carColor = colorIndex;
+				if( carColor == 0 )
+					carColor = "";
+
+				document.getElementById("attractImage").style.display = "none";
+
+				// Start the engine
+				JumpStart.playSound("sounds/LineRacers/carstart", 1.0, false);
+				setTimeout(function()
+				{
+					engineLoop = JumpStart.playSound("sounds/LineRacers/idle", 0.5, true);
+					engineLoop.flexVolume = 1.0;
+				}, 1000)
+
+				// create a car
+				var car = JumpStart.spawnInstance("models/LineRacers/body" + carColor + ".obj");
+				car.position.copy(startButton.position);
+				car.rotation.copy(startButton.rotation);
+				car.translateZ(-100.0);
+
+				var position = new THREE.Vector3().copy(g_crosshair.position);
+				position.y = g_worldOffset.y;
+				car.lookAt(position);
+
+				car.JumpStart.onSpawn["initCar"] = initCar;
+				car.JumpStart.onTick["makeTracks"] = makeTracks;
+				car.JumpStart.onNetworkRemoved["carRemoved"] = carRemoved;
+
+				car.JumpStart.carColor = colorIndex;	// auto-synced
+
+				car.JumpStart.sync();
+				car.userData.myCar = true;
+				car.userData.boost = 0;
+				g_myCar = car;
+
+				g_scene.remove(startButton);
+				startButton = null;
+			}
+
+			function initCar(isLocal, isInitial)
+			{
+				car = this;
+
+				if( !car.userData.hasOwnProperty("myCar") )
+					car.userData.myCar = false;
+
+				car.JumpStart.blocksLOS = false;
+				car.userData.lastSync = 0.0;
+				car.userData.lastPos = new THREE.Vector3().copy(car.position);
+
+				// attach all our parts
+				var verts;
+				var x;
+				for( x in JumpStart.models )
+				{
+					if( JumpStart.models[x].fileName === "models/LineRacers/car_offsets.obj" )
+					{
+						verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
+						break;
+					}
+				}
+
+				var carColor = car.JumpStart.carColor;
+				if( carColor == 0 )
+					carColor = "";
+
+				var driver = JumpStart.spawnInstance("models/LineRacers/driver" + carColor + ".obj", {"parent": car});
+				driver.position.copy(verts[2]);
+				driver.JumpStart.blocksLOS = false;
+				driver.userData.bobDirection = 1.0;
+				driver.userData.bobOrigin = driver.position.y;
+				driver.JumpStart.onTick = function()
+				{
+					var amount = (10.0 * g_deltaTime) * this.userData.bobDirection;
+					this.translateY(amount);
+
+					var difference = this.position.y - this.userData.bobOrigin;
+					if( (difference > 0 && difference > 1.0) ||
+						(difference < 0 ) )
+					{
+						if( difference >= 0 )
+							this.position.y = this.userData.bobOrigin + 1.0;
 						else
+							this.position.y = this.userData.bobOrigin;
+
+						this.userData.bobDirection *= -1.0;
+					}
+				};
+
+				var rearRight = JumpStart.spawnInstance("models/LineRacers/rearright" + carColor + ".obj", {"parent": car});
+				rearRight.position.copy(verts[0]);
+				rearRight.JumpStart.blocksLOS = false;
+				rearRight.JumpStart.onTick["tireSpin"] = tireSpin;
+
+				var rearLeft = JumpStart.spawnInstance("models/LineRacers/rearleft" + carColor + ".obj", {"parent": car});
+				rearLeft.position.copy(verts[4]);
+				rearLeft.JumpStart.blocksLOS = false;
+				rearLeft.JumpStart.onTick["tireSpin"] = tireSpin;
+
+				var frontRight = JumpStart.spawnInstance("models/LineRacers/frontright" + carColor + ".obj", {"parent": car});
+				frontRight.position.copy(verts[1]);
+				frontRight.JumpStart.blocksLOS = false;
+				frontRight.JumpStart.onTick["tireSpin"] = tireSpin;
+
+				var frontLeft = JumpStart.spawnInstance("models/LineRacers/frontleft" + carColor + ".obj", {"parent": car});
+				frontLeft.position.copy(verts[3]);
+				frontLeft.JumpStart.blocksLOS = false;
+				frontLeft.JumpStart.onTick["tireSpin"] = tireSpin;
+
+				car.JumpStart.blocksLOS = false;
+				car.userData.fadeBegun = false;
+
+				// create a trail
+				var trail = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
+				trail.scale.y = 20.0;
+				trail.position.copy(car.position);
+				trail.rotation.copy(car.rotation);
+				trail.translateZ(-20.0);
+				trail.translateY(5.0);
+				trail.scale.x = 4.0;
+				trail.JumpStart.blocksLOS = false;
+
+				// bookkeeping of car trails
+				car.userData.lastPosition = new THREE.Vector3().copy(car.position);
+				car.userData.oldestTrail = trail;
+				car.userData.activeTrail = trail;
+				g_cars.push(car);
+			}
+
+			function deadSpin()
+			{
+				this.rotateY(2.0 * g_deltaTime);
+			}
+
+			function deathSpawn()
+			{
+
+			}
+
+			function tireSpin()
+			{
+				var speed = 10.0;
+				if( g_myCar && g_myCar.children.indexOf(this) >= 0 )
+				{
+					if( g_myCar.userData.boost > 0 )
+					{
+						speed *= 2.0;
+					}
+				}
+
+				this.rotateX(speed * g_deltaTime);
+			}
+
+			function makeTracks()
+			{
+				if( !this.position.equals(this.userData.lastPos) )
+				{
+					this.userData.lastPos.copy(this.position);
+					this.userData.lastSync = 0;
+				}
+				else
+					this.userData.lastSync += g_deltaTime;
+			/*
+				if( this.userData.lastSync > 4.0 )
+				{
+					JumpStart.unsyncObject(this);
+					g_scene.remove(this);
+					return;
+				}
+			*/
+				var carColor = this.JumpStart.carColor;
+				if( carColor == 0 )
+					carColor = "";
+
+				if( !this.userData.hasOwnProperty("lastParticle") )
+					this.userData.lastParticle = 0.0;
+
+				this.userData.lastParticle -= 1.0 * g_deltaTime;
+
+				if( this.userData.lastParticle <= 0.0 )
+				{
+					this.userData.lastParticle = 0.04;
+
+					// Make fairy dust
+					var i, particle;
+					for( i = 0; i < 1; i++ )
+					{
+						particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
+						particle.JumpStart.blocksLOS = false;
+						particle.position.copy(this.position);
+						particle.rotation.copy(this.rotation);
+
+						particle.translateZ(-20.0);
+						particle.translateY(5.0);
+
+						var scale = Math.random();
+						if( scale < 0.5 )
+							scale = 0.5;
+
+						particle.scale.multiplyScalar(scale);
+
+						var randoX = 3.0 * Math.random();
+						if( Math.random() > 0.5 )
+							randoX *= -1.0;
+
+						var randoY = 3.0 * Math.random();
+						if( Math.random() > 0.5 )
+							randoY *= -1.0;
+
+						var randoZ = 3.0 * Math.random();
+						if( Math.random() > 0.5 )
+							randoZ *= -1.0;
+
+						particle.translateX(randoX);
+						particle.translateY(randoY);
+						particle.translateZ(randoZ);
+
+						particle.userData.life = 0.3;
+						particle.scale.multiplyScalar(4.0);
+
+						particle.JumpStart.onTick = function()
 						{
-							particle.scale.set(1, 1, 1);
-							particle.position.copy(this.position);
-							particle.rotation.copy(this.rotation);
+							if( this.userData.hasOwnProperty("will") )
+								this.userData.will -= 1.0 * g_deltaTime;
+
+							if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+							{
+								var randoPitch = 1.0 * Math.random();
+								if( Math.random() > 0.5 )
+									randoPitch *= -1.0;
+
+								var randoYaw = 1.0 * Math.random();
+								if( Math.random() > 0.5 )
+									randoYaw *= -1.0;
+
+								var randoRoll = 1.0 * Math.random();
+								if( Math.random() > 0.5 )
+									randoRoll *= -1.0;
+
+								this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+								this.userData.will = 3.0 * Math.random();
+							}
+
+							this.userData.life -= g_deltaTime;
+							if( this.userData.life <= 0 )
+							{
+								//g_scene.remove(this);
+								//return;
+
+								this.scale.x -= 1.0 * g_deltaTime;
+								this.scale.y -= 1.0 * g_deltaTime;
+								this.scale.z -= 1.0 * g_deltaTime;
+							}
+
+							this.rotateX(this.userData.direction.x * g_deltaTime);
+							this.rotateY(this.userData.direction.y * g_deltaTime);
+							this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+							this.translateZ(15.0 * g_deltaTime);
+							this.position.y += 10.0 * g_deltaTime;
+
+							if( this.scale.x <= 0.1 )
+								g_scene.remove(this);
+						};
+					}
+				}
+
+				if( JumpStart.webMode && this.userData.oldestTrail )
+				{
+					var trail = this.userData.oldestTrail;
+
+					var nextTrail;
+					while( typeof trail !== 'undefined' )
+					{
+						if( !trail.userData.hasOwnProperty("spinMode") || trail.userData.spinMode === true )
+						{
+							trail.rotateZ(Math.PI);
+							nextTrail = trail.userData.nextTrail;
+							if( typeof nextTrail !== 'undefined' )
+							{
+								nextTrail.userData.spinMode = true;
+								trail.userData.spinMode = false;
+							}
+							else
+							{
+								nextTrail = this.userData.oldestTrail;
+								nextTrail.userData.spinMode = true;
+								trail.userData.spinmode = false;
+							}
+
+							break;
 						}
+
+						trail = trail.userData.nextTrail;
+					}
+
+			/*
+					var foundFlip = false;
+					while( trail )
+					{
+						if( !trail.userData.hasOwnProperty("spinMode") || trail.userData.spinMode )
+						{
+							trail.userData.spinMode = false;
+							trail.rotateY(Math.PI / 2.0);
+
+							if( trail.userData.nextTrail )
+								trail.userData.nextTrail.userData.spinMode = true;
+
+							foundFlip = true;
+							break;
+						}
+
+						trail = trail.userData.nextTrail;
+					}
+
+					if( !foundFlip )
+						this.userData.oldestTrail.spinMode = true;
+					*/
+				}
+
+				if( this.userData.myCar )
+				{
+					// Drive towards the crosshair.
+					var position = new THREE.Vector3().copy(g_crosshair.position);
+					position.y = g_worldOffset.y;
+
+					//position.multiplyScalar(1/g_worldScale);
+
+					var driveDistance = position.distanceTo(this.position);
+
+					if( driveDistance < 25.0 )
+					{
+						if( !dead )
+							localCarCrash.call(this);
 					}
 					else
 					{
-						pos.setFromMatrixPosition( this.matrixWorld );
+						this.lookAt(position);
 
-						particle.position.copy(pos);
-						particle.rotation.copy(this.rotation);
+						var speed = driveDistance;
+						if( speed < 30 )
+							speed = 30;
+						else if( speed > 100 )
+							speed = 100;
+
+						this.userData.boost -= g_deltaTime;
+
+						if( this.userData.boost > 0 )
+						{
+							speed = 150;
+							//speed *= 1.5;
+
+							if( this.userData.hasOwnProperty("lastBoostTime") )
+								this.userData.lastBoostTime -= g_deltaTime;
+
+							if( this.userData.boost && (!this.userData.hasOwnProperty("lastBoostTime") || this.userData.lastBoostTime <= 0) )
+							{
+								//this.userData.lastBoostTime = 0.2;
+								this.userData.lastBoostTime = 0.2 / this.userData.boost;
+
+								var i, particle;
+								for( i = 0; i < 16; i++ )
+								{
+									particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
+									particle.JumpStart.blocksLOS = false;
+									particle.position.copy(this.position);
+									particle.rotation.copy(this.rotation);
+
+									var scale = Math.random();
+									scale *= 0.7;
+
+									if( scale < 0.5 )
+										scale = 0.5;
+
+									particle.scale.multiplyScalar(scale);
+
+									var randoX = 3.0 * Math.random();
+									if( Math.random() > 0.5 )
+										randoX *= -1.0;
+
+									var randoY = 3.0 * Math.random();
+									if( Math.random() > 0.5 )
+										randoY *= -1.0;
+
+									var randoZ = 3.0 * Math.random();
+									if( Math.random() > 0.5 )
+										randoZ *= -1.0;
+
+									if( randoY > 0 )
+										randoY *= -1.0;
+
+									particle.translateX(randoX);
+									particle.translateY(randoY);
+									particle.translateZ(-15.0);
+
+									var matrix = new THREE.Matrix4().copy(this.matrix);
+									matrix.multiply(new THREE.Matrix4().makeTranslation(0, 0, -15.0));
+
+									particle.lookAt(new THREE.Vector3().setFromMatrixPosition(matrix));
+
+									particle.userData.shock = 2.0;
+									particle.userData.life = 0.05;
+									particle.scale.multiplyScalar(10.0);
+
+									particle.JumpStart.onTick = function()
+									{
+										particle.userData.shock -= g_deltaTime;
+
+										if( particle.userData.shock <= 0.0 )
+										{
+											if( this.userData.hasOwnProperty("will") )
+												this.userData.will -= 1.0 * g_deltaTime;
+
+											if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+											{
+												var randoPitch = Math.PI * Math.random();
+												if( Math.random() > 0.5 )
+													randoPitch *= -1.0;
+
+												var randoYaw = Math.PI * Math.random();
+												if( Math.random() > 0.5 )
+													randoYaw *= -1.0;
+
+												var randoRoll = Math.PI * Math.random();
+												if( Math.random() > 0.5 )
+													randoRoll *= -1.0;
+
+												this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+												this.userData.will = 3.0 * Math.random();
+											}
+
+											this.userData.life -= g_deltaTime;
+											if( this.userData.life <= 0 )
+											{
+												// Leave this in will make it scale down x2 as fast after life is gone.
+												this.scale.x -= 6.0 * g_deltaTime;
+												this.scale.y -= 6.0 * g_deltaTime;
+												this.scale.z -= 6.0 * g_deltaTime;
+											}
+
+											this.rotateX(this.userData.direction.x * g_deltaTime);
+											this.rotateY(this.userData.direction.y * g_deltaTime);
+											this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+											this.translateZ(15.0 * g_deltaTime);
+											this.position.y += 10.0 * g_deltaTime;
+										}
+										else
+										{
+											this.translateZ(200.0 * g_deltaTime);
+										}
+
+										this.scale.x -= 6.0 * g_deltaTime;
+										this.scale.y -= 6.0 * g_deltaTime;
+										this.scale.z -= 6.0 * g_deltaTime;
+
+										if( this.scale.x <= 0.1 )
+											g_scene.remove(this);
+									};
+								}
+							}
+						}
+						else
+						{
+							this.userData.boost = 0;
+							this.userData.lastBoostTime = 0;
+						}
+
+						this.translateZ(speed * g_deltaTime);
+
+						// Test for collisions
+						var x, car, barrier, testPoint, dist;
+						for( x in g_cars )
+						{
+							car = g_cars[x];
+							barrier = car.userData.oldestTrail;
+
+							while( barrier )
+							{
+								// ignore the active trail
+								if( !barrier || barrier === this.userData.activeTrail || barrier.userData.nextTrail === this.userData.activeTrail )
+									break;
+								
+								// only care about barriers we can hit
+								if( typeof barrier.userData.rayToNext === 'undefined' || barrier.position.distanceTo(this.position) > barrier.scale.z / 2.0 )
+								{
+									barrier = barrier.userData.nextTrail;
+									continue;
+								}
+
+								testPoint = barrier.userData.rayToNext.closestPointToPoint(this.position);
+								dist = testPoint.distanceTo(this.position);
+
+								if( dist < 10.0 )
+								{
+									if( !dead )
+									{
+										localCarCrash.call(this);
+									}
+								}
+
+								barrier = barrier.userData.nextTrail;
+							}
+						}
 					}
+				}
+
+				// Keep the active trail aligned.
+				var trail = this.userData.activeTrail;
+				trail.position.copy(this.position);
+				trail.rotation.copy(this.rotation);
+				trail.translateZ(-20.0);
+				trail.translateY(5.0);
+				trail.lookAt(this.userData.lastPosition);
+				trail.rotateZ(Math.PI);
+				trail.scale.z = trail.position.distanceTo(this.userData.lastPosition) * 2.0;
+
+				// Create a new trail object every 10.0 meters.
+				if( trail.scale.z > 20.0 )
+				{
+					if( this.userData.myCar && g_arrow && g_myCar )
+					{
+						if( !this.userData.hasOwnProperty("lastTracerElapsed") )
+							this.userData.lastTracerElapsed = 0.0;
+
+						this.userData.lastTracerElapsed += g_deltaTime;
+
+						if( this.userData.lastTracerElapsed >= 0.1 )
+						{
+							this.userData.lastTracerElapsed = 0.0;
+
+							// Fire a new tracer
+							var tracer = JumpStart.spawnInstance("models/LineRacers/gold.obj", {"parent": g_myCar});
+							tracer.userData.isParticle = true;
+							tracer.JumpStart.hasLOS = false;
+				//			tracer.scale.set(0.5, 0.5, 0.5);
+
+							tracer.JumpStart.onTick = function()
+							{
+								if( !g_myCar || !g_arrow )
+									return;
+
+								this.translateZ(300.0 * g_deltaTime);
+								if( this.position.length() >= g_myCar.position.distanceTo(g_arrow.position) - 20 )
+								{
+									g_myCar.remove(this);
+									return;
+								}
+
+								// Make fairy dust
+								var pos = new THREE.Vector3();
+
+								if( !this.userData.hasOwnProperty("lastParticle") )
+									this.userData.lastParticle = 0.0;
+
+								this.userData.lastParticle -= 1.0 * g_deltaTime;
+
+								if( this.userData.lastParticle <= 0.0 )
+								{
+									this.userData.lastParticle = 0.02;
+
+									var i, particle;
+									for( i = 0; i < 1; i++ )
+									{
+										particle = JumpStart.spawnInstance("models/LineRacers/gold.obj", {"parent": g_myCar});
+										particle.userData.isParticle = true;
+										particle.JumpStart.blocksLOS = false;
+
+										particle.position.copy(this.position);
+										particle.rotation.copy(this.rotation);
+										particle.scale.set(1, 1, 1);
+
+										var scale = Math.random();
+										if( scale < 0.5 )
+											scale = 0.5;
+
+										particle.scale.multiplyScalar(scale);
+
+										var randoX = 3.0 * Math.random();
+										if( Math.random() > 0.5 )
+											randoX *= -1.0;
+
+										var randoY = 3.0 * Math.random();
+										if( Math.random() > 0.5 )
+											randoY *= -1.0;
+
+										var randoZ = 3.0 * Math.random();
+										if( Math.random() > 0.5 )
+											randoZ *= -1.0;
+
+										particle.translateX(randoX);
+				//						particle.translateY(randoY);
+										particle.translateZ(randoZ);
+
+										particle.userData.life = 0.3;
+										particle.scale.multiplyScalar(4.0);
+
+										particle.JumpStart.onTick = function()
+										{
+											if( this.userData.hasOwnProperty("will") )
+												this.userData.will -= 1.0 * g_deltaTime;
+
+											if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+											{
+												var randoPitch = 1.0 * Math.random();
+												if( Math.random() > 0.5 )
+													randoPitch *= -1.0;
+
+												var randoYaw = 1.0 * Math.random();
+												if( Math.random() > 0.5 )
+													randoYaw *= -1.0;
+
+												var randoRoll = 1.0 * Math.random();
+												if( Math.random() > 0.5 )
+													randoRoll *= -1.0;
+
+												this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+												this.userData.will = 3.0 * Math.random();
+											}
+
+											this.userData.life -= g_deltaTime;
+
+											if( g_myCar && g_arrow && this.position.length() > g_arrow.position.distanceTo(g_myCar.position) - 15.0 )
+											{
+											//	this.scale.x += 2.0 * g_deltaTime;
+											//	this.scale.y += 2.0 * g_deltaTime;
+											//	this.scale.z += 2.0 * g_deltaTime;
+												g_myCar.remove(this);
+												return;
+											}
+
+											if( this.userData.life <= 0 )
+											{
+												//g_scene.remove(this);
+												//return;
+
+												this.scale.x -= 4.0 * g_deltaTime;
+												this.scale.y -= 4.0 * g_deltaTime;
+												this.scale.z -= 4.0 * g_deltaTime;
+											}
+
+				//							this.rotateX(this.userData.direction.x * g_deltaTime);
+											this.rotateY(this.userData.direction.y * g_deltaTime);
+				//							this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+											this.translateZ(15.0 * g_deltaTime);
+				//							this.position.y += 10.0 * g_deltaTime;
+
+											if( this.scale.x <= 0.1 )
+												g_myCar.remove(this);
+										};
+									}
+								}
+							};
+						}
+					}
+
+					// Spawn the object
+					var nextTrail = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
+					nextTrail.scale.y = 20.0;
+					nextTrail.position.copy(this.position);
+					nextTrail.rotation.copy(this.rotation);
+					nextTrail.translateZ(-20.0);
+					nextTrail.translateY(5.0);
+					nextTrail.scale.x = 4.0;
+					nextTrail.JumpStart.blocksLOS = false;
+
+					// update the linked list
+					trail.userData.nextTrail = nextTrail;
+
+					var direction = new THREE.Vector3().copy(trail.position).sub(nextTrail.position);
+					trail.userData.rayToNext = new THREE.Ray(trail.position, direction.normalize());
+
+					// bookkeeping of car trails
+					this.userData.lastPosition.copy(trail.position);
+					this.userData.activeTrail = nextTrail;
+
+					if( !this.userData.fadeBegun )
+					{
+						// start the trail fade
+						this.userData.fadeBegun = true;
+						trail.JumpStart.onTick["smartFade"] = smartFade;
+					}
+
+					if( this.userData.myCar )
+						this.JumpStart.sync();
+				}
+			}
+
+			function localCarCrash()
+			{
+				var carColor = this.JumpStart.carColor;
+				if( carColor == 0 )
+					carColor = "";
+
+				if( engineLoop )
+				{
+					JumpStart.killSound(engineLoop);
+					engineLoop = null;
+				}
+
+				if( g_arrow )
+				{
+					g_scene.remove(g_arrow);
+					g_arrow = null;
+
+					g_crash = JumpStart.spawnInstance("models/LineRacers/dont.obj");
+					g_crash.JumpStart.hasLOS = false;
+					g_crash.userData.rotDirection = 1;
+					g_crash.userData.rotAmount = 0;
+
+					g_crashText = JumpStart.spawnInstance("models/LineRacers/crashtext.obj");
+					g_crashText.JumpStart.onTick = function()
+					{
+						this.position.copy(g_crash.position);
+					};
+
+					g_crashText.position.copy(g_crash.position);
+
+					g_crash.JumpStart.onTick = function()
+					{
+						var rot = 1.0 * this.userData.rotDirection * g_deltaTime;
+
+						this.userData.rotAmount += rot;
+						if( this.userData.rotAmount > Math.PI / 4.0 )
+						{
+							this.userData.rotAmount = Math.PI / 4.0;
+							this.userData.rotDirection = -1;
+						}
+						else if( this.userData.rotAmount < -Math.PI / 4.0 )
+						{
+							this.userData.rotAmount = -Math.PI / 4.0;
+							this.userData.rotDirection = 1;
+						}
+						else
+						{
+							this.rotateY(rot);
+						}
+
+						this.position.copy(g_crosshair.position);
+						this.position.y = g_worldOffset.y;
+					};
+
+					g_crash.position.copy(g_crosshair.position);
+					g_crash.position.y = g_worldOffset.y;
+					g_crash.position.y += 20.0;
+				}
+
+				chingLoop = JumpStart.playSound("sounds/LineRacers/ching", 1.0, false);
+				JumpStart.playSound("sounds/LineRacers/crash", 1.0, false);
+				dead = JumpStart.spawnInstance("models/LineRacers/dead" + carColor + ".obj");
+				dead.JumpStart.blocksLOS = false;
+				dead.JumpStart.onSpawn["deadSpawn"] = deadSpawn;
+				dead.position.copy(this.position);
+				dead.rotation.copy(this.rotation);
+				dead.position.y += 80.0;
+
+				giveStar();
+				starHandle = setInterval(giveStar, 1500);
+
+				dead.scale.multiplyScalar(2.0);
+
+				dead.JumpStart.onTick["deadSpin"] = deadSpin;
+
+				dead.JumpStart.sync();
+
+				delete this.JumpStart.onTick;
+				this.JumpStart.sync();
+				// FIXME: JumpStart has an issue that makes clearing the tick listener from here
+				// NOT work unless network is enabled!!
+			}
+
+			function smartFade()
+			{
+				this.scale.z -= 150.0 * g_deltaTime;
+
+				if( this.scale.z <= 0 )
+				{
+					var ending = false;
+					if( this.userData.hasOwnProperty('nextTrail') )
+						this.userData.nextTrail.JumpStart.onTick["smartFade"] = smartFade;
+					else
+						ending = true;
+
+					// Update the car's oldestTrail
+					var x, car, body, y, part, clone, randoX, randoY, randoZ;
+					for( x in g_cars )
+					{
+						car = g_cars[x];
+						if( car.userData.oldestTrail === this )
+						{
+							car.userData.oldestTrail = this.userData.nextTrail;
+
+							if( ending && car.userData.myCar )
+							{
+								// LAST TRAIL HAS BEEN REMOVED
+								JumpStart.unsyncObject(car);
+
+								//var startButton = JumpStart.spawnInstance("models/LineRacers/carstand.obj");
+								//startButton.JumpStart.onCursorDown["spawnCar"] = spawnCar;
+								createStartButton();
+							}
+
+							break;
+						}
+					}
+
+					g_scene.remove(this);
+				}
+			}
+
+			function highScores()
+			{
+				g_highScores = this;
+				g_highScores.JumpStart.addDataListener("scores", function(oldValue, value, isLocal) {
+					var scoresArray = new Array();
+					var i;
+					for( i in value )
+					{
+						scoresArray.push(value[i]);
+					}
+
+					scoresArray.sort(function(a, b) { return (a.high - b.high) * (-1); });
+					var table = document.getElementById("highscores");
+
+					// Remove all old rows
+					var targetRows = table.getElementsByTagName("tr");
+					while( targetRows.length > 0 )
+					{
+						table.removeChild(targetRows[0]);
+						targetRows = table.getElementsByTagName("tr");
+					}
+
+					// Add new rows
+					var x, playerScore, row, nameCol, scoreCol;
+					for( x in scoresArray )
+					{
+						playerScore = scoresArray[x];
+						row = document.createElement("tr");
+
+						nameCol = document.createElement("td");
+						nameCol.innerHTML = playerScore.displayName;
+
+						scoreCol = document.createElement("td");
+						scoreCol.innerHTML = playerScore.high + " stars";
+
+						row.appendChild(nameCol);
+						row.appendChild(scoreCol);
+						table.appendChild(row);
+					}
+				});
+			}
+
+			function carRemoved()
+			{
+				var car = this;
+				g_cars.splice(g_cars.indexOf(car), 1);
+
+				var carColor = car.JumpStart.carColor;
+				if( carColor == 0 )
+					carColor = "";
+
+				// Stop the sound
+				if( chingLoop )
+				{
+					JumpStart.killSound(chingLoop);
+					chingLoop = null;
+				}
+
+				// Start the new sounds
+				//JumpStart.playSound("sounds/LineRacers/trumpet", 0.5, false);
+				g_starGlobalOffsetCount = 0;
+
+				JumpStart.playSound("sounds/LineRacers/explosion", 1.0, false);
+
+				if( this.userData.myCar )
+				{
+					JumpStart.playSound("sounds/LineRacers/cashout", 1.0, false);
+
+					// High scores
+					if( !g_highScores )
+					{
+						g_highScores = JumpStart.spawnInstance("models/LineRacers/star.obj");
+						g_highScores.JumpStart.blocksLOS = false;
+						g_highScores.scale.set(0.0001, 0.0001, 0.0001);
+						g_highScores.position.set(0, -100.0, 0);
+						g_highScores.JumpStart.onSpawn["highScores"] = highScores;
+						g_highScores.JumpStart.scores = {};
+
+						var score = g_highScores.JumpStart.scores[g_localUser.userId] = {"displayName": g_localUser.displayName, "high": g_stars.length};
+
+						g_highScores.JumpStart.sync();
+					}
+					else
+					{
+						var needsSync = false;
+
+						var score;
+						if( g_highScores.JumpStart.scores.hasOwnProperty(g_localUser.userId) )
+						{
+							score = g_highScores.JumpStart.scores[g_localUser.userId];
+
+							if( g_stars.length > score.high )
+							{
+								score.high = g_stars.length;
+								needsSync = true;
+							}
+						}
+						else
+						{
+							g_highScores.JumpStart.scores[g_localUser.userId] = {"displayName": g_localUser.displayName, "high": g_stars.length};
+							needsSync = true;
+						}
+
+						if( needsSync )
+							g_highScores.JumpStart.sync();
+					}
+				}
+
+				// Make a visual fire ball
+				var pos;
+				if( !JumpStart.webMode )
+					pos = new THREE.Vector3();
+
+				if( this.userData.myCar )
+				{
+					var x, star;
+					for( x in g_stars )
+					{
+						star = g_stars[x];
+						
+						if( !JumpStart.webMode )
+							pos.copy(star.position);
+
+						THREE.SceneUtils.detach(star, dead, g_scene);
+						star.userData.lifeLeft = 150;
+
+						if( !JumpStart.webMode )
+						{
+							star.scale.copy(dead.scale);
+							star.position.copy(dead.position);
+							star.rotation.copy(dead.rotation);
+
+							star.translateX(pos.x);
+							star.translateY(pos.y);
+							star.translateZ(pos.z);
+						}
+
+						star.JumpStart.onTick["deathWatch"] = function()
+						{
+							this.userData.lifeLeft--;
+
+							if( this.userData.lifeLeft <= 0 )
+							{
+								g_stars.splice( g_stars.indexOf(star), 1 );
+								g_scene.remove(this);
+							}
+						};
+						star.JumpStart.applyForce(new THREE.Vector3().copy(star.position).sub(dead.position).multiplyScalar(0.15));
+					}
+				}
+
+				var explosion = JumpStart.spawnInstance("models/LineRacers/explosion.obj");
+				explosion.scale.set(0.001, 0.001, 0.001);
+				explosion.userData.scaleSize = 0.001;
+				explosion.userData.scaleDirection = 1;
+				explosion.position.copy(car.position).y += 15.0;
+				explosion.JumpStart.blocksLOS = false;
+
+				explosion.JumpStart.onTick = function()
+				{
+					if( this.userData.scaleDirection === 1 )
+					{
+						this.userData.scaleSize += 5.0 * g_deltaTime;
+
+						if( this.userData.scaleSize >= 1.0 )
+							this.userData.scaleDirection = -1;
+					}
+					else
+					{
+						this.userData.scaleSize -= 4.0 * g_deltaTime;
+
+						if( this.userData.scaleSize <= 0.001 )
+						{
+							g_scene.remove(this);
+							return;
+						}
+					}
+
+					this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+					this.rotateY(15.0 * g_deltaTime);
+					this.rotateX(20.0 * g_deltaTime);
+				};
+
+				// Add a body to explode
+				var body = JumpStart.spawnInstance("models/LineRacers/body" + carColor + ".obj", {"parent": car});
+
+				var y, part, clone, randoY, randoX, randoZ, force;
+				for( y in car.children )
+				{
+					part = car.children[y];
+
+					if( !part.hasOwnProperty("JumpStart") || part.hasOwnProperty("isParticle") )
+						continue;
+
+					clone = JumpStart.spawnInstance(part.JumpStart.modelFile);
+					clone.position.copy(new THREE.Vector3().setFromMatrixPosition(part.matrixWorld));
+					clone.JumpStart.blocksLOS = false;
+
+					randoY = 0.0;
+					if( clone.position.equals(new THREE.Vector3(0, 0, 0)) )
+					{
+						randoY = 30.0;
+						clone.position.copy(car.position);
+
+						if( !JumpStart.webMode )
+						{
+							// FIXME: Why is 10 the magic number, i wonder?
+							clone.position.y += 10.0;
+						}
+					}
+					else if( !JumpStart.webMode )
+						clone.position.multiplyScalar(1/g_worldScale);
+
+					clone.quaternion.copy(part.getWorldQuaternion());
+
+					randoX = 20.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoX *= -1.0;
+
+					randoZ = 20.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoZ *= -1.0;
+
+					// The main body should go nearly straight up
+					if( JumpStart.webMode && clone.position.equals(car.position) )
+					{
+						randoX *= 0.3;
+						randoZ *= 0.3;
+					}
+
+					force = new THREE.Vector3().copy(part.position);
+
+					clone.JumpStart.applyForce(new THREE.Vector3(force.x + randoX, (force.y * 5.0) + randoY, force.z + randoZ).multiplyScalar(0.25));
+
+					// The main body shouldn't spin so much.
+					if( randoY !== 0.0 )
+						clone.JumpStart.freefallRot.multiplyScalar(0.3);
+
+					clone.JumpStart.onTick = function()
+					{
+						if( this.position.y < g_worldOffset.y )
+						{
+							this.position.y = g_worldOffset.y;
+							this.JumpStart.physicsState = 0;
+
+							this.userData.lifeSpan = 4.0;
+							this.JumpStart.onTick = function()
+							{
+								this.userData.lifeSpan -= g_deltaTime;
+
+								if( this.userData.lifeSpan <= 0 )
+								{
+									this.userData.lifeSpan = 0;
+									g_scene.remove(this);
+								}
+							};
+						}
+					};
+				}
+
+				var explosionLook = new THREE.Vector3().copy(explosion.rotation);
+
+				// Particles
+				var i, particle;
+				for( i = 0; i < 16; i++ )
+				{
+					particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
+					particle.JumpStart.blocksLOS = false;
+					particle.position.copy(explosion.position);
+					particle.rotation.copy(explosion.rotation);
 
 					var scale = Math.random();
 					if( scale < 0.5 )
@@ -253,1281 +1722,103 @@ function giveStar()
 					if( Math.random() > 0.5 )
 						randoY *= -1.0;
 
+			//		if( randoY < 0 )
+			//			randoY = 0;
+
 					var randoZ = 3.0 * Math.random();
 					if( Math.random() > 0.5 )
 						randoZ *= -1.0;
 
 					particle.translateX(randoX);
-					particle.translateY(randoY);
+
+					if( randoY > 0 )
+						particle.translateY(randoY);
+
 					particle.translateZ(randoZ);
 
-					particle.userData.life = 0.3;
-					particle.scale.multiplyScalar(4.0);
+					explosion.lookAt(particle.position);
+					particle.rotation.copy(explosion.rotation);
+
+					particle.userData.shock = 2.0;
+					particle.userData.life = 0.2;
+					particle.scale.multiplyScalar(10.0);
 
 					particle.JumpStart.onTick = function()
 					{
-						if( this.userData.hasOwnProperty("will") )
-							this.userData.will -= 1.0 * g_deltaTime;
+						particle.userData.shock -= g_deltaTime;
 
-						if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+						if( particle.userData.shock <= 0.0 )
 						{
-							var randoPitch = 1.0 * Math.random();
-							if( Math.random() > 0.5 )
-								randoPitch *= -1.0;
+							if( this.userData.hasOwnProperty("will") )
+								this.userData.will -= 1.0 * g_deltaTime;
 
-							var randoYaw = 1.0 * Math.random();
-							if( Math.random() > 0.5 )
-								randoYaw *= -1.0;
+							if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+							{
+								var randoPitch = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoPitch *= -1.0;
 
-							var randoRoll = 1.0 * Math.random();
-							if( Math.random() > 0.5 )
-								randoRoll *= -1.0;
+								var randoYaw = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoYaw *= -1.0;
 
-							this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
-							this.userData.will = 3.0 * Math.random();
+								var randoRoll = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoRoll *= -1.0;
+
+								this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+								this.userData.will = 3.0 * Math.random();
+							}
+
+							this.userData.life -= g_deltaTime;
+							if( this.userData.life <= 0 )
+							{
+								//g_scene.remove(this);
+			//					this.JumpStart.onTick = function()
+			//					{
+									this.scale.x -= 1.0 * g_deltaTime;
+									this.scale.y -= 1.0 * g_deltaTime;
+									this.scale.z -= 1.0 * g_deltaTime;
+
+			//					};
+
+			//					return;
+							}
+
+							this.rotateX(this.userData.direction.x * g_deltaTime);
+							this.rotateY(this.userData.direction.y * g_deltaTime);
+							this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+							this.translateZ(15.0 * g_deltaTime);
+							this.position.y += 10.0 * g_deltaTime;
+
+							if( this.scale.x <= 0.1 )
+								g_scene.remove(this);
 						}
-
-						this.userData.life -= g_deltaTime;
-						if( this.userData.life <= 0 )
+						else
 						{
-							//g_scene.remove(this);
-							//return;
-
-							this.scale.x -= 1.0 * g_deltaTime;
-							this.scale.y -= 1.0 * g_deltaTime;
-							this.scale.z -= 1.0 * g_deltaTime;
+							this.translateZ(200.0 * g_deltaTime);
 						}
-
-						this.rotateX(this.userData.direction.x * g_deltaTime);
-						this.rotateY(this.userData.direction.y * g_deltaTime);
-						this.rotateZ(this.userData.direction.z * g_deltaTime);
-
-						this.translateZ(15.0 * g_deltaTime);
-						this.position.y += 10.0 * g_deltaTime;
-
-						if( this.scale.x <= 0.1 )
-							g_scene.remove(this);
 					};
 				}
-			}
-		};
 
-		g_stars.push(star);
-	}, 500);
-}
+				explosion.rotation.copy(explosionLook);
 
-function onTick()
-{
-	fireworksLoop();
-
-	// Adjust audio levels
-	if( g_myCar && engineLoop )
-	{
-		var maxDistance = 1000;
-
-		var flexVolume = g_localUser.lookOrigin.distanceTo(g_myCar.position) / maxDistance;
-		if( flexVolume > 1.0 )
-			flexVolume = 1.0;
-
-		engineLoop.volume = 1.0 - flexVolume;
-	}
-}
-
-function bobLetter()
-{
-	var amount = (4.0 * g_deltaTime) * this.userData.bobDirection;
-	this.translateY(amount);
-
-	var difference = this.position.y - this.userData.bobOrigin;
-	if( (difference > 0 && difference > 2.0) ||
-		(difference < 0 && difference < -2.0) )
-	{
-		if( difference >= 0 )
-			this.position.y = this.userData.bobOrigin + 2.0;
-		else
-			this.position.y = this.userData.bobOrigin - 2.0;
-
-		this.userData.bobDirection *= -1.0;
-	}
-}
-
-function startButtonTick()
-{
-	if( !g_localUser.lookHit || !g_localUser.lookHit.object || !g_crosshair || !g_localUser.lookOrigin)
-		return;
-
-	if( g_localUser.lookHit.object === g_floorPlane)
-	{
-		this.position.copy(g_crosshair.position);
-		this.lookAt(g_localUser.lookOrigin);
-		this.rotation.x = 0;
-		this.rotation.z = 0;
-	}
-}
-
-var g_myCar = null;
-var chingLoop = null;
-var engineLoop = null;
-var startButton = null;
-function createStartButton()
-{
-	// choose a color
-	var colorIndex;
-	if( g_cars.length > 0 )
-		colorIndex = Number(g_cars[g_cars.length-1].JumpStart.carColor) + 1;
-	else
-	{
-		colorIndex = Math.round(Math.random() * 2.0);
-	}
-
-	if( colorIndex > 2 )
-		colorIndex = 0;
-
-	var carColor = colorIndex;
-	if( carColor == 0 )
-		carColor = "";
-
-	startButton = JumpStart.spawnInstance("models/LineRacers/carstand.obj");
-	startButton.userData.carColor = colorIndex;
-	startButton.JumpStart.onCursorDown[onCursorDown] = onCursorDown;
-	startButton.JumpStart.onTick["startButtonTick"] = startButtonTick;
-	startButton.JumpStart.blocksLOS = false;
-
-	// Make the start button re-position itself IMMIDATELY
-	startButtonTick.call(startButton);
-
-	// attach all our parts
-	var verts;
-	var x;
-	for( x in JumpStart.models )
-	{
-		if( JumpStart.models[x].fileName === "models/LineRacers/carstand_offsets.obj" )
-		{
-			verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
-			break;
-		}
-	}
-
-	var dummyCar = JumpStart.spawnInstance("models/LineRacers/car" + carColor + ".obj", {"parent": startButton});
-	//dummyCar.JumpStart.onCursorDown["spawnCar"] = spawnCar;
-	dummyCar.position.copy(verts[1]);
-	dummyCar.JumpStart.blocksLOS = false;
-
-	var letterR = JumpStart.spawnInstance("models/LineRacers/r.obj", {"parent": startButton});
-	//letterR.JumpStart.onCursorDown["spawnCar"] = spawnCar;
-	letterR.position.copy(verts[0]);
-	letterR.JumpStart.blocksLOS = false;
-	letterR.userData.bobDirection = 1.0;
-	letterR.userData.bobOrigin = letterR.position.y;
-	letterR.JumpStart.onTick = bobLetter;
-
-	var letterA = JumpStart.spawnInstance("models/LineRacers/a.obj", {"parent": startButton});
-	//letterA.JumpStart.onCursorDown["spawnCar"] = spawnCar;
-	letterA.position.copy(verts[2]);
-	letterA.JumpStart.blocksLOS = false;
-	letterA.userData.bobDirection = -1.0;
-	letterA.userData.bobOrigin = letterA.position.y;
-	letterA.JumpStart.onTick = bobLetter;
-
-	var letterC = JumpStart.spawnInstance("models/LineRacers/c.obj", {"parent": startButton});
-	//letterC.JumpStart.onCursorDown["spawnCar"] = spawnCar;
-	letterC.position.copy(verts[4]);
-	letterC.JumpStart.blocksLOS = false;
-	letterC.userData.bobDirection = 1.0;
-	letterC.userData.bobOrigin = letterC.position.y;
-	letterC.JumpStart.onTick = bobLetter;
-
-	var letterE = JumpStart.spawnInstance("models/LineRacers/e.obj", {"parent": startButton});
-	//letterE.JumpStart.onCursorDown["spawnCar"] = spawnCar;
-	letterE.position.copy(verts[3]);
-	letterE.JumpStart.blocksLOS = false;
-	letterE.userData.bobDirection = -1.0;
-	letterE.userData.bobOrigin = letterE.position.y;
-	letterE.JumpStart.onTick = bobLetter;
-}
-
-function onReady()
-{
-	// first user
-	if( g_localUser.firstUser )
-	{
-
-	}
-
-	createStartButton();
-
-	// START SIMULATION
-	JumpStart.run();
-}
-
-function spawnCar()
-{
-	if( !startButton )
-		return;
-
-	var colorIndex = startButton.userData.carColor;
-
-	var carColor = colorIndex;
-	if( carColor == 0 )
-		carColor = "";
-
-	// Start the engine
-	JumpStart.playSound("sounds/LineRacers/carstart", 1.0, false);
-	setTimeout(function()
-	{
-		engineLoop = JumpStart.playSound("sounds/LineRacers/idle", 0.5, true);
-		engineLoop.flexVolume = 1.0;
-	}, 1000)
-
-	// create a car
-	var car = JumpStart.spawnInstance("models/LineRacers/body" + carColor + ".obj");
-	car.position.copy(startButton.position);
-	car.rotation.copy(startButton.rotation);
-	car.translateZ(-100.0);
-
-	var position = new THREE.Vector3().copy(g_crosshair.position);
-	position.y = g_worldOffset.y;
-	car.lookAt(position);
-
-	car.JumpStart.onSpawn["initCar"] = initCar;
-	car.JumpStart.onTick["makeTracks"] = makeTracks;
-	car.JumpStart.onNetworkRemoved["carRemoved"] = carRemoved;
-
-	car.JumpStart.carColor = colorIndex;	// auto-synced
-
-	car.JumpStart.sync();
-	car.userData.myCar = true;
-	g_myCar = car;
-
-	g_scene.remove(startButton);
-	startButton = null;
-}
-
-function initCar(isLocal, isInitial)
-{
-	car = this;
-
-	if( !car.userData.hasOwnProperty("myCar") )
-		car.userData.myCar = false;
-
-	car.JumpStart.blocksLOS = false;
-
-	// attach all our parts
-	var verts;
-	var x;
-	for( x in JumpStart.models )
-	{
-		if( JumpStart.models[x].fileName === "models/LineRacers/car_offsets.obj" )
-		{
-			verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
-			break;
-		}
-	}
-
-	var carColor = car.JumpStart.carColor;
-	if( carColor == 0 )
-		carColor = "";
-
-	var driver = JumpStart.spawnInstance("models/LineRacers/driver" + carColor + ".obj", {"parent": car});
-	driver.position.copy(verts[2]);
-	driver.JumpStart.blocksLOS = false;
-	driver.userData.bobDirection = 1.0;
-	driver.userData.bobOrigin = driver.position.y;
-	driver.JumpStart.onTick = function()
-	{
-		var amount = (10.0 * g_deltaTime) * this.userData.bobDirection;
-		this.translateY(amount);
-
-		var difference = this.position.y - this.userData.bobOrigin;
-		if( (difference > 0 && difference > 1.0) ||
-			(difference < 0 ) )
-		{
-			if( difference >= 0 )
-				this.position.y = this.userData.bobOrigin + 1.0;
-			else
-				this.position.y = this.userData.bobOrigin;
-
-			this.userData.bobDirection *= -1.0;
-		}
-	};
-
-	var rearRight = JumpStart.spawnInstance("models/LineRacers/rearright" + carColor + ".obj", {"parent": car});
-	rearRight.position.copy(verts[0]);
-	rearRight.JumpStart.blocksLOS = false;
-	rearRight.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
-
-	var rearLeft = JumpStart.spawnInstance("models/LineRacers/rearleft" + carColor + ".obj", {"parent": car});
-	rearLeft.position.copy(verts[4]);
-	rearLeft.JumpStart.blocksLOS = false;
-	rearLeft.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
-
-	var frontRight = JumpStart.spawnInstance("models/LineRacers/frontright" + carColor + ".obj", {"parent": car});
-	frontRight.position.copy(verts[1]);
-	frontRight.JumpStart.blocksLOS = false;
-	frontRight.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
-
-	var frontLeft = JumpStart.spawnInstance("models/LineRacers/frontleft" + carColor + ".obj", {"parent": car});
-	frontLeft.position.copy(verts[3]);
-	frontLeft.JumpStart.blocksLOS = false;
-	frontLeft.JumpStart.onTick = function(){ this.rotateX(10.0 * g_deltaTime); };
-
-	car.JumpStart.blocksLOS = false;
-	car.userData.fadeBegun = false;
-
-	// create a trail
-	var trail = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
-	trail.scale.y = 20.0;
-	trail.position.copy(car.position);
-	trail.rotation.copy(car.rotation);
-	trail.translateZ(-20.0);
-	trail.translateY(5.0);
-	trail.scale.x = 4.0;
-	trail.JumpStart.blocksLOS = false;
-
-	// bookkeeping of car trails
-	car.userData.lastPosition = new THREE.Vector3().copy(car.position);
-	car.userData.oldestTrail = trail;
-	car.userData.activeTrail = trail;
-	g_cars.push(car);
-}
-
-// Purpose:
-//	1. Drive towards the crosshair.
-//	2. Keep the active trail aligned.
-//	3. Create a new trail object every X meters.
-//	4. Check for collisions against the trails.
-var dead = null;
-function makeTracks()
-{
-	var carColor = this.JumpStart.carColor;
-	if( carColor == 0 )
-		carColor = "";
-
-	// Make fairy dust
-	var i, particle;
-	for( i = 0; i < 1; i++ )
-	{
-		particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
-		particle.JumpStart.blocksLOS = false;
-		particle.position.copy(this.position);
-		particle.rotation.copy(this.rotation);
-
-		particle.translateZ(-20.0);
-		particle.translateY(5.0);
-
-		var scale = Math.random();
-		if( scale < 0.5 )
-			scale = 0.5;
-
-		particle.scale.multiplyScalar(scale);
-
-		var randoX = 3.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoX *= -1.0;
-
-		var randoY = 3.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoY *= -1.0;
-
-		var randoZ = 3.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoZ *= -1.0;
-
-		particle.translateX(randoX);
-		particle.translateY(randoY);
-		particle.translateZ(randoZ);
-
-		particle.userData.life = 0.3;
-		particle.scale.multiplyScalar(4.0);
-
-		particle.JumpStart.onTick = function()
-		{
-			if( this.userData.hasOwnProperty("will") )
-				this.userData.will -= 1.0 * g_deltaTime;
-
-			if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
-			{
-				var randoPitch = 1.0 * Math.random();
-				if( Math.random() > 0.5 )
-					randoPitch *= -1.0;
-
-				var randoYaw = 1.0 * Math.random();
-				if( Math.random() > 0.5 )
-					randoYaw *= -1.0;
-
-				var randoRoll = 1.0 * Math.random();
-				if( Math.random() > 0.5 )
-					randoRoll *= -1.0;
-
-				this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
-				this.userData.will = 3.0 * Math.random();
-			}
-
-			this.userData.life -= g_deltaTime;
-			if( this.userData.life <= 0 )
-			{
-				//g_scene.remove(this);
-				//return;
-
-				this.scale.x -= 1.0 * g_deltaTime;
-				this.scale.y -= 1.0 * g_deltaTime;
-				this.scale.z -= 1.0 * g_deltaTime;
-			}
-
-			this.rotateX(this.userData.direction.x * g_deltaTime);
-			this.rotateY(this.userData.direction.y * g_deltaTime);
-			this.rotateZ(this.userData.direction.z * g_deltaTime);
-
-			this.translateZ(15.0 * g_deltaTime);
-			this.position.y += 10.0 * g_deltaTime;
-
-			if( this.scale.x <= 0.1 )
-				g_scene.remove(this);
-		};
-	}
-
-	if( JumpStart.webMode && this.userData.oldestTrail )
-	{
-		var trail = this.userData.oldestTrail;
-
-		var nextTrail;
-		while( typeof trail !== 'undefined' )
-		{
-			if( !trail.userData.hasOwnProperty("spinMode") || trail.userData.spinMode === true )
-			{
-				trail.rotateZ(Math.PI);
-				nextTrail = trail.userData.nextTrail;
-				if( typeof nextTrail !== 'undefined' )
+				if( car.userData.myCar )
 				{
-					nextTrail.userData.spinMode = true;
-					trail.userData.spinMode = false;
-				}
-				else
-				{
-					nextTrail = this.userData.oldestTrail;
-					nextTrail.userData.spinMode = true;
-					trail.userData.spinmode = false;
-				}
+					g_myCar = null;
 
-				break;
-			}
-
-			trail = trail.userData.nextTrail;
-		}
-
-/*
-		var foundFlip = false;
-		while( trail )
-		{
-			if( !trail.userData.hasOwnProperty("spinMode") || trail.userData.spinMode )
-			{
-				trail.userData.spinMode = false;
-				trail.rotateY(Math.PI / 2.0);
-
-				if( trail.userData.nextTrail )
-					trail.userData.nextTrail.userData.spinMode = true;
-
-				foundFlip = true;
-				break;
-			}
-
-			trail = trail.userData.nextTrail;
-		}
-
-		if( !foundFlip )
-			this.userData.oldestTrail.spinMode = true;
-		*/
-	}
-
-	if( this.userData.myCar )
-	{
-		// Drive towards the crosshair.
-		var position = new THREE.Vector3().copy(g_crosshair.position);
-		position.y = g_worldOffset.y;
-
-		//position.multiplyScalar(1/g_worldScale);
-
-		if( position.distanceTo(this.position) > 20.0 )
-			this.lookAt(position);
-
-		this.translateZ(100.0 * g_deltaTime);
-
-		// Test for collisions
-		var x, car, barrier, testPoint, dist;
-		for( x in g_cars )
-		{
-			car = g_cars[x];
-			barrier = car.userData.oldestTrail;
-
-			while( barrier )
-			{
-				// ignore the active trail
-				if( !barrier || barrier === this.userData.activeTrail || barrier.userData.nextTrail === this.userData.activeTrail )
-					break;
-				
-				// only care about barriers we can hit
-				if( typeof barrier.userData.rayToNext === 'undefined' || barrier.position.distanceTo(this.position) > barrier.scale.z / 2.0 )
-				{
-					barrier = barrier.userData.nextTrail;
-					continue;
-				}
-
-				testPoint = barrier.userData.rayToNext.closestPointToPoint(this.position);
-				dist = testPoint.distanceTo(this.position);
-
-				if( dist < 10.0 )
-				{
-					if( !dead )
+					if( dead )
 					{
-						if( engineLoop )
-						{
-							JumpStart.killSound(engineLoop);
-							engineLoop = null;
-						}
-
-						chingLoop = JumpStart.playSound("sounds/LineRacers/ching", 1.0, false);
-						JumpStart.playSound("sounds/LineRacers/crash", 1.0, false);
-						dead = JumpStart.spawnInstance("models/LineRacers/dead" + carColor + ".obj");
-						dead.position.copy(this.position);
-						dead.rotation.copy(this.rotation);
-						dead.position.y += 80.0;
-
-						giveStar();
-						starHandle = setInterval(giveStar, 1500);
-
-						dead.scale.multiplyScalar(2.0);
-
-						dead.JumpStart.onTick = function()
-						{
-							this.rotateY(2.0 * g_deltaTime);
-						};
+						JumpStart.unsyncObject(dead);
+						g_scene.remove(dead);
+						dead = null;
+						clearInterval(starHandle);
 					}
-
-					// HIT!!
-					delete this.JumpStart.onTick;
-
-					// FIXME: JumpStart has an issue that makes clearing the tick listener from here
-					// NOT work unless network is enabled!!
 				}
 
-				barrier = barrier.userData.nextTrail;
+				g_scene.remove(car);
 			}
-		}
-	}
-
-	// Keep the active trail aligned.
-	var trail = this.userData.activeTrail;
-	trail.position.copy(this.position);
-	trail.rotation.copy(this.rotation);
-	trail.translateZ(-20.0);
-	trail.translateY(5.0);
-	trail.lookAt(this.userData.lastPosition);
-	trail.rotateZ(Math.PI);
-	trail.scale.z = trail.position.distanceTo(this.userData.lastPosition) * 2.0;
-
-	// Create a new trail object every 10.0 meters.
-	if( trail.scale.z > 20.0 )
-	{
-		// Spawn the object
-		var nextTrail = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
-		nextTrail.scale.y = 20.0;
-		nextTrail.position.copy(this.position);
-		nextTrail.rotation.copy(this.rotation);
-		nextTrail.translateZ(-20.0);
-		nextTrail.translateY(5.0);
-		nextTrail.scale.x = 4.0;
-		nextTrail.JumpStart.blocksLOS = false;
-
-		// update the linked list
-		trail.userData.nextTrail = nextTrail;
-
-		var direction = new THREE.Vector3().copy(trail.position).sub(nextTrail.position);
-		trail.userData.rayToNext = new THREE.Ray(trail.position, direction.normalize());
-
-		// bookkeeping of car trails
-		this.userData.lastPosition.copy(trail.position);
-		this.userData.activeTrail = nextTrail;
-
-		if( !this.userData.fadeBegun )
-		{
-			// start the trail fade
-			this.userData.fadeBegun = true;
-			trail.JumpStart.onTick["smartFade"] = smartFade;
-		}
-
-		if( this.userData.myCar )
-			this.JumpStart.sync();
-	}
-}
-
-function smartFade()
-{
-	this.scale.z -= 150.0 * g_deltaTime;
-
-	if( this.scale.z <= 0 )
-	{
-		var ending = false;
-		if( this.userData.hasOwnProperty('nextTrail') )
-			this.userData.nextTrail.JumpStart.onTick["smartFade"] = smartFade;
-		else
-			ending = true;
-
-		// Update the car's oldestTrail
-		var x, car, body, y, part, clone, randoX, randoY, randoZ;
-		for( x in g_cars )
-		{
-			if( g_cars[x].userData.oldestTrail === this )
-			{
-				car = g_cars[x];
-				car.userData.oldestTrail = this.userData.nextTrail;
-
-				if( ending && car.userData.myCar )
-				{
-					// LAST TRAIL HAS BEEN REMOVED
-					JumpStart.unsyncObject(car);
-
-					//var startButton = JumpStart.spawnInstance("models/LineRacers/carstand.obj");
-					//startButton.JumpStart.onCursorDown["spawnCar"] = spawnCar;
-					createStartButton();
-				}
-
-				break;
-			}
-		}
-
-		g_scene.remove(this);
-	}
-}
-
-var g_highScores = null;
-function highScores()
-{
-	g_highScores = this;
-	g_highScores.JumpStart.addDataListener("scores", function(oldValue, value, isLocal) {
-		var scoresArray = new Array();
-		var i;
-		for( i in value )
-		{
-			scoresArray.push(value[i]);
-		}
-
-		scoresArray.sort(function(a, b) { return (a.high - b.high) * (-1); });
-		var table = document.getElementById("highscores");
-
-		// Remove all old rows
-		var targetRows = table.getElementsByTagName("tr");
-		while( targetRows.length > 0 )
-		{
-			table.removeChild(targetRows[0]);
-			targetRows = table.getElementsByTagName("tr");
-		}
-
-		// Add new rows
-		var x, playerScore, row, nameCol, scoreCol;
-		for( x in scoresArray )
-		{
-			playerScore = scoresArray[x];
-			row = document.createElement("tr");
-
-			nameCol = document.createElement("td");
-			nameCol.innerHTML = playerScore.displayName;
-
-			scoreCol = document.createElement("td");
-			scoreCol.innerHTML = playerScore.high + " stars";
-
-			row.appendChild(nameCol);
-			row.appendChild(scoreCol);
-			table.appendChild(row);
-		}
-	});
-}
-
-function carRemoved()
-{
-	var car = this;
-	g_cars.splice(g_cars.indexOf(car), 1);
-
-	var carColor = car.JumpStart.carColor;
-	if( carColor == 0 )
-		carColor = "";
-
-	// Stop the sound
-	if( chingLoop )
-	{
-		JumpStart.killSound(chingLoop);
-		chingLoop = null;
-	}
-
-	// Start the new sounds
-	//JumpStart.playSound("sounds/LineRacers/trumpet", 0.5, false);
-	g_starGlobalOffsetCount = 0;
-
-	JumpStart.playSound("sounds/LineRacers/explosion", 1.0, false);
-	JumpStart.playSound("sounds/LineRacers/cashout", 1.0, false);
-
-	// High scores
-	if( !g_highScores )
-	{
-		g_highScores = JumpStart.spawnInstance("models/LineRacers/star.obj");
-		g_highScores.scale.set(0.0001, 0.0001, 0.0001);
-		g_highScores.position.set(0, -100.0, 0);
-		g_highScores.JumpStart.onSpawn["highScores"] = highScores;
-		g_highScores.JumpStart.scores = {};
-
-		var score = g_highScores.JumpStart.scores[g_localUser.userId] = {"displayName": g_localUser.displayName, "high": g_stars.length};
-
-		g_highScores.JumpStart.sync();
-	}
-	else
-	{
-		var needsSync = false;
-
-		var score;
-		if( g_highScores.JumpStart.scores.hasOwnProperty(g_localUser.userId) )
-		{
-			score = g_highScores.JumpStart.scores[g_localUser.userId];
-
-			if( g_stars.length > score.high )
-			{
-				score.high = g_stars.length;
-				needsSync = true;
-			}
-		}
-		else
-		{
-			g_highScores.JumpStart.scores[g_localUser.userId] = {"displayName": g_localUser.displayName, "high": g_stars.length};
-			needsSync = true;
-		}
-
-		if( needsSync )
-			g_highScores.JumpStart.sync();
-	}
-
-	// Make a visual fire ball
-	var pos;
-	if( !JumpStart.webMode )
-		pos = new THREE.Vector3();
-
-	var x, star;
-	for( x in g_stars )
-	{
-		star = g_stars[x];
-		
-		if( !JumpStart.webMode )
-			pos.copy(star.position);
-
-		THREE.SceneUtils.detach(star, dead, g_scene);
-		star.userData.lifeLeft = 150;
-
-		if( !JumpStart.webMode )
-		{
-			star.scale.copy(dead.scale);
-			star.position.copy(dead.position);
-			star.rotation.copy(dead.rotation);
-
-			star.translateX(pos.x);
-			star.translateY(pos.y);
-			star.translateZ(pos.z);
-		}
-
-		star.JumpStart.onTick["deathWatch"] = function()
-		{
-			this.userData.lifeLeft--;
-
-			if( this.userData.lifeLeft <= 0 )
-			{
-				g_stars.splice( g_stars.indexOf(star), 1 );
-				g_scene.remove(this);
-			}
-		};
-		star.JumpStart.applyForce(new THREE.Vector3().copy(star.position).sub(dead.position));
-	}
-
-	var explosion = JumpStart.spawnInstance("models/LineRacers/explosion.obj");
-	explosion.scale.set(0.001, 0.001, 0.001);
-	explosion.userData.scaleSize = 0.001;
-	explosion.userData.scaleDirection = 1;
-	explosion.position.copy(car.position).y += 15.0;
-	explosion.JumpStart.blocksLOS = false;
-
-	explosion.JumpStart.onTick = function()
-	{
-		if( this.userData.scaleDirection === 1 )
-		{
-			this.userData.scaleSize += 5.0 * g_deltaTime;
-
-			if( this.userData.scaleSize >= 1.0 )
-				this.userData.scaleDirection = -1;
-		}
-		else
-		{
-			this.userData.scaleSize -= 4.0 * g_deltaTime;
-
-			if( this.userData.scaleSize <= 0.001 )
-			{
-				g_scene.remove(this);
-				return;
-			}
-		}
-
-		this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
-		this.rotateY(15.0 * g_deltaTime);
-		this.rotateX(20.0 * g_deltaTime);
-	};
-
-	// Add a body to explode
-	var body = JumpStart.spawnInstance("models/LineRacers/body" + carColor + ".obj", {"parent": car});
-
-	var y, part, clone, randoY, randoX, randoZ, force;
-	for( y in car.children )
-	{
-		part = car.children[y];
-
-		if( !part.hasOwnProperty("JumpStart") )
-			continue;
-
-		clone = JumpStart.spawnInstance(part.JumpStart.modelFile);
-		clone.position.copy(new THREE.Vector3().setFromMatrixPosition(part.matrixWorld));
-		clone.JumpStart.blocksLOS = false;
-
-		randoY = 0.0;
-		if( clone.position.equals(new THREE.Vector3(0, 0, 0)) )
-		{
-			randoY = 30.0;
-			clone.position.copy(car.position);
-
-			if( !JumpStart.webMode )
-			{
-				// FIXME: Why is 10 the magic number, i wonder?
-				clone.position.y += 10.0;
-			}
-		}
-		else if( !JumpStart.webMode )
-			clone.position.multiplyScalar(1/g_worldScale);
-
-		clone.quaternion.copy(part.getWorldQuaternion());
-
-		randoX = 20.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoX *= -1.0;
-
-		randoZ = 20.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoZ *= -1.0;
-
-		// The main body should go nearly straight up
-		if( JumpStart.webMode && clone.position.equals(car.position) )
-		{
-			randoX *= 0.3;
-			randoZ *= 0.3;
-		}
-
-		force = new THREE.Vector3().copy(part.position);
-
-		clone.JumpStart.applyForce(new THREE.Vector3(force.x + randoX, (force.y * 10.0) + randoY, force.z + randoZ));
-
-		// The main body shouldn't spin so much.
-		if( randoY !== 0.0 )
-			clone.JumpStart.freefallRot.multiplyScalar(0.3);
-
-		clone.JumpStart.onTick = function()
-		{
-			if( this.position.y < g_worldOffset.y )
-			{
-				this.position.y = g_worldOffset.y;
-				this.JumpStart.physicsState = 0;
-
-				this.userData.lifeSpan = 4.0;
-				this.JumpStart.onTick = function()
-				{
-					this.userData.lifeSpan -= g_deltaTime;
-
-					if( this.userData.lifeSpan <= 0 )
-					{
-						this.userData.lifeSpan = 0;
-						g_scene.remove(this);
-					}
-				};
-			}
-		};
-	}
-
-	var explosionLook = new THREE.Vector3().copy(explosion.rotation);
-
-	// Particles
-	var i, particle;
-	for( i = 0; i < 16; i++ )
-	{
-		particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
-		particle.JumpStart.blocksLOS = false;
-		particle.position.copy(explosion.position);
-		particle.rotation.copy(explosion.rotation);
-
-		var scale = Math.random();
-		if( scale < 0.5 )
-			scale = 0.5;
-
-		particle.scale.multiplyScalar(scale);
-
-		var randoX = 3.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoX *= -1.0;
-
-		var randoY = 3.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoY *= -1.0;
-
-		var randoZ = 3.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoZ *= -1.0;
-
-		particle.translateX(randoX);
-		particle.translateY(randoY);
-		particle.translateZ(randoZ);
-
-		explosion.lookAt(particle.position);
-		particle.rotation.copy(explosion.rotation);
-
-		particle.userData.shock = 2.0;
-		particle.userData.life = 0.2;
-		particle.scale.multiplyScalar(10.0);
-
-		particle.JumpStart.onTick = function()
-		{
-			particle.userData.shock -= g_deltaTime;
-
-			if( particle.userData.shock <= 0.0 )
-			{
-				if( this.userData.hasOwnProperty("will") )
-					this.userData.will -= 1.0 * g_deltaTime;
-
-				if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
-				{
-					var randoPitch = Math.PI * Math.random();
-					if( Math.random() > 0.5 )
-						randoPitch *= -1.0;
-
-					var randoYaw = Math.PI * Math.random();
-					if( Math.random() > 0.5 )
-						randoYaw *= -1.0;
-
-					var randoRoll = Math.PI * Math.random();
-					if( Math.random() > 0.5 )
-						randoRoll *= -1.0;
-
-					this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
-					this.userData.will = 3.0 * Math.random();
-				}
-
-				this.userData.life -= g_deltaTime;
-				if( this.userData.life <= 0 )
-				{
-					//g_scene.remove(this);
-//					this.JumpStart.onTick = function()
-//					{
-						this.scale.x -= 1.0 * g_deltaTime;
-						this.scale.y -= 1.0 * g_deltaTime;
-						this.scale.z -= 1.0 * g_deltaTime;
-
-//					};
-
-//					return;
-				}
-
-				this.rotateX(this.userData.direction.x * g_deltaTime);
-				this.rotateY(this.userData.direction.y * g_deltaTime);
-				this.rotateZ(this.userData.direction.z * g_deltaTime);
-
-				this.translateZ(15.0 * g_deltaTime);
-				this.position.y += 10.0 * g_deltaTime;
-
-				if( this.scale.x <= 0.1 )
-					g_scene.remove(this);
-			}
-			else
-			{
-				this.translateZ(200.0 * g_deltaTime);
-			}
-		};
-	}
-
-	explosion.rotation.copy(explosionLook);
-
-	if( dead )
-	{
-		g_scene.remove(dead);
-		dead = null;
-		clearInterval(starHandle);
-	}
-
-	if( car.userData.myCar )
-		g_myCar = null;
-
-	g_scene.remove(car);
-}
-
-</script>
-
-<script>
-// when animating on canvas, it is best to use requestAnimationFrame instead of setTimeout or setInterval
-// not supported in all browsers though and sometimes needs a prefix, so we need a shim
-window.requestAnimFrame = ( function() {
-	return window.requestAnimationFrame ||
-				window.webkitRequestAnimationFrame ||
-				window.mozRequestAnimationFrame ||
-				function( callback ) {
-					window.setTimeout( callback, 1000 / 60 );
-				};
-})();
-
-// now we will setup our basic variables for the demo
-var canvas = document.getElementById( 'canvas' ),
-		ctx = canvas.getContext( '2d' ),
-		// full screen dimensions
-		cw = window.innerWidth,
-		ch = window.innerHeight / 3.0,
-		// firework collection
-		fireworks = [],
-		// particle collection
-		particles = [],
-		// starting hue
-		hue = 120,
-		// when launching fireworks with a click, too many get launched at once without a limiter, one launch per 5 loop ticks
-		limiterTotal = 5,
-		limiterTick = 0,
-		// this will time the auto launches of fireworks, one launch per 80 loop ticks
-		timerTotal = 80,
-		timerTick = 0,
-		mousedown = false,
-		// mouse x coordinate,
-		mx,
-		// mouse y coordinate
-		my;
-		
-// set canvas dimensions
-canvas.width = cw;
-canvas.height = ch;
-
-// now we are going to setup our function placeholders for the entire demo
-
-// get a random number within a range
-function random( min, max ) {
-	return Math.random() * ( max - min ) + min;
-}
-
-// calculate the distance between two points
-function calculateDistance( p1x, p1y, p2x, p2y ) {
-	var xDistance = p1x - p2x,
-			yDistance = p1y - p2y;
-	return Math.sqrt( Math.pow( xDistance, 2 ) + Math.pow( yDistance, 2 ) );
-}
-
-// create firework
-function Firework( sx, sy, tx, ty ) {
-	// actual coordinates
-	this.x = sx;
-	this.y = sy;
-	// starting coordinates
-	this.sx = sx;
-	this.sy = sy;
-	// target coordinates
-	this.tx = tx;
-	this.ty = ty;
-	// distance from starting point to target
-	this.distanceToTarget = calculateDistance( sx, sy, tx, ty );
-	this.distanceTraveled = 0;
-	// track the past coordinates of each firework to create a trail effect, increase the coordinate count to create more prominent trails
-	this.coordinates = [];
-	this.coordinateCount = 3;
-	// populate initial coordinate collection with the current coordinates
-	while( this.coordinateCount-- ) {
-		this.coordinates.push( [ this.x, this.y ] );
-	}
-	this.angle = Math.atan2( ty - sy, tx - sx );
-	this.speed = 2;
-	this.acceleration = 1.05;
-	this.brightness = random( 50, 70 );
-	// circle target indicator radius
-	this.targetRadius = 1;
-}
-
-// update firework
-Firework.prototype.update = function( index ) {
-	// remove last item in coordinates array
-	this.coordinates.pop();
-	// add current coordinates to the start of the array
-	this.coordinates.unshift( [ this.x, this.y ] );
-	
-	// cycle the circle target indicator radius
-	if( this.targetRadius < 8 ) {
-		this.targetRadius += 0.3;
-	} else {
-		this.targetRadius = 1;
-	}
-	
-	// speed up the firework
-	this.speed *= this.acceleration;
-	
-	// get the current velocities based on angle and speed
-	var vx = Math.cos( this.angle ) * this.speed,
-			vy = Math.sin( this.angle ) * this.speed;
-	// how far will the firework have traveled with velocities applied?
-	this.distanceTraveled = calculateDistance( this.sx, this.sy, this.x + vx, this.y + vy );
-	
-	// if the distance traveled, including velocities, is greater than the initial distance to the target, then the target has been reached
-	if( this.distanceTraveled >= this.distanceToTarget ) {
-		createParticles( this.tx, this.ty );
-		// remove the firework, use the index passed into the update function to determine which to remove
-		fireworks.splice( index, 1 );
-	} else {
-		// target not reached, keep traveling
-		this.x += vx;
-		this.y += vy;
-	}
-}
-
-// draw firework
-Firework.prototype.draw = function() {
-	ctx.beginPath();
-	// move to the last tracked coordinate in the set, then draw a line to the current x and y
-	ctx.moveTo( this.coordinates[ this.coordinates.length - 1][ 0 ], this.coordinates[ this.coordinates.length - 1][ 1 ] );
-	ctx.lineTo( this.x, this.y );
-	ctx.strokeStyle = 'hsl(' + hue + ', 100%, ' + this.brightness + '%)';
-	ctx.stroke();
-	
-	ctx.beginPath();
-	// draw the target for this firework with a pulsing circle
-	ctx.arc( this.tx, this.ty, this.targetRadius, 0, Math.PI * 2 );
-	ctx.stroke();
-}
-
-// create particle
-function Particle( x, y ) {
-	this.x = x;
-	this.y = y;
-	// track the past coordinates of each particle to create a trail effect, increase the coordinate count to create more prominent trails
-	this.coordinates = [];
-	this.coordinateCount = 5;
-	while( this.coordinateCount-- ) {
-		this.coordinates.push( [ this.x, this.y ] );
-	}
-	// set a random angle in all possible directions, in radians
-	this.angle = random( 0, Math.PI * 2 );
-	this.speed = random( 1, 10 );
-	// friction will slow the particle down
-	this.friction = 0.95;
-	// gravity will be applied and pull the particle down
-	this.gravity = 1;
-	// set the hue to a random number +-50 of the overall hue variable
-	this.hue = random( hue - 50, hue + 50 );
-	this.brightness = random( 50, 80 );
-	this.alpha = 1;
-	// set how fast the particle fades out
-	this.decay = random( 0.015, 0.03 );
-}
-
-// update particle
-Particle.prototype.update = function( index ) {
-	// remove last item in coordinates array
-	this.coordinates.pop();
-	// add current coordinates to the start of the array
-	this.coordinates.unshift( [ this.x, this.y ] );
-	// slow down the particle
-	this.speed *= this.friction;
-	// apply velocity
-	this.x += Math.cos( this.angle ) * this.speed;
-	this.y += Math.sin( this.angle ) * this.speed + this.gravity;
-	// fade out the particle
-	this.alpha -= this.decay;
-	
-	// remove the particle once the alpha is low enough, based on the passed in index
-	if( this.alpha <= this.decay ) {
-		particles.splice( index, 1 );
-	}
-}
-
-// draw particle
-Particle.prototype.draw = function() {
-	ctx. beginPath();
-	// move to the last tracked coordinates in the set, then draw a line to the current x and y
-	ctx.moveTo( this.coordinates[ this.coordinates.length - 1 ][ 0 ], this.coordinates[ this.coordinates.length - 1 ][ 1 ] );
-	ctx.lineTo( this.x, this.y );
-	ctx.strokeStyle = 'hsla(' + this.hue + ', 100%, ' + this.brightness + '%, ' + this.alpha + ')';
-	ctx.stroke();
-}
-
-// create particle group/explosion
-function createParticles( x, y ) {
-	// increase the particle count for a bigger explosion, beware of the canvas performance hit with the increased particles though
-	var particleCount = 30;
-	while( particleCount-- ) {
-		particles.push( new Particle( x, y ) );
-	}
-}
-
-// main demo loop
-function fireworksLoop() {
-	// this function will run endlessly with requestAnimationFrame
-//	requestAnimFrame( loop );
-	
-	// increase the hue to get different colored fireworks over time
-	//hue += 0.5;
-  
-  // create random color
-  hue= random(0, 360 );
-	
-	// normally, clearRect() would be used to clear the canvas
-	// we want to create a trailing effect though
-	// setting the composite operation to destination-out will allow us to clear the canvas at a specific opacity, rather than wiping it entirely
-	ctx.globalCompositeOperation = 'destination-out';
-	// decrease the alpha property to create more prominent trails
-	ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-	ctx.fillRect( 0, 0, cw, ch );
-	// change the composite operation back to our main mode
-	// lighter creates bright highlight points as the fireworks and particles overlap each other
-	ctx.globalCompositeOperation = 'lighter';
-	
-	// loop over each firework, draw it, update it
-	var i = fireworks.length;
-	while( i-- ) {
-		fireworks[ i ].draw();
-		fireworks[ i ].update( i );
-	}
-	
-	// loop over each particle, draw it, update it
-	var i = particles.length;
-	while( i-- ) {
-		particles[ i ].draw();
-		particles[ i ].update( i );
-	}
-	
-	// launch fireworks automatically to random coordinates, when the mouse isn't down
-	if( timerTick >= timerTotal ) {
-		if( !mousedown ) {
-			// start the firework at the bottom middle of the screen, then set the random target coordinates, the random y coordinates will be set within the range of the top half of the screen
-			fireworks.push( new Firework( cw / 2, ch, random( 0, cw ), random( 0, ch / 2 ) ) );
-			timerTick = 0;
-		}
-	} else {
-		timerTick++;
-	}
-	
-	// limit the rate at which fireworks get launched when mouse is down
-	if( limiterTick >= limiterTotal ) {
-		if( mousedown ) {
-			// start the firework at the bottom middle of the screen, then set the current mouse coordinates as the target
-			fireworks.push( new Firework( cw / 2, ch, mx, my ) );
-			limiterTick = 0;
-		}
-	} else {
-		limiterTick++;
-	}
-}
-
-// once the window loads, we are ready for some fireworks!
-//window.onload = loop;
-
-</script>
-
-</body>
+		</script>
+	</body>
 </html>

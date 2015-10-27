@@ -1,534 +1,552 @@
-<!-- Author: Elijah Newman-Gomez -->
+<!-- Powered by the JumpStart Game Engine -->
 <!DOCTYPE html>
 <html lang="en">
-<head>
-		<title>JumpStart</title>
+	<head>
+		<title>Building Blocks</title>
 
-		<script src="lib/three.js"></script>
-		<script src="lib/firebase.js"></script>
-		<script src="src/AltOBJMTLLoader.js"></script>
-		<script src="lib/OBJMTLLoader.js"></script>
-		<script src="lib/MTLLoader.js"></script>
-		<script src="src/sync/FirebaseSync.js"></script>
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
 		<link rel="stylesheet" type="text/css" href="myStyle.css">
-</head>
-<body>
+	</head>
 
-<div style="width: 100%; position: fixed;">
-<center>
-	<img src="misc/buildtitle.png" />
-</center>
-</div>
+	<body>
 
-<img src="misc/buildbuttons.png" style="position: fixed; top: 150px; left: 10px;" />
+		<img src="misc/buildbuttons.png" id="controls" style="display: none; position: fixed; top: 150px; left: 10px;" />
 
-<div id="info" style="display: none;">JumpStart</div>
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
 
-<!-- APPEND JUMPSTART.JS TO YOUR BODY ELEMENT -->
-<script src="JumpStart.js"></script>
-
-<script>
-
-// (OPTIONAL) CONFIGURE JUMPSTART
-var myOptions =
-{
-	"debugMode": false,
-	"legacyLoader": true,
-	"worldScale": 1.0,
-	"scaleWithEnclosure": true,
-	"enabledCursorEvents":
-	{
-		"cursorDown": true,
-		"cursorUp": true,
-		"cursorEnter": true,
-		"cursorLeave": true,
-		"cursorMove": false
-	},
-	"camera":
-	{
-		"lookAtOrigin": true,
-		"position": new THREE.Vector3(-5.0, 10.0, 30.0),
-		//"position": new THREE.Vector3(1.0, 1.0, 2.0),
-		"translation": new THREE.Vector3(40.0, 30.0, 180.0)
-	},
-	"firebase":
-	{
-		"rootUrl": "https://building-blocks.firebaseio.com/",
-		"appId": "building-blocks",
-		"params": { "TRACE": false }
-	}
-};
-JumpStart.setOptions(myOptions);
-
-
-// DEFINE JUMPSTART'S TWO CALLBACKS
-
-// PURPOSE: The JumpStart globals and your THREE.js scene are ready to use.
-function onPrecache()
-{
-//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
-//	allDataRef.remove();
-
-	// Precache anything that your app needs.
-	var myModels = [
-		"models/BuildingBlocks/jewel.obj",
-		"models/BuildingBlocks/cube.obj",
-		"models/BuildingBlocks/grass.obj",
-		"models/BuildingBlocks/dirt.obj",
-		"models/BuildingBlocks/bricks.obj",
-		"models/BuildingBlocks/cube_cage.obj",
-		"models/BuildingBlocks/explosion.obj"
-	];
-
-//	this.precacheSound("sounds/pistol-1");
-//	this.precacheSound("sounds/00electrexplo01");
-//	this.precacheSound("sounds/00electrexplo03");
-	JumpStart.precacheSound("sounds/BuildingBlocks/expl_03");
-
-	JumpStart.loadModels(myModels).then(function() {
-
-		// Finally call JumpStart.doneCaching() to signify you are done.
-		// Your onReady global function wll be called next.
-		JumpStart.doneCaching();
-	});
-}
-
-// PURPOSE: Gets called every time the scene is about to be rendered.
-function onTick()
-{
-	// do work
-}
-
-</script>
-
-
-<script>
-
-// ALL YOUR NON-JUMPSTART CODE GOES HERE
-var g_sampleBlock;
-var g_previewBlock;
-var g_MaxBlocks = 600;
-var g_BlockWidth = 25.0;	// Actual 3ds Max units
-var g_CurrentBlockType = 0;
-var g_BlockTypes = ["models/BuildingBlocks/cube.obj", "models/BuildingBlocks/grass.obj", "models/BuildingBlocks/dirt.obj", "models/BuildingBlocks/jewel.obj", "models/BuildingBlocks/bricks.obj"];
-
-// TODO: Make calling the JumpStart.run() command OPTIONAL!! (swap it for a JumpStart.preventDefault())
-function onReady()
-{
-	// The first user
-	if( g_localUser.firstUser )
-	{
-		// Nothing special required.
-	}
-
-	// PREVIEW BLOCK
-	g_previewBlock = JumpStart.spawnInstance("models/BuildingBlocks/cube_cage.obj");
-	g_previewBlock.JumpStart.blocksLOS = false;
-
-	// REPLICATE THE LISTENERS FROM THE CROSSHAIR BECAUSE ALTSPACE DOES NOT CARE ABOUT OUR blocksLOS PROPERTY!!
-	g_previewBlock.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
-	g_previewBlock.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
-
-	// Do something each render tick.
-	g_previewBlock.JumpStart.onTick = function()
-	{
-		if( !g_lookHit )
-			return;
-
-		function isBlockAlreadyHere(block)
-		{
-			var x, sceneObject;
-			for( x in g_scene.children )
+		<!-- Window-Level Event Callbacks -->
+		<script>
+			var myOptions =
 			{
-				sceneObject = g_scene.children[x];
-				if( !sceneObject.hasOwnProperty('isBlock') || sceneObject === block )
-					continue;
+				"titleImageURL": "misc/buildtitle.png",
+				"legacyLoader": false,
+				"worldScale": 1.0,
+				"scaleWithEnclosure": true,
+				"camera":
+				{
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+					"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+				},
+				"firebase":
+				{
+					"rootUrl": "https://building-blocks.firebaseio.com/",
+					"appId": "building-blocks",
+					"suppressPersonalBrowser": true
+				}
+			};
 
-				if( sceneObject.position.equals(block.position) )
-					return true;
+			JumpStart.setOptions(myOptions);
+
+			// Window-level callback for onPrecache event
+			function onPrecache()
+			{
+			//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+			//	allDataRef.remove();
+
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+
+				// Precache anything that your app needs.
+				var myModels = [
+					"models/BuildingBlocks/jewel.obj",
+					"models/BuildingBlocks/cube.obj",
+					"models/BuildingBlocks/grass.obj",
+					"models/BuildingBlocks/dirt.obj",
+					"models/BuildingBlocks/bricks.obj",
+					"models/BuildingBlocks/cube_cage.obj",
+					"models/BuildingBlocks/explosion.obj"
+				];
+
+				JumpStart.precacheSound("sounds/BuildingBlocks/expl_03");
+
+				JumpStart.loadModels(myModels).then(function() {
+
+					// Finally call JumpStart.doneCaching() to signify you are done.
+					// Your onReady global function wll be called next.
+					JumpStart.doneCaching();
+				});
 			}
 
-			return false;
-		}
-
-		// Prepare to snap...
-		var hitPlane = null;
-		var hitBlock = null;
-		if( g_lookHit.object.parent.hasOwnProperty('isBlock') )
-			hitBlock = g_lookHit.object.parent;
-
-		if( !hitBlock )
-		{
-			if( g_lookHit.object.hasOwnProperty('isCursorPlane') )
+			// PURPOSE: Gets called every time the scene is about to be rendered.
+			function onTick()
 			{
-				hitPlane = g_lookHit.object;
-				if( hitPlane === g_floorPlane )
+				if( g_localUser && g_localUser.lookOrigin && g_localUser.lookOrigin.z < 0 && (!document.body.hasOwnProperty("mirrored") || !document.body.mirrored) )
 				{
-					// Apply FLOOR gridsnap
-					var snappedPosition = new THREE.Vector3().copy(g_lookHit.scaledPoint);
+					document.body.style.webkitTransform = "scaleX(-1)";
+					document.body.style.filter = "FlipH";
+					document.body.mirrored = true;
+				}
+				else if( g_localUser.lookOrigin.z >= 0 && document.body.hasOwnProperty("mirrored") && document.body.mirrored )
+				{
+					document.body.style.webkitTransform = "none";
+					document.body.style.filter = "none";
+					document.body.mirrored = false;
+				}
+			}
 
-					// X snap
-					var blockXShift = 0.0;
-					var remainderX = g_lookHit.scaledPoint.x % (g_BlockWidth/1.0);
-					var testRemainderX = (g_lookHit.scaledPoint.x + g_lookHit.face.normal.x) % (g_BlockWidth/1.0);
-					if( testRemainderX < ((-1) * (g_BlockWidth/2.0)))
-						blockXShift = (-1) * g_BlockWidth;
-					else if( testRemainderX > (g_BlockWidth/2.0))
-						blockXShift = g_BlockWidth;
+			var g_sampleBlock;
+			var g_previewBlock;
+			var g_MaxBlocks = 600;
+			var g_BlockWidth = 25.0;	// Actual 3ds Max units
+			var g_CurrentBlockType = 0;
+			var g_BlockTypes = ["models/BuildingBlocks/cube.obj", "models/BuildingBlocks/grass.obj", "models/BuildingBlocks/dirt.obj", "models/BuildingBlocks/jewel.obj", "models/BuildingBlocks/bricks.obj"];
 
-					remainderX = (-1) * (remainderX) + blockXShift;
+			function onReady()
+			{
+				if( !JumpStart.requestedRoomId )
+					return;
 
-					// Z snap
-					var blockZShift = 0.0;
-					var remainderZ = g_lookHit.scaledPoint.z % (g_BlockWidth/1.0);
-					var testRemainderZ = (g_lookHit.scaledPoint.z + g_lookHit.face.normal.z) % (g_BlockWidth/1.0);
-					if( testRemainderZ < ((-1) * (g_BlockWidth/2.0)))
-						blockZShift = (-1) * g_BlockWidth;
-					else if( testRemainderZ > (g_BlockWidth/2.0))
-						blockZShift = g_BlockWidth;
-
-					remainderZ = (-1) * (remainderZ) + blockZShift;
-
-					// Apply the snap offsets
-					snappedPosition.add(new THREE.Vector3(remainderX, 0, remainderZ));
-					this.position.copy(snappedPosition);
-
-					if( this.hasOwnProperty('isInvalid') && this.isInvalid )
+				// Do nothing if we are not in an enclosure yet.
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
 					{
-						this.isInvalid = false;
-						this.scale.set(1, 1, 1);
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
+
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+				
+				// The first user
+				if( g_localUser.firstUser )
+				{
+					// Nothing special required.
+				}
+
+				// PREVIEW BLOCK
+				g_previewBlock = JumpStart.spawnInstance("models/BuildingBlocks/cube_cage.obj");
+				g_previewBlock.JumpStart.blocksLOS = false;
+
+				// REPLICATE THE LISTENERS FROM THE CROSSHAIR BECAUSE ALTSPACE DOES NOT CARE ABOUT OUR blocksLOS PROPERTY!!
+				g_previewBlock.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
+				g_previewBlock.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
+
+				// Do something each render tick.
+				g_previewBlock.JumpStart.onTick = function()
+				{
+					if( !g_lookHit )
+						return;
+
+					function isBlockAlreadyHere(block)
+					{
+						var x, sceneObject;
+						for( x in g_scene.children )
+						{
+							sceneObject = g_scene.children[x];
+							if( !sceneObject.hasOwnProperty('isBlock') || sceneObject === block )
+								continue;
+
+							if( sceneObject.position.equals(block.position) )
+								return true;
+						}
+
+						return false;
+					}
+
+					// Prepare to snap...
+					var hitPlane = null;
+					var hitBlock = null;
+					if( g_lookHit.object.parent.hasOwnProperty('isBlock') )
+						hitBlock = g_lookHit.object.parent;
+
+					if( !hitBlock )
+					{
+						if( g_lookHit.object.hasOwnProperty('isCursorPlane') )
+						{
+							hitPlane = g_lookHit.object;
+							if( hitPlane === g_floorPlane )
+							{
+								// Apply FLOOR gridsnap
+								var snappedPosition = new THREE.Vector3().copy(g_lookHit.scaledPoint);
+
+								// X snap
+								var blockXShift = 0.0;
+								var remainderX = g_lookHit.scaledPoint.x % (g_BlockWidth/1.0);
+								var testRemainderX = (g_lookHit.scaledPoint.x + g_lookHit.face.normal.x) % (g_BlockWidth/1.0);
+								if( testRemainderX < ((-1) * (g_BlockWidth/2.0)))
+									blockXShift = (-1) * g_BlockWidth;
+								else if( testRemainderX > (g_BlockWidth/2.0))
+									blockXShift = g_BlockWidth;
+
+								remainderX = (-1) * (remainderX) + blockXShift;
+
+								// Z snap
+								var blockZShift = 0.0;
+								var remainderZ = g_lookHit.scaledPoint.z % (g_BlockWidth/1.0);
+								var testRemainderZ = (g_lookHit.scaledPoint.z + g_lookHit.face.normal.z) % (g_BlockWidth/1.0);
+								if( testRemainderZ < ((-1) * (g_BlockWidth/2.0)))
+									blockZShift = (-1) * g_BlockWidth;
+								else if( testRemainderZ > (g_BlockWidth/2.0))
+									blockZShift = g_BlockWidth;
+
+								remainderZ = (-1) * (remainderZ) + blockZShift;
+
+								// Apply the snap offsets
+								snappedPosition.add(new THREE.Vector3(remainderX, 0, remainderZ));
+								this.position.copy(snappedPosition);
+
+								if( this.hasOwnProperty('isInvalid') && this.isInvalid )
+								{
+									this.isInvalid = false;
+									this.scale.set(1, 1, 1);
+								}
+							}
+							else
+							{
+								this.isInvalid = true;
+								this.scale.set(0.0001, 0.0001, 0.0001);
+								g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
+							}
+						}
+					}
+					else
+					{
+						// Apply BLOCK gridsnap
+						var snappedPosition = new THREE.Vector3().copy(g_lookHit.object.parent.position);
+
+						var offset = new THREE.Vector3(g_BlockWidth, g_BlockWidth, g_BlockWidth);
+						offset.multiply(g_lookHit.face.normal);
+
+						snappedPosition.add(offset);
+						this.position.copy(snappedPosition);
+
+
+						if( g_lookHit.object.parent.hasOwnProperty('scaleFactor') && g_lookHit.object.parent.scaleFactor < 1.0 )
+						{
+							this.isInvalid = true;
+							this.scale.set(0.0001, 0.0001, 0.0001);
+							g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
+						}
+						else if( this.hasOwnProperty('isInvalid') && this.isInvalid )
+						{
+							this.isInvalid = false;
+							this.scale.set(1, 1, 1);
+						}
+					}
+
+					// Don't spawn 2 blocks in the same spot!!
+					// FIXME This ain't cheap if there are lots of blocks.
+					if( isBlockAlreadyHere(g_previewBlock) )
+					{
+						this.isInvalid = true;
+						this.scale.set(0.0001, 0.0001, 0.0001);
+						g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
+					}
+				};
+
+				// So we know what we're spawning.
+				CreateSampleBlock();
+
+				document.getElementById("controls").style.display = "block";
+
+				// START SIMULATION
+				JumpStart.run();
+			}
+
+			function onCursorDown()
+			{
+				if( g_previewBlock.hasOwnProperty('isInvalid') && g_previewBlock.isInvalid )
+					return;
+
+				spawnBlock();
+			}
+
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+			function CreateSampleBlock()
+			{
+				var oldPulse, oldPulseDirection;
+				if( typeof g_sampleBlock === 'object' )
+				{
+					oldPulse = g_sampleBlock.pulse;
+					oldPulseDirection = g_sampleBlock.pulseDirection;
+					g_scene.remove(g_sampleBlock);
+				}
+
+				// Attach a headsUp object
+				// TODO: JumpStart needs more work before it can support hierarchies, so manage this object independently instead.
+				g_sampleBlock = JumpStart.spawnInstance(g_BlockTypes[g_CurrentBlockType]);
+
+				if(typeof oldPulse !== 'undefined' )
+				{
+					g_sampleBlock.pulse = oldPulse;
+					g_sampleBlock.pulseDirection = oldPulseDirection;
+				}
+
+				g_sampleBlock.JumpStart.blocksLOS = false;
+
+				// Do something each render tick.
+				g_sampleBlock.JumpStart.onTick = function()
+				{
+					if( !this.hasOwnProperty('pulse'))
+					{
+						this.pulse = 0.5;
+						this.pulseDirection = true;
+					}
+					
+					if( g_previewBlock )
+					{
+						this.position.copy(g_previewBlock.position);
+						this.scale.copy(g_previewBlock.scale);
+
+						if( this.pulseDirection )
+							this.pulse += 0.1 * g_deltaTime;
+						else
+							this.pulse -= 0.1 * g_deltaTime;
+
+						if( this.pulse >= 0.55 )
+							this.pulseDirection = false;
+						else if( this.pulse <= 0.45 )
+							this.pulseDirection = true;
+
+						this.scale.multiplyScalar(this.pulse);
 					}
 				}
+			}
+
+			function spawnBlock()
+			{
+				if( g_MaxBlocks <= g_numSyncedInstances )
+					return null;
+
+				var instance = JumpStart.spawnInstance(g_BlockTypes[g_CurrentBlockType]);
+				instance.position.copy(g_previewBlock.position);
+				instance.isBlock = true;
+
+				instance.JumpStart.onSpawn["spawnEffects"] = spawnEffects;
+				instance.JumpStart.onTick["growUp"] = growUp;
+				instance.JumpStart.onNetworkRemoved["fancyRemove"] = fancyRemove;
+
+				// Add us as a networked object!!
+				instance.JumpStart.sync();
+
+				return instance;
+			}
+
+			function spawnEffects(isLocal, isInitial)
+			{
+				this.isBlock = true;
+
+				if( isInitial )	// This flag is bullshit.  Synced objects get spawned in async.  Will be fixed soon!!
+					return;
+
+				if( isLocal )
+					this.scaleFactor = g_sampleBlock.scale.x;
 				else
+					this.scaleFactor = 0.2;
+
+				this.scale.set(1, 1, 1).multiplyScalar(this.scaleFactor);
+			}
+
+			function growUp()
+			{
+				if( !this.hasOwnProperty('scaleFactor') )
+					this.scaleFactor = 1.0;
+
+				if( this.scaleFactor < 1.0 )
+					this.scaleFactor += 1.0 * g_deltaTime;
+
+				if( this.scaleFactor > 1.0 )
 				{
-					this.isInvalid = true;
-					this.scale.set(0.0001, 0.0001, 0.0001);
-					g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
+					this.scaleFactor = 1.0;
+					delete this.JumpStart.onTick['default'];
+				}
+
+				this.scale.set(1, 1, 1).multiplyScalar(this.scaleFactor);
+			}
+
+			function CycleBlock(delta)
+			{
+				g_CurrentBlockType += delta;
+
+				if( g_CurrentBlockType == g_BlockTypes.length )
+					g_CurrentBlockType = 0;
+				else if( g_CurrentBlockType < 0 )
+					g_CurrentBlockType = g_BlockTypes.length-1;
+
+				CreateSampleBlock();
+			}
+
+			function fancyRemove(isLocal)
+			{
+				if( typeof isLocal === 'undefined' )
+					return;
+
+				var hitBlock = this;
+
+				JumpStart.playSound("sounds/BuildingBlocks/expl_03", 1.0);
+
+				var explosion = JumpStart.spawnInstance("models/BuildingBlocks/explosion.obj");
+				explosion.scale.set(0.001, 0.001, 0.001);
+				explosion.userData.scaleSize = 0.001;
+				explosion.userData.scaleDirection = 1;
+				explosion.position.copy(hitBlock.position).y += g_BlockWidth / 2.0;
+				explosion.JumpStart.blocksLOS = false;
+
+				g_scene.remove(hitBlock);
+
+				explosion.JumpStart.onTick = function()
+				{
+					if( this.userData.scaleDirection === 1 )
+					{
+						this.userData.scaleSize += 5.0 * g_deltaTime;
+
+						if( this.userData.scaleSize >= 1.0 )
+							this.userData.scaleDirection = -1;
+					}
+					else
+					{
+						this.userData.scaleSize -= 4.0 * g_deltaTime;
+
+						if( this.userData.scaleSize <= 0.001 )
+						{
+							g_scene.remove(this);
+							return;
+						}
+					}
+
+					this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+					this.rotateY(15.0 * g_deltaTime);
+					this.rotateX(20.0 * g_deltaTime);
+				};
+
+				//hitBlock.JumpStart.applyForce(new THREE.Vector3(0, 10.0, 0));
+
+				var gibs = new Array();
+
+				/*
+				var gib1 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib1.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, 0, (g_BlockWidth / 4.0) * -1.0));
+				gib1.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib1);
+				*/
+
+				var gib2 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib2.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, 0, (g_BlockWidth / 4.0) * -1.0));
+				gib2.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib2);
+
+				var gib3 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib3.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, 0, (g_BlockWidth / 4.0) * 1.0));
+				gib3.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib3);
+
+				/*
+				var gib4 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib4.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, 0, (g_BlockWidth / 4.0) * 1.0));
+				gib4.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib4);
+				*/
+
+				/*
+				var gib5 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib5.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * -1.0));
+				gib5.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib5);
+				*/
+
+				var gib6 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib6.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * -1.0));
+				gib6.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib6);
+
+				var gib7 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib7.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * 1.0));
+				gib7.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib7);
+
+				/*
+				var gib8 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
+				gib8.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * 1.0));
+				gib8.scale.set(0.5, 0.5, 0.5);
+				gibs.push(gib8);
+				*/
+
+				var x, randoX, randoY;
+				for( x in gibs )
+				{
+					randoX = 5.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoX *= -1.0;
+
+					randoZ = 5.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoZ *= -1.0;
+
+					gibs[x].JumpStart.blocksLOS = false;
+					gibs[x].JumpStart.applyForce(new THREE.Vector3(randoX, 20.0, randoZ).multiplyScalar(0.3));
+					gibs[x].JumpStart.onTick["blockDebris"] = blockDebris;
+					gibs[x].position.y += 0.5;
 				}
 			}
-		}
-		else
-		{
-			// Apply BLOCK gridsnap
-			var snappedPosition = new THREE.Vector3().copy(g_lookHit.object.parent.position);
 
-			var offset = new THREE.Vector3(g_BlockWidth, g_BlockWidth, g_BlockWidth);
-			offset.multiply(g_lookHit.face.normal);
-
-			snappedPosition.add(offset);
-			this.position.copy(snappedPosition);
-
-
-			if( g_lookHit.object.parent.hasOwnProperty('scaleFactor') && g_lookHit.object.parent.scaleFactor < 1.0 )
+			// FIXME: Input NEEDS to be handled through JumpStart calls, for tick-sync.
+			document.addEventListener("keydown", function(e)
 			{
-				this.isInvalid = true;
-				this.scale.set(0.0001, 0.0001, 0.0001);
-				g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
-			}
-			else if( this.hasOwnProperty('isInvalid') && this.isInvalid )
+				if( e.keyCode == 0 || e.keyCode == 32 )
+				{
+					var hitBlock = g_lookHit.object.parent;
+					if( hitBlock.hasOwnProperty('isBlock') )
+					{
+						hitBlock.JumpStart.blocksLOS = false;
+						JumpStart.removeSyncedObject(hitBlock);
+					}
+				}
+				else if( e.keyCode == 88 )
+				{
+					JumpStart.pendingEventA = function() { CycleBlock(1); };
+				}
+				else if( e.keyCode == 90 )
+					JumpStart.pendingEventA = function() { CycleBlock(-1); };
+				/*
+				else if( e.keyCode == 67 )
+				{
+					JumpStart.pendingClick = true;
+				}
+				*/
+			}, false);
+
+			function blockDebris()
 			{
-				this.isInvalid = false;
-				this.scale.set(1, 1, 1);
+				if( this.userData.hasOwnProperty("terminal") )
+				{
+					this.userData.terminal -= g_deltaTime;
+
+					if( this.userData.terminal <= 0 )
+						g_scene.remove(this);
+				}
+				else if( this.position.y <= g_worldOffset.y )
+				{
+					this.position.y = g_worldOffset.y;
+					this.JumpStart.physicsState = 0;
+					this.userData.terminal = 5.0;
+				}
 			}
-		}
-
-		// Don't spawn 2 blocks in the same spot!!
-		// FIXME This ain't cheap if there are lots of blocks.
-		if( isBlockAlreadyHere(g_previewBlock) )
-		{
-			this.isInvalid = true;
-			this.scale.set(0.0001, 0.0001, 0.0001);
-			g_crosshair.scale.set(0.0001, 0.0001, 0.0001);
-		}
-	};
-
-	// So we know what we're spawning.
-	CreateSampleBlock();
-
-	// START SIMULATION
-	JumpStart.run();
-}
-
-function onCursorDown()
-{
-	if( g_previewBlock.hasOwnProperty('isInvalid') && g_previewBlock.isInvalid )
-		return;
-
-	spawnBlock();
-}
-
-// Damn capitalization!! Need sleep & to fix.
-function CreateSampleBlock()
-{
-	var oldPulse, oldPulseDirection;
-	if( typeof g_sampleBlock === 'object' )
-	{
-		oldPulse = g_sampleBlock.pulse;
-		oldPulseDirection = g_sampleBlock.pulseDirection;
-		g_scene.remove(g_sampleBlock);
-	}
-
-	// Attach a headsUp object
-	// TODO: JumpStart needs more work before it can support hierarchies, so manage this object independently instead.
-	g_sampleBlock = JumpStart.spawnInstance(g_BlockTypes[g_CurrentBlockType]);
-
-	if(typeof oldPulse !== 'undefined' )
-	{
-		g_sampleBlock.pulse = oldPulse;
-		g_sampleBlock.pulseDirection = oldPulseDirection;
-	}
-
-	g_sampleBlock.JumpStart.blocksLOS = false;
-
-	// Do something each render tick.
-	g_sampleBlock.JumpStart.onTick = function()
-	{
-		if( !this.hasOwnProperty('pulse'))
-		{
-			this.pulse = 0.5;
-			this.pulseDirection = true;
-		}
-		
-		if( g_previewBlock )
-		{
-			this.position.copy(g_previewBlock.position);
-			this.scale.copy(g_previewBlock.scale);
-
-			if( this.pulseDirection )
-				this.pulse += 0.1 * g_deltaTime;
-			else
-				this.pulse -= 0.1 * g_deltaTime;
-
-			if( this.pulse >= 0.55 )
-				this.pulseDirection = false;
-			else if( this.pulse <= 0.45 )
-				this.pulseDirection = true;
-
-			this.scale.multiplyScalar(this.pulse);
-		}
-	}
-}
-
-function spawnBlock()
-{
-	if( g_MaxBlocks <= g_numSyncedInstances )
-		return null;
-
-	var instance = JumpStart.spawnInstance(g_BlockTypes[g_CurrentBlockType]);
-	instance.position.copy(g_previewBlock.position);
-	instance.isBlock = true;
-
-	instance.JumpStart.onSpawn["spawnEffects"] = spawnEffects;
-	instance.JumpStart.onTick["growUp"] = growUp;
-	instance.JumpStart.onNetworkRemoved["fancyRemove"] = fancyRemove;
-
-	// Add us as a networked object!!
-	instance.JumpStart.sync();
-
-	return instance;
-}
-
-function spawnEffects(isLocal, isInitial)
-{
-	this.isBlock = true;
-
-	if( isInitial )	// This flag is bullshit.  Synced objects get spawned in async.  Will be fixed soon!!
-		return;
-
-	if( isLocal )
-		this.scaleFactor = g_sampleBlock.scale.x;
-	else
-		this.scaleFactor = 0.2;
-
-	this.scale.set(1, 1, 1).multiplyScalar(this.scaleFactor);
-}
-
-function growUp()
-{
-	if( !this.hasOwnProperty('scaleFactor') )
-		this.scaleFactor = 1.0;
-
-	if( this.scaleFactor < 1.0 )
-		this.scaleFactor += 1.0 * g_deltaTime;
-
-	if( this.scaleFactor > 1.0 )
-	{
-		this.scaleFactor = 1.0;
-		delete this.JumpStart.onTick['default'];
-	}
-
-	this.scale.set(1, 1, 1).multiplyScalar(this.scaleFactor);
-}
-
-function CycleBlock(delta)
-{
-	g_CurrentBlockType += delta;
-
-	if( g_CurrentBlockType == g_BlockTypes.length )
-		g_CurrentBlockType = 0;
-	else if( g_CurrentBlockType < 0 )
-		g_CurrentBlockType = g_BlockTypes.length-1;
-
-	CreateSampleBlock();
-}
-
-function fancyRemove(isLocal)
-{
-	if( typeof isLocal === 'undefined' )
-		return;
-
-	var hitBlock = this;
-
-	JumpStart.playSound("sounds/BuildingBlocks/expl_03", 1.0);
-
-	var explosion = JumpStart.spawnInstance("models/BuildingBlocks/explosion.obj");
-	explosion.scale.set(0.001, 0.001, 0.001);
-	explosion.userData.scaleSize = 0.001;
-	explosion.userData.scaleDirection = 1;
-	explosion.position.copy(hitBlock.position).y += g_BlockWidth / 2.0;
-	explosion.JumpStart.blocksLOS = false;
-
-	g_scene.remove(hitBlock);
-
-	explosion.JumpStart.onTick = function()
-	{
-		if( this.userData.scaleDirection === 1 )
-		{
-			this.userData.scaleSize += 5.0 * g_deltaTime;
-
-			if( this.userData.scaleSize >= 1.0 )
-				this.userData.scaleDirection = -1;
-		}
-		else
-		{
-			this.userData.scaleSize -= 4.0 * g_deltaTime;
-
-			if( this.userData.scaleSize <= 0.001 )
-			{
-				g_scene.remove(this);
-				return;
-			}
-		}
-
-		this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
-		this.rotateY(15.0 * g_deltaTime);
-		this.rotateX(20.0 * g_deltaTime);
-	};
-
-	//hitBlock.JumpStart.applyForce(new THREE.Vector3(0, 10.0, 0));
-
-	var gibs = new Array();
-
-	/*
-	var gib1 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib1.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, 0, (g_BlockWidth / 4.0) * -1.0));
-	gib1.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib1);
-	*/
-
-	var gib2 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib2.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, 0, (g_BlockWidth / 4.0) * -1.0));
-	gib2.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib2);
-
-	var gib3 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib3.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, 0, (g_BlockWidth / 4.0) * 1.0));
-	gib3.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib3);
-
-	/*
-	var gib4 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib4.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, 0, (g_BlockWidth / 4.0) * 1.0));
-	gib4.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib4);
-	*/
-
-	/*
-	var gib5 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib5.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * -1.0));
-	gib5.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib5);
-	*/
-
-	var gib6 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib6.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * -1.0));
-	gib6.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib6);
-
-	var gib7 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib7.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * -1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * 1.0));
-	gib7.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib7);
-
-	/*
-	var gib8 = JumpStart.spawnInstance(hitBlock.JumpStart.modelFile);
-	gib8.position.copy(hitBlock.position).add(new THREE.Vector3((g_BlockWidth / 4.0) * 1.0, (g_BlockWidth / 2.0), (g_BlockWidth / 4.0) * 1.0));
-	gib8.scale.set(0.5, 0.5, 0.5);
-	gibs.push(gib8);
-	*/
-
-	var x, randoX, randoY;
-	for( x in gibs )
-	{
-		randoX = 5.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoX *= -1.0;
-
-		randoZ = 5.0 * Math.random();
-		if( Math.random() > 0.5 )
-			randoZ *= -1.0;
-
-		gibs[x].JumpStart.blocksLOS = false;
-		gibs[x].JumpStart.applyForce(new THREE.Vector3(randoX, 20.0, randoZ));
-		gibs[x].JumpStart.onTick["blockDebris"] = blockDebris;
-		gibs[x].position.y += 0.5;
-	}
-}
-
-// FIXME: Input NEEDS to be handled through JumpStart calls, for tick-sync.
-document.addEventListener("keydown", function(e)
-{
-	if( e.keyCode == 0 || e.keyCode == 32 )
-	{
-		var hitBlock = g_lookHit.object.parent;
-		if( hitBlock.hasOwnProperty('isBlock') )
-		{
-			hitBlock.JumpStart.blocksLOS = false;
-			JumpStart.removeSyncedObject(hitBlock);
-		}
-	}
-	else if( e.keyCode == 88 )
-	{
-		JumpStart.pendingEventA = function() { CycleBlock(1); };
-	}
-	else if( e.keyCode == 90 )
-		JumpStart.pendingEventA = function() { CycleBlock(-1); };
-	/*
-	else if( e.keyCode == 67 )
-	{
-		JumpStart.pendingClick = true;
-	}
-	*/
-}, false);
-
-function blockDebris()
-{
-	if( this.userData.hasOwnProperty("terminal") )
-	{
-		this.userData.terminal -= g_deltaTime;
-
-		if( this.userData.terminal <= 0 )
-			g_scene.remove(this);
-	}
-	else if( this.position.y <= g_worldOffset.y )
-	{
-		this.position.y = g_worldOffset.y;
-		this.JumpStart.physicsState = 0;
-		this.userData.terminal = 5.0;
-	}
-}
-
-</script>
-
-</body>
+		</script>
+	</body>
 </html>

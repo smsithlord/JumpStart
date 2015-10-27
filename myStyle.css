@@ -9,3 +9,89 @@ body
 	font-size: 18px;
 	text-align: center;
 }
+
+@-webkit-keyframes spin
+{
+	from
+	{
+    	-webkit-transform: rotate(0deg);
+    	transform: rotate(0deg);
+    }
+	to
+	{ 
+		-webkit-transform: rotate(360deg);
+		transform: rotate(360deg);
+	}
+}
+
+@-webkit-keyframes zoomIn
+{
+	from
+	{
+    	-webkit-transform: scale(0.5);
+    	transform: scale(0.5);
+    }
+	to
+	{ 
+		-webkit-transform: scale(1.0);
+		transform: scale(1.0);
+	}
+}
+
+@-webkit-keyframes zoomOut
+{
+	from
+	{
+    	-webkit-transform: scale(1.0);
+    	transform: scale(1.0);
+    }
+	to
+	{ 
+		-webkit-transform: scale(0.1);
+		transform: scale(0.1);
+	}
+}
+
+.spinningImage
+{
+/*	-webkit-animation: spin 2s linear infinite;*/
+	-webkit-animation-name: spin; 
+	-webkit-animation-duration: 2.0s; 
+	-webkit-animation-iteration-count: infinite;
+	-webkit-animation-timing-function: linear;
+}
+
+#loadingSlate
+{
+	display: none;
+}
+
+#titleImageSlate
+{
+	-webkit-transition: top 1s;
+	transition: top 1s;
+}
+
+.zoomIntoLoading
+{
+	-webkit-animation-name: zoomIn; 
+	-webkit-animation-duration: 1.0s; 
+	-webkit-animation-iteration-count: 1;
+	-webkit-animation-timing-function: ease-out;
+}
+
+.zoomOutOfLoading
+{
+	-webkit-animation-name: zoomOut; 
+	-webkit-animation-duration: 1.0s; 
+	-webkit-animation-iteration-count: 1;
+	-webkit-animation-timing-function: ease-out;
+}
+
+#loadingMsg
+{
+	font-size: 20px;
+	font-width: 900;
+	font-family: Arial;
+	letter-spacing: 0.1em;
+}

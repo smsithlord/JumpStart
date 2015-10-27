@@ -1,12 +1,8 @@
-// TODO:
-// - Reduce firebase footprint when mouse events are disabled in options.
-
 // Declare some globals
-var g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_crosshair, g_lookHit, g_numSyncedInstances, g_networkReady, g_floorPlane;
+var g_materialCreator, g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_crosshair, g_lookHit, g_numSyncedInstances, g_networkReady, g_floorPlane, g_roofPlane, g_westPlane, g_northPlane, g_eastPlane, g_southPlane, g_hoveredObject;
 
 // Extend the window object.
 window.JumpStart = new jumpStart();
-
 // Listen for ready events
 if( !JumpStart.webMode )
 {
@@ -19,7 +15,11 @@ if( !JumpStart.webMode )
 			altspace.getUser().then(function(user)
 			{
 				JumpStart.localUser = user;
-				JumpStart.connectToFirebase();
+				altspace.getThreeJSTrackingSkeleton().then(function(object)
+				{
+					JumpStart.localUser.trackingSkeleton = object;
+					JumpStart.connectToFirebase();
+				});
 			});
 		});
 	});
@@ -62,7 +62,11 @@ function jumpStart()
 	this.deltaTime = 0.0;
 	this.crosshair = null;
 	this.firebaseSync = null;
+	this.materialCreator = null;
 	this.syncedInstances = {};
+	this.infoSlate = null;
+	this.requestedRoomId = null;
+	this.fpsSlate = null;
 
 	// Any properties of a scene object's JumpStart sub-object that are NOT whitelisted get auto-synced.
 	this.noSyncProperties = ["addDataListener", "setTint", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
@@ -74,7 +78,13 @@ function jumpStart()
 	this.initialSync = true;
 	this.debugui = new jumpStartDebugUI();
 	this.pendingDataListeners = [];
-	this.floorPlane = {};
+	//this.floorPlane = {};
+	this.floorPlane = null;
+	this.roofPlane = null;
+	this.westPlane = null;
+	this.northPlane = null;
+	this.eastPlane = null;
+	this.southPlane = null;
 
 	this.cachedSounds = {};
 
@@ -87,10 +97,14 @@ function jumpStart()
 
 	this.options =
 	{
+		"titleImageURL": "",
 		"debugMode": false,
 		"legacyLoader": false,
 		"worldScale": 1.0,
 		"scaleWithEnclosure": false,
+		"showFPS": true,
+		"showCrosshair": true,
+		"showCursorPlanes": false,
 		"enabledCursorEvents":
 		{
 			"cursorDown": true,
@@ -115,13 +129,14 @@ function jumpStart()
 		{
 			"rootUrl": "",
 			"appId": "",
+			"suppressPersonalBrowser": false,
 			"params": { "AUTOSYNC": true, "TRACE": false }
 		}
 	};
 
 	this.worldScale;
 	this.worldOffset = new THREE.Vector3();
-	this.webMode = !window.hasOwnProperty("altspace");
+	this.webMode = !(window.hasOwnProperty("altspace") && window.altspace.inClient);
 }
 
 jumpStart.prototype.connectToFirebase = function()
@@ -318,10 +333,25 @@ jumpStart.prototype.spawnCursorPlane = function(userParams)
 	}
 
 	var depth = 1.0;
-	var cursorPlane = new THREE.Mesh(
-		new THREE.BoxGeometry(params.width, params.height, depth),
-		new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5 })
-	);
+	var cursorPlane;
+
+	if( !this.options["legacyLoader"] )
+		depth = 0.0;
+
+	if( this.options["legacyLoader"] )
+	{
+		cursorPlane = new THREE.Mesh(
+			new THREE.BoxGeometry(params.width, params.height, depth),
+			new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: this.options["showCursorPlanes"] })
+		);
+	}
+	else
+	{
+		cursorPlane = new THREE.Mesh(
+			new THREE.PlaneGeometry(params.width, params.height),
+			new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: this.options["showCursorPlanes"] })
+		);
+	}
 	cursorPlane.geometry.computeBoundingSphere();
 
 	cursorPlane.isCursorPlane = true;
@@ -396,7 +426,9 @@ jumpStart.prototype.onCursorDown = function()
 
 	// FIXME: Add a way for user objects to preventDefault on cursor events.
 	if( typeof window.onCursorDown === 'function' )
+	{
 		window.onCursorDown();
+	}
 };
 
 jumpStart.prototype.onMouseUp = function()
@@ -466,6 +498,7 @@ jumpStart.prototype.processCursorMove = function()
 
 	// Update the local user's look info
 	this.localUser.lookOrigin.copy(this.cursorRay.origin);
+	this.localUser.lookOrigin.multiplyScalar(1.0/this.worldScale);
 	this.localUser.lookDirection.copy(this.cursorRay.direction);
 
 	// Set the raycaster
@@ -495,24 +528,27 @@ jumpStart.prototype.processCursorMove = function()
 			var goodPoint = true;
 
 			// Make sure it's a INWARD surface
-			var face = intersects[x].face;
-			if( !(face.a === 5 &&
-				face.b === 7 &&
-				face.c === 0) &&
-				!(face.a === 7 &&
-				face.b === 2 &&
-				face.c === 0) )
+			if( this.options["legacyLoader"] )
 			{
-				goodPoint = false;
+				var face = intersects[x].face;
+				if( !(face.a === 5 &&
+					face.b === 7 &&
+					face.c === 0) &&
+					!(face.a === 7 &&
+					face.b === 2 &&
+					face.c === 0) )
+				{
+					goodPoint = false;
+				}
 			}
 
-
-			if( goodPoint )
+			if( goodPoint || true)
 			{
 				if( this.hoveredObject )
 				{
 					unhoverObject(this.hoveredObject);
 					this.hoveredObject = null;
+					g_hoveredObject = this.hoveredObject;
 				}
 
 				this.localUser.lookHit = intersects[x];
@@ -538,6 +574,7 @@ jumpStart.prototype.processCursorMove = function()
 					{
 						unhoverObject(this.hoveredObject);
 						this.hoveredObject = null;
+						g_hoveredObject = this.hoveredObject;
 					}
 
 					// Now set this new object as hovered
@@ -545,6 +582,7 @@ jumpStart.prototype.processCursorMove = function()
 						sceneObject.JumpStart.onCursorEnter[y].call(sceneObject);
 
 					this.hoveredObject = sceneObject;
+					g_hoveredObject = this.hoveredObject;
 					this.localUser.lookHit = intersects[x];
 
 					// FIXME: Figure out what's up with Altspace scene scaling.
@@ -565,10 +603,13 @@ jumpStart.prototype.processCursorMove = function()
 		}
 	}
 
+	var oldScale = new THREE.Vector3().copy(this.crosshair.scale);
+
 	if( !this.localUser.lookHit && this.hoveredObject )
 	{
 		unhoverObject(this.hoveredObject);
 		this.hoveredObject = null;
+		g_hoveredObject = this.hoveredObject;
 	}
 	else if( this.crosshair && this.localUser.lookHit )
 	{
@@ -587,8 +628,72 @@ jumpStart.prototype.processCursorMove = function()
 	if( !this.localUser.lookHit )
 		this.crosshair.scale.set(0.0001, 0.0001, 0.0001);
 	else
+	{
+//		this.crosshair.scale.copy(oldScale);
 		this.crosshair.scale.set(1, 1, 1);
+	}
+
+//		this.crosshair.scale.set(1, 1, 1);
 };
+
+jumpStart.prototype.createInfoSlate = function()
+{
+	if( this.infoSlate )
+		return this.infoSlate;
+
+	var slate = document.createElement("div");
+	slate.style.cssText = "position: absolute; left: 0; right: 0; top: 0; bottom: 0;";
+
+	return slate;
+};
+
+jumpStart.prototype.showInfoSlate = function()
+{
+	if( !this.infoSlate )
+		this.infoSlate = this.createInfoSlate();
+
+	if( this.infoSlate.parentNode !== document.body )
+		document.body.appendChild(this.infoSlate);
+
+	this.infoSlate.style.display = "block";
+};
+
+jumpStart.prototype.hideInfoSlate = function()
+{
+	if( !this.infoSlate )
+		this.infoSlate = this.createInfoSlate();
+
+//	if( this.infoSlate.parentNode !== document.body )
+//		return;
+
+	this.infoSlate.style.display = "none";
+};
+
+jumpStart.prototype.destroyInfoSlate = function()
+{
+	this.infoSlate.className = "zoomOutOfLoading";
+
+	setTimeout(function()
+	{
+		JumpStart.infoSlate.parentNode.removeChild(JumpStart.infoSlate);
+		JumpStart.infoSlate = null;
+	}, 1000);
+};
+
+jumpStart.prototype.showLoadingMsg = function(msg)
+{
+	if( !this.infoSlate )
+		return;
+
+	var cleanMsg = msg.trim();
+	if( cleanMsg !== "" )
+		console.log(cleanMsg);
+
+//	var consoleMsg = msg;
+//	consoleMsg.replace(/^\s+|\s+$/g,'');
+	document.getElementById("loadingMsg").innerHTML = msg;
+	this.showInfoSlate();
+}
 
 jumpStart.prototype.initiate = function()
 {
@@ -598,9 +703,66 @@ jumpStart.prototype.initiate = function()
 	this.altContentAlreadyLoaded = true;
 
 	this.worldScale = this.options["worldScale"];
+	this.hoveredObject = null;
+	g_hoveredObject = this.hoveredObject;
+
+	// Figure out if we are passed a roomId in our URL
+	// Based on the function at: https://css-tricks.com/snippets/javascript/get-url-variables/
+	function getQueryVariable(variable)
+	{
+		var query = window.location.search.substring(1);
+		var vars = query.split("&");
+		var i;
+		for( i=0; i < vars.length; i++ )
+		{
+			var pair = vars[i].split("=");
+			if( pair[0] === variable )
+				return pair[1];
+		}
+
+		return null;
+	}
+
+	this.requestedRoomId = getQueryVariable("room");
+
+	this.infoSlate = this.createInfoSlate();
+
+	var html = "<div id='loadingSlate' style='position: absolute; width: 100%; height: 100%;'><table height='100%' width='100%'><tr><td align='center' valign='bottom' height='100'>";
+
+	var imgCount = 2;
+	if( this.options["titleImageURL"] !== "" )
+	{
+		imgCount++;
+		html += "<div id='titleImageSlate' style='position: relative; left: 0; right: 0;''><center><img src='";
+		html += this.options["titleImageURL"];
+		html += "' onload='var elem = document.getElementById(\"loadingSlate\"); if( typeof elem.loadedImageCount === \"undefined\" ) elem.loadedImageCount = 0; elem.loadedImageCount++; if( elem.loadedImageCount == " + imgCount + " ) { elem.className = \"zoomIntoLoading\"; elem.style.display = \"block\"; JumpStart.finishInit(); }' /></center></div>";
+		//html += "' /></center></div>";
+	}
+
+	html += "</td></tr><tr><td height='1%' align='center' valign='middle'>";
+	html += "<img src='misc/jumpstartlogo.png' id='loadingLogo' onload='var elem = document.getElementById(\"loadingSlate\"); if( typeof elem.loadedImageCount === \"undefined\" ) elem.loadedImageCount = 0; elem.loadedImageCount++; if( elem.loadedImageCount == " + imgCount + " ) { elem.className = \"zoomIntoLoading\"; elem.style.display = \"block\"; JumpStart.finishInit(); }' />";
+	//html += "<img src='misc/jumpstartlogo.png' id='loadingLogo' />";
+	html += "</td></tr><tr><td align='center' valign='top' height='100'>";
+	html += "<div id='loadingMsg'>Initializing...</div>";
+	html += "</td></tr></table>";
+
+	var loadingElem = "<div id='loadingRing' style='position: absolute; top: 0; bottom: 0; left: 0; right: 0;'><table width='100%' height='100%'><tr><td align='center' valign='middle'><img src='misc/loading.png' class='spinningImage' onload='var elem = document.getElementById(\"loadingSlate\"); if( typeof elem.loadedImageCount === \"undefined\" ) elem.loadedImageCount = 0; elem.loadedImageCount++; if( elem.loadedImageCount == " + imgCount + " ) { elem.className = \"zoomIntoLoading\"; elem.style.display = \"block\"; JumpStart.finishInit(); }' /></td></tr></table></div></div>";
+	//var loadingElem = "<div id='loadingRing' style='position: absolute; top: 0; bottom: 0; left: 0; right: 0;'><table width='100%' height='100%'><tr><td align='center' valign='middle'><img src='misc/loading.png' class='spinningImage' /></td></tr></table></div></div>";
+	html += loadingElem;
+
+	this.infoSlate.innerHTML = html;
+	this.showInfoSlate();
+	return;
+}
+
+jumpStart.prototype.finishInit = function()
+{
+	//document.getElementById("loadingSlate").className += " zoomIntoLoading";
 
 	if( this.webMode )
 	{
+		this.worldScale = 1.0;
+		
 		//this.enclosure = { "innerWidth": window.innerWidth / 3.0, "innerHeight": window.innerHeight / 3.0, "innerDepth": window.innerWidth / 3.0 };
 		var commonVal = Math.round(1024 / 2.5);
 		this.enclosure = {
@@ -614,7 +776,7 @@ jumpStart.prototype.initiate = function()
 			"scaledHeight": Math.round(commonVal * (1 / this.worldScale)),
 			"scaledDepth": Math.round(commonVal * (1 / this.worldScale))
 		};
-		this.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser" };
+		this.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser", "trackingSkeleton": null };
 
 		this.localUser.displayName = "WebUser" + Date.now();
 //		if( this.options.debugMode )
@@ -637,6 +799,13 @@ jumpStart.prototype.initiate = function()
 	{
 		// Altspace has a different style of scaling
 		this.worldScale *= 3.0;
+
+		if( this.enclosure.innerDepth === 300 )
+			this.worldScale *= 0.3;
+
+		// Adjust for enclosure scale, if desired.
+		if( this.options["scaleWithEnclosure"] )
+			this.worldScale *= this.enclosure.pixelsPerMeter / 280;
 
 		this.enclosure.adjustedWidth = Math.round(this.enclosure.innerWidth * JumpStart.worldScale);
 		this.enclosure.adjustedHeight = Math.round(this.enclosure.innerHeight * JumpStart.worldScale);
@@ -663,7 +832,7 @@ jumpStart.prototype.initiate = function()
 	//	depth = this.enclosure.innerDepth;
 
 	// Offset us if we are in the personal browser
-	if( depth === 100 )
+	if( this.enclosure.innerDepth === 100 || this.enclosure.innerDepth === 300 )
 	{
 		this.worldOffset.z = depth / (-2.0);
 
@@ -683,7 +852,18 @@ jumpStart.prototype.initiate = function()
 	if( this.options.legacyLoader )
 		this.objectLoader = new THREE.AltOBJMTLLoader();
 	else
+	{
+		/*
+		this.objectLoader = altspace.utilities.multiloader;
+		this.objectLoader.init({
+			crossOrigin: 'anonymous',
+			baseUrl: "http://localhost:8000/live/"
+		});
+		*/
 		this.objectLoader = new THREE.OBJMTLLoader();
+//		this.materialCreator = new THREE.MTLLoader.MaterialCreator();
+//		this.materialCreator.crossOrigin = 'anonymous';
+	}
 
 	this.scene = new THREE.Scene();
 	this.scene.scale.multiplyScalar(this.worldScale);
@@ -701,8 +881,8 @@ jumpStart.prototype.initiate = function()
 
 	if ( this.webMode )
 	{
-		this.renderer = new THREE.WebGLRenderer();
-		this.renderer.setClearColor("#AAAAAA");
+		this.renderer = new THREE.WebGLRenderer({ alpha: true });
+		this.renderer.setClearColor( 0x00ff00, 0.1 );
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
 		document.body.appendChild( this.renderer.domElement );
 
@@ -738,7 +918,7 @@ jumpStart.prototype.initiate = function()
 		if( this.options.legacyLoader )
 			this.renderer = altspace.getThreeJSRenderer({version:'0.1.0'});
 		else
-			this.renderer = altspace.getThreeJSRenderer({version:'0.2.0'});
+			this.renderer = altspace.getThreeJSRenderer();
 	}
 
 	// Create some invisible planes for raycasting.
@@ -763,6 +943,8 @@ jumpStart.prototype.initiate = function()
 			"width": width,
 			"height": depth
 		});
+
+		this.roofPlane = topPlane;
 	}
 
 	if( this.options.enabledCursorEvents.northPlane )
@@ -773,6 +955,8 @@ jumpStart.prototype.initiate = function()
 			"width": width,
 			"height": height
 		});
+
+		this.northPlane = northPlane;
 	}
 
 	if( this.options.enabledCursorEvents.southPlane )
@@ -783,6 +967,8 @@ jumpStart.prototype.initiate = function()
 			"width": width,
 			"height": height
 		});
+
+		this.southPlane = southPlane;
 	}
 
 	if( this.options.enabledCursorEvents.westPlane )
@@ -793,6 +979,8 @@ jumpStart.prototype.initiate = function()
 			"width": depth,
 			"height": height
 		});
+
+		this.westPlane = westPlane;
 	}
 
 	if( this.options.enabledCursorEvents.eastPlane )
@@ -803,6 +991,8 @@ jumpStart.prototype.initiate = function()
 			"width": depth,
 			"height": height
 		});
+
+		this.eastPlane = eastPlane;
 	}
 
 	g_localUser = this.localUser;
@@ -819,91 +1009,139 @@ jumpStart.prototype.initiate = function()
 	g_numSyncedInstances = this.numSyncedInstances;
 	g_initialSync = this.initialSync;
 	g_floorPlane = this.floorPlane;
+	g_roofPlane = this.roofPlane;
+	g_westPlane = this.westPlane;
+	g_northPlane = this.northPlane;
+	g_eastPlane = this.eastPlane;
+	g_southPlane = this.southPlane;
 
 	// We are ready to rock-n-roll!!
 	this.initialized = true;
 
-	// Load our crosshair
-	this.loadModels("models/JumpStart/crosshair.obj").then(function()
+	if( (JumpStart.options.firebase.rootUrl === "" || JumpStart.options.firebase.appId === "" || JumpStart.requestedRoomId) &&
+		(!JumpStart.personalBrowser || !JumpStart.options["surppressPersonalBrowser"]) )
 	{
-		// Spawn it in
-		var crosshair = JumpStart.spawnInstance("models/JumpStart/crosshair.obj");
-		crosshair.JumpStart.blocksLOS = false;
-		//crosshair.scale.multiplyScalar(1.0);
-
-		crosshair.JumpStart.onTick = function()
+		// Load our crosshair
+		this.loadModels("models/JumpStart/crosshair.obj").then(function()
 		{
-			if( !this.hasOwnProperty('spinAmount') || this.spinAmount >= Math.PI * 2.0 )
-				this.spinAmount = 0.0;
+			// Spawn it in
+			var crosshair = JumpStart.spawnInstance("models/JumpStart/crosshair.obj");
+			crosshair.JumpStart.blocksLOS = false;
 
-			this.spinAmount += 1.0 * g_deltaTime;
-			this.rotateZ(this.spinAmount);
-		};
-
-		JumpStart.crosshair = crosshair;
-		g_crosshair = JumpStart.crosshair;
-
-		if( !JumpStart.webMode )
-		{
-			crosshair.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
-			crosshair.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
-		}
-
-		function prepPrecache()
-		{
-			// WE ALSO HAVE SOME STUFF TO "CACHE" IF IN DEBUG MODE...
-			// Inject the css if in debug mode
-			if( JumpStart.options.debugMode )
+			// Should it be invisible?
+			if( !JumpStart.options["showCrosshair"] )
 			{
-				JumpStart.debugui = new jumpStartDebugUI();
-
-				var templateElem = document.getElementById("JumpStartDebugElements");
-				if( templateElem )
+				crosshair.traverse(function(child)
 				{
-					var container = document.createElement("div");
-					container.innerHTML = templateElem.innerHTML;
-					document.body.appendChild(container);
-				}
+					if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+					{
+						child.material.visible = false;
+					}
+				}.bind(this));
 			}
 
-			// User global, if it exists.
-			if( window.hasOwnProperty("onPrecache") )
-				onPrecache();
-			else
-				JumpStart.doneCaching();
+			crosshair.JumpStart.onTick = function()
+			{
+				if( !JumpStart.options["showCrosshair"] )
+					return;
+				
+				if( !this.hasOwnProperty('spinAmount') || this.spinAmount >= Math.PI * 2.0 )
+					this.spinAmount = 0.0;
+
+				this.spinAmount += 1.0 * g_deltaTime;
+				this.rotateZ(this.spinAmount);
+			};
+
+			JumpStart.crosshair = crosshair;
+			g_crosshair = JumpStart.crosshair;
+
+			if( !JumpStart.webMode )
+			{
+				crosshair.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
+				crosshair.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
+			}
+
+			JumpStart.reallyFinishInit();
+			return;
+		});
+	}
+	else
+		JumpStart.reallyFinishInit();
+}
+
+jumpStart.prototype.reallyFinishInit = function()
+{
+	function prepPrecache()
+	{
+		// WE ALSO HAVE SOME STUFF TO "CACHE" IF IN DEBUG MODE...
+		// Inject the css if in debug mode
+		if( JumpStart.options.debugMode )
+		{
+			JumpStart.debugui = new jumpStartDebugUI();
+
+			var templateElem = document.getElementById("JumpStartDebugElements");
+			if( templateElem )
+			{
+				var container = document.createElement("div");
+				container.innerHTML = templateElem.innerHTML;
+				document.body.appendChild(container);
+			}
 		}
 
-		// Wait for us to get our room key
-		if( JumpStart.options.firebase.rootUrl !== "" && JumpStart.options.firebase.appId !== "" )
+		// User global, if it exists.
+		if( window.hasOwnProperty("onPrecache") )
 		{
-			var myHandle = setInterval(function()
-			{
-				if( JumpStart.firebaseSync.roomKey === null )
-					return;
-
-				var membersRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey).child('members');
-				membersRef.once("value", function(snapshot) {
-					var members = snapshot.val();
-
-					var count = 0;
-					var x;
-					for( x in members )
-						count++;
-console.log("Member count: " + count);
-					if( count > 0 )
-						JumpStart.localUser.firstUser = false;
-
-					// Now we're ready for game logic
-					prepPrecache();
-				});
-
-				clearInterval(myHandle);
-			}, 100);
+			JumpStart.showLoadingMsg("Precaching custom assets...");
+			onPrecache();
 		}
 		else
-			prepPrecache();
-	});
-}
+			JumpStart.doneCaching();
+	}
+
+	// Wait for us to get our room key
+	if( JumpStart.options.firebase.rootUrl !== "" && JumpStart.options.firebase.appId !== "" )
+	{
+		JumpStart.showLoadingMsg("Waiting for Firebase session...");
+
+		var myHandle = setInterval(function()
+		{
+			if( JumpStart.firebaseSync.roomKey === null )
+				return;
+
+			clearInterval(myHandle);
+/*
+			var membersRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey).child('members');
+			membersRef.once("value", function(snapshot) {
+				var members = snapshot.val();
+
+				var count = 0;
+				var x;
+				for( x in members )
+					count++;
+console.log("Member count: " + count);
+				if( count > 0 )
+					JumpStart.localUser.firstUser = false;
+
+				// Now we're ready for game logic
+				prepPrecache();
+			});
+*/
+
+			var readyRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey).child('ready');
+			readyRef.once("value", function(snapshot) {
+				var ready = snapshot.val();
+
+				if( typeof ready !== 'undefined' && ready )
+					JumpStart.localUser.firstUser = false;
+
+				// Now we're ready for game logic
+				prepPrecache();
+			});
+		}, 100);
+	}
+	else
+		prepPrecache();
+};
 
 jumpStart.prototype.doneCaching = function()
 {
@@ -917,9 +1155,70 @@ jumpStart.prototype.doneCaching = function()
 	this.initialSync = false;
 
 	if( window.hasOwnProperty("onReady") )
-		onReady();
+	{
+		if( this.firebaseSync )
+		{
+			if( this.firebaseSync.reloadWithNewURL )
+				JumpStart.showLoadingMsg("Creating new Firebase session...");
+			else
+				JumpStart.showLoadingMsg("Connecting to Firebase session...");
+		}
+
+		if(  JumpStart.options.firebase.rootUrl !== "" && JumpStart.options.firebase.appId !== "" )
+		{
+			var readyRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey).child('ready');
+			readyRef.once("value", function(snapshot) {
+				var ready = snapshot.val();
+
+				if( typeof ready !== "undefined" && ready )
+					JumpStart.localUser.firstUser = false;
+				else
+					JumpStart.localUser.firstUser = true;
+
+				if( JumpStart.firebaseSync.firebaseRoom )
+				{
+					if( !JumpStart.personalBrowser || !JumpStart.options.firebase["suppressPersonalBrowser"] )
+					{
+						var roomRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey);
+						roomRef.child("ready").set(true, function(errorObject)
+						{
+							if (errorObject) {
+								console.error("firebase operation failed", errorObject);
+								JumpStart.localUser.firstUser = false;
+							}
+
+							// Now we're ready for game logic
+							JumpStart.showLoadingMsg("Connected.");
+							onReady();
+						});
+					}
+					else
+					{
+						JumpStart.showLoadingMsg("Connected.");
+						onReady();
+					}
+				}
+				else
+				{
+					if( JumpStart.requestedRoomId )
+					{
+						JumpStart.showLoadingMsg("<font style='color: #ff0000; font-weight: 900;'>FAILED to connect to Firebase room.  Reloading...</font>");
+						location.reload();
+					}
+				}
+			});
+		}
+		else
+		{
+			JumpStart.showLoadingMsg("Ready.");
+			onReady();
+		}
+	}
 	else
+	{
 		console.log("Your app is ready, but you have no onReady callback function!");
+		JumpStart.showLoadingMsg("Your app is missing its window-level onReady callback function.");
+	}
 };
 
 jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
@@ -969,8 +1268,40 @@ jumpStart.prototype.updateJumpStartProperties = function(instance, syncData)
 		else
 		{
 			// Apply any force that is needed
-			if( x === "physicsState" && syncData[x] !== instance.JumpStart.physicsState )
+			/*
+			if( (!instance.userData.hasOwnProperty("lastAppliedForce") || !instance.userData.lastAppliedForce.equals(instance.JumpStart.appliedForce)) || 
+				(x === "physicsState" && syncData[x] !== instance.JumpStart.physicsState) )
+*/
+
+			if( x === "physicsState" && syncData[x] === 0 && instance.JumpStart.hasOwnProperty("velocity") )
+			{
+				instance.JumpStart.velocity.set(0, 0, 0);
+				if( window.hasOwnProperty("TikiBallHasStopped") )
+					TikiBallHasStopped();
+			}
+
+			if( (x === "physicsState" && syncData[x] !== instance.JumpStart.physicsState && syncData[x] !== 0) ||
+				(x === "physicsState" && syncData[x] !== 0 && (!instance.userData.hasOwnProperty("lastAppliedForce") || !instance.userData.lastAppliedForce.equals(instance.JumpStart.appliedForce))) )
+			{
+				if( !instance.userData.hasOwnProperty("lastAppliedForce") )
+					instance.userData.lastAppliedForce = new THREE.Vector3();
+
+				if( instance.JumpStart.hasOwnProperty("appliedForce") )
+					instance.userData.lastAppliedForce.copy(instance.JumpStart.appliedForce);
+
 				needsAppliedForce = true;
+				
+				if( window.hasOwnProperty("MakeDrumHitParticles") && instance.JumpStart.appliedForce.length() > 0.0 )
+				{
+					if( instance.JumpStart.hasOwnProperty("velocity") )
+					{
+						instance.JumpStart.velocity.set(0, 0, 0);
+						instance.userData.velocity.set(0, 0, 0);
+
+						MakeDrumHitParticles(instance);
+					}
+				}
+			}
 
 			// Copy the value over like regular
 			instance.JumpStart[x] = syncData[x];
@@ -978,7 +1309,13 @@ jumpStart.prototype.updateJumpStartProperties = function(instance, syncData)
 	}
 
 	if( needsAppliedForce && instance.JumpStart.hasOwnProperty("velocity") )
+	{
+		//console.log(instance.JumpStart.velocity);
+//		console.log((instance.JumpStart.appliedForce.equals(syncData.appliedForce) && instance.JumpStart.velocity.equals(syncData.velocity)));
+//		instance.JumpStart.velocity.copy(syncData.velocity);
 		instance.JumpStart.velocity.add(instance.JumpStart.appliedForce);
+//		instance.JumpStart.velocity.copy(instance.JumpStart.appliedForce);
+	}
 
 	if( syncData.hasOwnProperty('networkRemovedListeners') )
 	{
@@ -1165,17 +1502,75 @@ jumpStart.prototype.updateJumpStartProperties = function(instance, syncData)
 
 jumpStart.prototype.run = function()
 {
-	// Start the game loop
-	this.onTick();
+	if( !this.firebaseSync || this.requestedRoomId )
+	{
+		var html = "";
+		if( JumpStart.options["titleImageURL"] !== "" )
+		{
+			/*
+			html += "<div style='position: fixed; top: 0; left: 0; right: 0;''><center><img src='";
+			html += JumpStart.options["titleImageURL"];
+			html += "'' /></center></div>";
+			*/
+			var elem = document.getElementById("titleImageSlate");
+			var distFromTop = elem.offsetTop;
+
+			elem.parentElement.removeChild(elem);
+
+			elem.style.position = "absolute";
+			elem.style.top = distFromTop + "px";
+			document.body.appendChild(elem);
+
+			setTimeout(function()
+			{
+				var elem = document.getElementById("titleImageSlate");
+				elem.style.top = 0;
+			}, 1000);
+
+			//elem.style.top = "0";
+//			return;
+//			if( elem )
+//			{
+//				elem = elem.parentNode.removeChild(elem);
+//				elem.style.position = "absolute";
+//				document.body.appendChild(elem);
+//			}
+		}
+
+		this.showLoadingMsg("");
+		this.destroyInfoSlate();
+
+		if( JumpStart.options["showFPS"] )
+		{
+			var fpsSlate = document.createElement("div");
+			fpsSlate.id = "fps";
+			fpsSlate.style.cssText = "position: fixed; top: 0; left: 0;";
+
+			document.body.appendChild(fpsSlate);
+			JumpStart.fpsSlate = fpsSlate;
+		}
+
+		var headerImage = document.createElement("div");
+		headerImage.innerHTML = html;
+		
+		document.body.appendChild(headerImage);
+
+		//this.clock.start();
+		// Start the game loop
+		this.onTick();
+	}
 };
 
 var frameSamples = new Array();
-var fpsSlate = document.getElementById("fps");
 jumpStart.prototype.onTick = function()
 {
-	if( fpsSlate )
+	if( this.fpsSlate )
 	{
-		frameSamples.push(g_deltaTime);
+		var timeScale = 1.0;
+		if( window.hasOwnProperty("g_timeScale") )
+			timeScale = g_timeScale;
+		
+		frameSamples.push(g_deltaTime / timeScale);
 
 		var average = 0;
 		if( frameSamples.length > 10 )
@@ -1188,7 +1583,7 @@ jumpStart.prototype.onTick = function()
 			average = sum / frameSamples.length;
 			frameSamples = new Array();
 
-			fpsSlate.innerHTML = "<h2><b>" + Math.round(1.0 / average) + " fps</b></h2>";
+			this.fpsSlate.innerHTML = "<h2><b>" + Math.round(1.0 / average) + " fps</b></h2>";
 		}
 	}
 
@@ -1198,6 +1593,9 @@ jumpStart.prototype.onTick = function()
 		var x, y, z;
 		for( x in parentObject.children )
 		{
+			if( parentObject !== g_scene && !parentObject.hasOwnProperty("JumpStart") )
+				continue;
+
 			sceneObject = parentObject.children[x];
 			if( !sceneObject.hasOwnProperty("JumpStart") )
 				continue;
@@ -1224,10 +1622,28 @@ jumpStart.prototype.onTick = function()
 				}
 
 				// Terminal velocity because we have no air drag
-				if( sceneObject.JumpStart.velocity.length() > 5.0 )
+				var velLen = sceneObject.JumpStart.velocity.length();
+				var termVel = 5.0;
+				if( window.hasOwnProperty("g_terminalVelocity") )
+					termVel = g_terminalVelocity;
+
+				if( window.hasOwnProperty("g_timeScale") )
+					termVel *= g_timeScale;
+
+				if( velLen > termVel )
+					sceneObject.JumpStart.velocity.multiplyScalar(0.9);
+				/*
+				if( !window.hasOwnProperty("g_terminalVelocity") )
 				{
-					sceneObject.JumpStart.velocity.normalize().multiplyScalar( 5.0 );
+console.log("subbing " + velLen);
+					if( velLen > 5.0 )
+						sceneObject.JumpStart.velocity -= velLen;
+
+							//sceneObject.JumpStart.velocity.normalize().multiplyScalar( 5.0 );
 				}
+				*/
+	//				else if( sceneObject.JumpStart.velocity.length() > g_terminalVelocity )
+	//					sceneObject.JumpStart.velocity.normalize().multiplyScalar( g_terminalVelocity );
 
 				// Update the rotation
 				sceneObject.rotateX((sceneObject.JumpStart.freefallRot.x * 5.0) * this.deltaTime);
@@ -1299,9 +1715,25 @@ jumpStart.prototype.onTick = function()
 	this.deltaTime = this.clock.getDelta();
 	g_deltaTime = this.deltaTime;
 
+	if( window.hasOwnProperty("g_timeScale") )
+		g_deltaTime = g_deltaTime * g_timeScale;
+
 	// FIXME: We should really prep event listeners before processing cursor move, in case any of them have new listeners assigned with the = function syntax.
 	this.processCursorMove();
 
+/*
+	// Do post-tick stuff for cursor planes
+	for( x in posttickCursorPlanes )
+	{
+		sceneObject = posttickCursorPlanes[x];
+
+		if( JumpStart.localUser.lookHit && JumpStart.localUser.lookHit !== sceneObject )
+		{
+			console.log("yoo");
+			sceneObject.position.set(0, -9999999, 0);
+		}
+	}
+*/
 	// FIXME: PLACEHOLDER FOR REAL INPUT EVENTS!!
 	if( this.pendingClick )
 	{
@@ -1326,6 +1758,62 @@ jumpStart.prototype.onTick = function()
 	requestAnimationFrame( function(){ JumpStart.onTick(); } );
 
 	recursive.call(this, this.scene);
+
+	var enclosurePlanes = [
+		{"plane": this.floorPlane, "axis": "y", "greater": false},
+		{"plane": this.roofPlane, "axis": "y", "greater": true},
+		{"plane": this.westPlane, "axis": "x", "greater": false},
+		{"plane": this.eastPlane, "axis": "x", "greater": true},
+		{"plane": this.northPlane, "axis": "z", "greater": false},
+		{"plane": this.southPlane, "axis": "z", "greater": true}
+	];
+
+	var i, plane;
+	for( i = 0; i < enclosurePlanes.length; i++ )
+	{
+		enclosurePlane = enclosurePlanes[i];
+
+		plane = enclosurePlane.plane;
+
+		if( !plane )
+			continue;
+
+		if( !plane.hasOwnProperty("originalScale") )
+		{
+			plane.originalScale = new THREE.Vector3().copy(plane.scale);
+			plane.scaledHidden = false;
+		}
+		else
+		{
+			if( this.localUser.lookOrigin )
+			{
+				if( enclosurePlane.greater && this.localUser.lookOrigin[enclosurePlane.axis] > plane.position[enclosurePlane.axis] )
+				{
+					if( !plane.scaledHidden )
+					{
+						plane.scale.set(0.0001, 0.0001, 0.0001);
+						plane.scaledHidden = true;
+					}
+				}
+				else if( !enclosurePlane.greater && this.localUser.lookOrigin[enclosurePlane.axis] < plane.position[enclosurePlane.axis] )
+				{
+					if( !plane.scaledHidden )
+					{
+						plane.scale.set(0.0001, 0.0001, 0.0001);
+						plane.scaledHidden = true;
+					}
+				}
+				else
+				{
+					if( plane.scaledHidden )
+					{
+						plane.scale.copy(plane.originalScale);
+						plane.scaledHidden = false;
+					}
+				}
+			}
+		}
+	}
 
 	this.renderer.render( this.scene, this.camera );
 };
@@ -1389,17 +1877,54 @@ jumpStart.prototype.loadModels = function()
 
 	this.modelLoader.batchName = "batch" + Date.now();
 
+/*
+	var req = null;
+	if( !JumpStart.options.legacyLoader )
+		req = new this.objectLoader.LoadRequest();
+	*/
+
+	if( models.indexOf("models/JumpStart/crosshair.obj") >= 0 )
+		this.showLoadingMsg("Loading engine assets...");
+	else
+		this.showLoadingMsg("Loading models: 0/" + models.length);
+
 	var x;
 	for( x in models )
 	{
 		var fileName = models[x];
 		JumpStart.models.push({"fileName": fileName, "batchName": JumpStart.modelLoader.batchName});
 		
+//		this.showLoadingMsg("Loading " + fileName);
+
 		if( JumpStart.options.legacyLoader )
 			JumpStart.objectLoader.load(fileName, JumpStart.modelLoader.batchCallbackFactory(fileName, JumpStart.modelLoader.batchName));
 		else
+		{
+//			req.objUrls.push(fileName);
+//			req.mtlUrls.push(fileName.substring(0, fileName.length - 3) + "mtl");
 			JumpStart.objectLoader.load(fileName, fileName.substring(0, fileName.length - 3) + "mtl", JumpStart.modelLoader.batchCallbackFactory(fileName, JumpStart.modelLoader.batchName));
+		}
 	}
+
+/*
+	this.objectLoader.load(req, function()
+	{
+		//console.log("Done loading!");
+		if( req.error )
+		{
+			console.log("Error loading object!");
+		}
+		else
+		{
+			for( x = 0; x < req.objects.length; x++ )
+			{
+				var object = req.objects[x];
+								//console.log(object);
+				JumpStart.modelLoader.batchCallbackFactory(models[x], JumpStart.modelLoader.batchName)(object);
+			}
+		}
+	});
+*/
 
 	return {
 		"then": function(callback)
@@ -1477,8 +2002,22 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 			}
 //			*/
 			
-//			console.log("Spawned an object");
+			// Mark the material as needing to be updated
+			/*
+			var y, mesh;
+			for( y in clone.children )
+			{
+				mesh = clone.children[y];
 
+				if( mesh.material )
+				{
+//					mesh.material.needsUpdate = true;
+					console.log(mesh.material.needsUpdate);
+					document.getElementById("info").innerHTML = mesh.material.needsUpdate;
+				}
+			}
+*/
+//			console.log("Spawned an object");
 			return clone;
 		}
 	}
@@ -1520,31 +2059,57 @@ jumpStart.prototype.prepInstance = function(modelFile)
 		"modelFile": modelFile,
 		"setTint": function(tintColor)
 		{
-			if( JumpStart.webMode )
-			{
-				var x, mesh;
-				for( x in this.children )
-				{
-					mesh = this.children[x];
+			// FIXME Inside of Altsapce it works fine, but in web mode every instance of the material used on the
+			// object gets highlighted, even if on a different object instance.
 
-					if( mesh.material && mesh.material instanceof THREE.MeshPhongMaterial )
-						mesh.material.ambient = tintColor;
+			// Sets the TINT (or brightness) of an object.
+			if( !JumpStart.options["legacyLoader"] )
+			{
+				if( !JumpStart.webMode )
+				{
+					tintColor.multiplyScalar(0.8);
+					this.userData.tintColor = tintColor;
+
+					this.traverse(function(child)
+					{
+						child.userData.tintColor = tintColor;
+					}.bind(this));
+				}
+				else
+				{
+					this.traverse(function(child)
+					{
+						if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+						{
+							child.material.color = tintColor;
+							child.material.needsUpdate = true;
+						}
+					}.bind(this));
 				}
 			}
 			else
 			{
-				var altspaceTintColor;
-				if( JumpStart.options.legacyLoader )
-					altspaceTintColor = {"r": tintColor.r * 0.5, "g": tintColor.g * 0.5, "b": tintColor.b * 0.5};
-				else
-					altspaceTintColor = {"r": tintColor.r, "g": tintColor.g, "b": tintColor.b};
-
-				this.userData.tintColor = altspaceTintColor;
-
-				this.traverse(function(child)
+				if( !JumpStart.webMode )
 				{
-					this.userData.tintColor = altspaceTintColor;
-				}.bind(this));
+					tintColor.multiplyScalar(0.8);
+					this.userData.tintColor = tintColor;
+
+					this.traverse(function(child)
+					{
+						child.userData.tintColor = tintColor;
+					}.bind(this));
+				}
+				else
+				{
+					this.traverse(function(child)
+					{
+						if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+						{
+							child.material.color = tintColor;
+							child.material.needsUpdate = true;
+						}
+					}.bind(this));
+				}
 			}
 		}.bind(this),
 		"addDataListener": function(property, listener)
@@ -1966,7 +2531,11 @@ jumpStart.prototype.applyForce = function(sceneObject, force)
 	if( !sceneObject.JumpStart.hasOwnProperty("physicsState") || sceneObject.JumpStart.physicsState === 0 )
 		this.makePhysics(sceneObject);
 
+	// FIXME FIX ME: This only works because it is an error to assign a vector this way!!!
 	sceneObject.JumpStart.appliedForce = force;
+//	sceneObject.JumpStart.appliedForce.copy(force);
+//	sceneObject.JumpStart.appliedForce.copy(sceneObject.JumpStart.velocity);
+//	sceneObject.JumpStart.appliedForce.add(force);
 	sceneObject.JumpStart.velocity.add(force);
 };
 
@@ -2019,11 +2588,45 @@ jumpStart.prototype.onSoundCached = function(loadedSound, soundFileName)
 
 jumpStart.prototype.killSound = function(sound)
 {
+	sound.pause();
+	sound.currentTime = 0;
+};
+
+jumpStart.prototype.killSoundInstance = function(sound)
+{
 	sound.src = "";
 	sound.load();
 };
 
 jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loop)
+{
+	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
+	{
+		console.log("The sound " + sound_file_name + " is not cached!");
+		this.precacheSound(sound_file_name);
+
+		// Playing un-cached sounds is disabled!! (by default)
+		return;
+	}
+
+	var loop;
+	if( typeof user_loop !== "undefined" )
+		loop = user_loop;
+	else
+		loop = false;
+
+	var volumeScale = (typeof volume_scale == 'undefined') ? 1.0 : volume_scale;
+
+//	var cachedSound = this.cachedSounds[sound_file_name].cloneNode();
+	var cachedSound = this.cachedSounds[sound_file_name];
+	cachedSound.loop = loop;
+	cachedSound.volume = 1.0 * volumeScale;
+	cachedSound.play();
+
+	return cachedSound;
+};
+
+jumpStart.prototype.playSoundInstance = function(sound_file_name, volume_scale, user_loop)
 {
 	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
 	{
@@ -2094,17 +2697,35 @@ jumpStartModelLoader.prototype.onModelLoaded = function(fileName, loadedObject, 
 	// Assume we are finished loading models until we know otherwise.
 	var batchFinishedLoading = true;
 
+	var completed = 0;
+	var remaining = 0;
+	var engineBatch = false;
+
 	var x;
 	for( x in JumpStart.models )
 	{
 		if( JumpStart.models[x].batchName !== batchName )
 			continue;
 
+		if( JumpStart.models[x].fileName === "models/JumpStart/crosshair.obj" )
+			engineBatch = true;
+
 		if( JumpStart.models[x].fileName === fileName )
+		{
 			JumpStart.models[x].object = loadedObject;
+			completed++;
+		}
 		else if( !JumpStart.models[x].hasOwnProperty("object") )
+		{
 			batchFinishedLoading = false;
+			remaining++;
+		}
+		else
+			completed++;
 	}
+
+	if( !engineBatch )
+		JumpStart.showLoadingMsg("Loading models: " + completed + "/" + (completed + remaining));
 
 	if( batchFinishedLoading )
 		JumpStart.modelLoader.onAllModelsLoaded(batchName);
@@ -2120,7 +2741,7 @@ jumpStartModelLoader.prototype.onAllModelsLoaded = function(batchName)
 			batchSize++;
 	}
 
-	console.log("Loaded " + batchSize + " models.");
+//	console.log("Loaded " + batchSize + " models.");
 
 	JumpStart.modelLoader.onModelBatchLoaded(batchName);
 }
@@ -2326,7 +2947,7 @@ FirebaseSync.prototype._copyObjectData = function( object, objectData) {
 
 FirebaseSync.prototype.addDataListener = function(object, property, eventType, listener) {
 
-	if ( !this.firebaseRoom ) return ; // still initializing
+	if ( !this.firebaseRoom ) return; // still initializing
 
 	var objectKey = this.uuid2key[ object.uuid ];
 	if ( !objectKey ) {

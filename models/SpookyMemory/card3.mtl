@@ -1,0 +1,9 @@
+newmtl 13___Default
+Kd 1 1 1
+illum 0
+map_Kd cardx.jpg
+
+newmtl front
+Kd 1 1 1
+illum 0
+map_Kd card3.jpg
