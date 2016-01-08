@@ -773,26 +773,140 @@ FirebaseSync.prototype._sameObjectData = function( object, objectData ) {
 
 FirebaseSync.prototype._copyObjectData = function( object, objectData) {
 
-	object.position.x = objectData.position.x;
-	object.position.y = objectData.position.y;
-	object.position.z = objectData.position.z;
+	//if( !object.hasOwnProperty("JumpStart") || ((!object.JumpStart.hasOwnProperty("lerpSync") || !object.JumpStart.lerpSync) && (!object.JumpStart.hasOwnProperty("pathSync") || !object.JumpStart.pathSync)) )
 
-	object.rotation.x = objectData.rotation.x;
-	object.rotation.y = objectData.rotation.y;
-	object.rotation.z = objectData.rotation.z;
+	// Check if JumpStart physics state has changed...
+	if( objectData.syncData.hasOwnProperty("physicsState") && object.hasOwnProperty("JumpStart") && object.JumpStart.hasOwnProperty("physicsState") && object.JumpStart.physicsState !== objectData.syncData.physicsState )
+	{
+//		object.JumpStart.makeStatic();
+//		object.JumpStart.appliedForce = new THREE.Vector3(0, 0, 0);
+//		object.JumpStart.freefallRot = new THREE.Vector3(0, 0, 0);
 
-	object.scale.x = objectData.scale.x;
-	object.scale.y = objectData.scale.y;
-	object.scale.z = objectData.scale.z;
+		// NOT synced
+		object.JumpStart.velocity = new THREE.Vector3(0, 0, 0);
+	}
 
-	if ( objectData.hasOwnProperty( "syncData" )) {
+	if( (!objectData.syncData.hasOwnProperty("lerpSync") || !objectData.syncData.lerpSync) && (!objectData.syncData.hasOwnProperty("pathSync") || !objectData.syncData.pathSync) )
+	{
+		object.position.x = objectData.position.x;
+		object.position.y = objectData.position.y;
+		object.position.z = objectData.position.z;
+
+		object.rotation.x = objectData.rotation.x;
+		object.rotation.y = objectData.rotation.y;
+		object.rotation.z = objectData.rotation.z;
+
+		object.scale.x = objectData.scale.x;
+		object.scale.y = objectData.scale.y;
+		object.scale.z = objectData.scale.z;
+	}
+	else
+	{
+		var objectInitialized = this.objectsInitialized.indexOf( object ) !== -1;
+		if( !objectInitialized )
+		{
+			object.position.x = objectData.position.x;
+			object.position.y = objectData.position.y;
+			object.position.z = objectData.position.z;
+
+			object.rotation.x = objectData.rotation.x;
+			object.rotation.y = objectData.rotation.y;
+			object.rotation.z = objectData.rotation.z;
+
+			object.scale.x = objectData.scale.x;
+			object.scale.y = objectData.scale.y;
+			object.scale.z = objectData.scale.z;
+		}
+
+//		if(object.JumpStart.hasOwnProperty("lerpSync") && object.JumpStart.lerpSync)
+		if(objectData.syncData.hasOwnProperty("lerpSync") && objectData.syncData.lerpSync)
+		{
+			object.userData.targetScale = new THREE.Vector3().copy(objectData.scale);
+			object.userData.targetScaleOriginal = new THREE.Vector3().copy(object.scale);
+			object.userData.targetScaleLerp = 0.0;
+			object.userData.targetScaleLerpTime = 0.2;
+
+			object.userData.targetRot = new THREE.Vector3().copy(objectData.rotation);
+			object.userData.targetRotOriginal = new THREE.Vector3().copy(object.rotation);
+			object.userData.targetRotLerp = 0.0;
+			object.userData.targetRotLerpTime = 0.2;
+
+			object.userData.targetPos = new THREE.Vector3().copy(objectData.position);
+			object.userData.targetPosOriginal = new THREE.Vector3().copy(object.position);
+			object.userData.targetPosLerp = 0.0;
+			object.userData.targetPosLerpTime = 0.2;
+		}
+		//else ( object.JumpStart.hasOwnProperty("pathSync") && object.JumpStart.pathSync )
+		else ( objectData.syncData.hasOwnProperty("pathSync") && objectData.syncData.pathSync )
+		{
+			/*
+			object.position.x = objectData.position.x;
+			object.position.y = objectData.position.y;
+			object.position.z = objectData.position.z;
+
+			object.rotation.x = objectData.rotation.x;
+			object.rotation.y = objectData.rotation.y;
+			object.rotation.z = objectData.rotation.z;
+
+			object.scale.x = objectData.scale.x;
+			object.scale.y = objectData.scale.y;
+			object.scale.z = objectData.scale.z;
+			*/
+
+//			if( objectData.hasOwnProperty( "syncData" ) )
+//			{
+				/*
+				console.log("Sync data:");
+				console.log(objectData.syncData.targetPos);
+				console.log(" vs ");
+				console.log(object.JumpStart.targetPos);
+				*/
+//				var objectInitialized = this.objectsInitialized.indexOf( object ) !== -1;
+//				console.log(object.JumpStart.targetPosLerp);
+//				console.log("Vale: " + objectData.syncData.targetPos.x);
+				//console.log("lerp time: " + (!objectData.syncData.hasOwnProperty("targetPos") || !object.JumpStart.hasOwnProperty("targetPos") || !object.JumpStart.targetPos.equals(new THREE.Vector3(objectData.syncData.targetPos.x, objectData.syncData.targetPos.y, objectData.syncData.targetPos.z))));
+//				console.log("Target vs now: ");
+//				console.log(object.JumpStart.targetPos);
+//				console.log(new THREE.Vector3(objectData.syncData.targetPos.x, objectData.syncData.targetPos.y, objectData.syncData.targetPos.z));
+				if( objectData.syncData.hasOwnProperty("targetPosLerpTime") && (!objectData.syncData.hasOwnProperty("targetPos") || !object.JumpStart.hasOwnProperty("targetPos") || !object.JumpStart.targetPos.equals(new THREE.Vector3(objectData.syncData.targetPos.x, objectData.syncData.targetPos.y, objectData.syncData.targetPos.z))) )
+				{
+					//console.log("toss it plzzz!");
+					object.userData.targetPosLerp = 0.0;
+					object.userData.targetPosAnim = null;
+
+					if( object.JumpStart.hasOwnProperty("targetPosOriginal") )
+						object.JumpStart.targetPosOriginal.copy(object.position);
+				}
+//console.log("Vale2: " + objectData.syncData.targetRot.x);
+				if( objectData.syncData.hasOwnProperty("targetRotLerpTime") && (!objectData.syncData.hasOwnProperty("targetRot") || !object.JumpStart.hasOwnProperty("targetRot") || !object.JumpStart.targetRot.equals(new THREE.Vector3(objectData.syncData.targetRot.x, objectData.syncData.targetRot.y, objectData.syncData.targetRot.z))) )
+				{
+					object.userData.targetRotLerp = 0.0;
+					object.userData.targetRotAnim = null;
+
+					if( object.JumpStart.hasOwnProperty("targetRotOriginal") )
+						object.JumpStart.targetRotOriginal.copy(object.rotation);
+				}
+
+//console.log("Vale 3: " + objectData.syncData.targetScale.x);
+				if( objectData.syncData.hasOwnProperty("targetScaleLerpTime") && (!objectData.syncData.hasOwnProperty("targetScale") || !object.JumpStart.hasOwnProperty("targetScale") || !object.JumpStart.targetScale.equals(new THREE.Vector3(objectData.syncData.targetScale.x, objectData.syncData.targetScale.y, objectData.syncData.targetScale.z))) )
+				{
+					object.userData.targetScaleLerp = 0.0;
+					object.userData.targetScaleAnim = null;
+
+					if( object.JumpStart.hasOwnProperty("targetScaleOriginal") )
+						object.JumpStart.targetScaleOriginal.copy(object.scale);
+				}
+//			}
+		}
+	}
+
+	if ( objectData.hasOwnProperty( "syncData" ) ) {
 
 		// copy top-level syncData into object.userData
 		var syncDataClone = JSON.parse( JSON.stringify( objectData.syncData ));
 		object.userData.syncData = syncDataClone;
 
 	}
-
 }
 
 

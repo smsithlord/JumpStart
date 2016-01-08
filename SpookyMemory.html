@@ -20,24 +20,83 @@
 
 	<body>
 
+		<div style="position: absolute; top: 0; left: 0; right: 0; bottom: 0;"><table height="100%" width="100%"><tr><td align="center" valign="center"><div id="gameMsg"></div></td></tr></table></div>
+
 		<!-- JumpStart SDK Core Include -->
 		<script src="JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
-			JumpStart.setOptions({"showCrosshair": false});
+			JumpStart.setOptions({
+				"showCrosshair": false,
+				"titleImageURL": "misc/spookytitle.png",
+				"firebase": {
+					"rootUrl": "https://spooky-memory.firebaseIO.com",
+					"appId": "Spooky Memory",
+					"suppressPersonalBrowser": true
+				}
+			});
 
 			var g_deck = null;
 			var g_deckRig = null;
 			var g_deckRigVerts = null;
 			var g_gameState = 0;
+			var g_endGame = false;
 
 			var g_tossTarget = null;
 			var g_lastTossedIndex = 0;
 			var g_cardMap = [5, 8, 3, 0, 6, 9, 4, 2, 1, 10, 7];
 
+			function onTick()
+			{
+				if( g_localUser && g_localUser.lookOrigin && g_localUser.lookOrigin.z < 0 && (!document.body.hasOwnProperty("mirrored") || !document.body.mirrored) )
+				{
+					document.body.style.webkitTransform = "scaleX(-1)";
+					document.body.style.filter = "FlipH";
+					document.body.mirrored = true;
+				}
+				else if( g_localUser.lookOrigin.z >= 0 && document.body.hasOwnProperty("mirrored") && document.body.mirrored )
+				{
+					document.body.style.webkitTransform = "none";
+					document.body.style.filter = "none";
+					document.body.mirrored = false;
+				}
+			}
+
+			function onPrecache()
+			{
+//				var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+//				allDataRef.remove();
+//				return;
+
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+
+				var myModels = [
+					"models/SpookyMemory/card.obj",
+					"models/SpookyMemory/card0.obj",
+					"models/SpookyMemory/card1.obj",
+					"models/SpookyMemory/card2.obj",
+					"models/SpookyMemory/card3.obj",
+					"models/SpookyMemory/card4.obj",
+					"models/SpookyMemory/deck.obj",
+					"models/SpookyMemory/deckrig.obj",
+					"models/SpookyMemory/pixel1.obj"
+				];
+
+				JumpStart.loadModels(myModels).then(function() {
+					JumpStart.doneCaching();
+				});
+			}
+
 			function onReady()
 			{
+				if( !JumpStart.requestedRoomId )
+					return;
+
 				// Do nothing if we are not in an enclosure yet.
 				if( JumpStart.personalBrowser )
 				{
@@ -57,82 +116,85 @@
 					return;
 				}
 
-				// JumpStart can only use models IT loads
-				var myModels = [
-					"models/SpookyMemory/card0.obj",
-					"models/SpookyMemory/card1.obj",
-					"models/SpookyMemory/card2.obj",
-					"models/SpookyMemory/card3.obj",
-					"models/SpookyMemory/card4.obj",
-					"models/SpookyMemory/deck.obj",
-					"models/SpookyMemory/deckrig.obj",
-					"models/SpookyMemory/pixel1.obj"
-				];
+				g_tossTarget = JumpStart.spawnInstance("models/SpookyMemory/pixel1.obj");
+				g_tossTarget.scale.set(0.0001, 0.0001, 0.0001);
 
-				JumpStart.loadModels(myModels).then(function() {
-
+				// Only the FIRST user spawns the deck!
+				if( g_localUser.firstUser )
+				{
 					// Spawn the deck
 					g_deck = JumpStart.spawnInstance("models/SpookyMemory/deck.obj");
 					g_deck.position.copy(g_worldOffset);
 					g_deck.position.x -= 100.0;
 					g_deck.scale.multiplyScalar(0.5);
+					g_deck.JumpStart.onSpawn["deckSpawn"] = deckSpawn;
+					g_deck.JumpStart.onCursorDown["dealPlease"] = dealPlease;
+					g_deck.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+					g_deck.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
 
-					// Load the deck rig
-					g_deckRig = JumpStart.spawnInstance("models/SpookyMemory/deckrig.obj", {parent: g_deck});
-					g_deckRig.JumpStart.blocksLOS = false;
-					g_deckRig.scale.multiplyScalar(g_deck.scale.x);
+					g_deck.JumpStart.sync();
+				}
 
-					g_deckRigVerts = g_deckRig.children[g_deckRig.children.length-1].geometry.vertices;
-
-					// Adjust scale of all the verts
-					var x;
-					for( x in g_deckRigVerts )
-					{
-						g_deckRigVerts[x].multiplyScalar(g_deck.scale.x);
-					}
-
-					var mat = null;
-					for( mesh in g_deckRig.children )
-					{
-						mat = g_deckRig.children[mesh].material;
-
-						if( !mat )
-							continue;
-
-						mat.visible = false;
-						mat.transparent = true;
-					}
-
-					setTimeout(function()
-					{
-						tossCard();
-					}, 1000);
-
-			/* CURSOR RAY VISUALIZATION
-			var marker = JumpStart.spawnInstance("models/SpookyMemory/pixel1.obj");
-			marker.JumpStart.blocksLOS = false;
-			marker.scale.set(1, 1, 1);
-
-			marker.JumpStart.onTick = function()
-			{
-				if( !g_lookHit )
-					return;
-
-				marker.position.copy(g_localUser.lookOrigin);
-				marker.translateY(2.0);
-				marker.lookAt(g_lookHit.scaledPoint);
-				marker.scale.z = g_localUser.lookOrigin.distanceTo(g_lookHit.scaledPoint);
-			};
-			*/
-
-					// Now start the simulation
-					JumpStart.run();
-				});
+				// Now start the simulation
+				JumpStart.run();
 			}
 		</script>
 
 		<!-- Custom Object-Level Event Callbacks -->
 		<script>
+			var g_endCard = null;
+			var g_cards = new Array();
+			var g_cardsInDeck = null;
+
+			function dealPlease()
+			{
+				//console.log(g_cards.length);
+				if( g_cards.length > 0 )
+					return;
+
+				if( !g_cardsInDeck || g_cardsInDeck.length === 0 )
+					g_cardsInDeck = [0, 1, 1, 2, 2, 3, 3, 4, 4];
+
+				g_lastTossedIndex = 0;
+
+				if( g_endCard )
+					JumpStart.unsyncObject(g_endCard);
+
+				tossCard();
+			}
+
+			function deckSpawn()
+			{
+				if( !g_deck )
+					g_deck = this;
+
+				// Load the deck rig
+				g_deckRig = JumpStart.spawnInstance("models/SpookyMemory/deckrig.obj", {parent: this});
+				g_deckRig.JumpStart.blocksLOS = false;
+				g_deckRig.scale.multiplyScalar(this.scale.x);
+
+				g_deckRigVerts = g_deckRig.children[g_deckRig.children.length-1].geometry.vertices;
+
+				// Adjust scale of all the verts
+				var x;
+				for( x in g_deckRigVerts )
+				{
+					g_deckRigVerts[x].multiplyScalar(this.scale.x);
+				}
+
+				var mat = null;
+				for( mesh in g_deckRig.children )
+				{
+					mat = g_deckRig.children[mesh].material;
+
+					if( !mat )
+						continue;
+
+					mat.visible = false;
+					mat.transparent = true;
+				}
+			}
+
 			function highlightOnObject()
 			{
 				var myColor = new THREE.Color(1.5, 1.5, 1.5);
@@ -151,34 +213,39 @@
 
 				if( g_lastTossedIndex > g_cardMap.length-2 )
 				{
-					console.log("Game state 1xx");
+					//console.log("Game state 1xx");
 					g_gameState = 1;
 					return;
 				}
 
 				// Spawn a card
-				var randoCard = Math.floor((Math.random() * 5) + 1) - 1;
-				var card = JumpStart.spawnInstance("models/SpookyMemory/card" + randoCard + ".obj");
-				card.JumpStart.blocksLOS = false;
+				//var randoCard = Math.floor((Math.random() * 5) + 1) - 1;
+				//var card = JumpStart.spawnInstance("models/SpookyMemory/card" + randoCard + ".obj");
+
+				var deckCard = Math.floor((Math.random() * g_cardsInDeck.length) + 1) - 1;
+
+				var card = JumpStart.spawnInstance("models/SpookyMemory/card" + g_cardsInDeck[deckCard] + ".obj");
+				g_cardsInDeck.splice(deckCard, 1);
+
+				card.JumpStart.gridIndex = g_lastTossedIndex;
+				card.JumpStart.pathSync = true;
+				//card.JumpStart.blocksLOS = false;
 				card.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
 				card.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+				card.JumpStart.onSpawn["cardSpawned"] = cardSpawned;
+				card.JumpStart.onNetworkRemoved["cardRemoved"] = cardRemoved;
 
 				card.position.copy(g_deck.position);
 				card.rotation.copy(g_deck.rotation);
 				card.rotateY(Math.PI);
 				card.scale.copy(g_deck.scale);
-				card.userData.isTossing = true;
-
+//				card.userData.isTossing = true;
+/*
 				var targetPos = g_deckRigVerts[g_cardMap[0]];
 				card.translateX(targetPos.x);
 				card.translateY(targetPos.y);
 				card.translateZ(targetPos.z);
-
-				if( !g_tossTarget )
-				{
-					g_tossTarget = JumpStart.spawnInstance("models/SpookyMemory/pixel1.obj");
-					g_tossTarget.scale.set(0.0001, 0.0001, 0.0001);
-				}
+				*/
 
 				g_tossTarget.position.copy(g_deck.position);
 				g_tossTarget.rotation.copy(g_deck.rotation);
@@ -222,38 +289,105 @@
 
 				var dist = g_tossTarget.position.distanceTo(posOriginal);
 
-				card.userData.targetPos = new THREE.Vector3().copy(g_tossTarget.position);
-				card.userData.targetPosOriginal = posOriginal;
+				card.JumpStart.targetPos = new THREE.Vector3().copy(g_tossTarget.position);
+				card.JumpStart.targetPosOriginal = posOriginal;
 				card.userData.targetPosLerp = 0.0;
-				card.userData.targetPosLerpTime = dist / (50 + (0.9 * dist));
+				card.JumpStart.targetPosLerpTime = dist / (50 + (0.9 * dist));
 				card.userData.targetPosCallback = function()
 				{
-					this.userData.isTossing = false;
+//					this.userData.isTossing = false;
+					this.JumpStart.sync();
 					tossCard();
 
 					card.userData.targetPosCallback = null;
 				};
 
 				// LERP the rotation
-				card.userData.targetRot = new THREE.Vector3(0, 2.0 * Math.PI, 0);
-				card.userData.targetRotOriginal = new THREE.Vector3().copy(card.rotation);
+				card.JumpStart.targetRot = new THREE.Vector3(0, 2.0 * Math.PI, 0);
+				card.JumpStart.targetRotOriginal = new THREE.Vector3().copy(card.rotation);
 				card.userData.targetRotLerp = 0.0;
-				card.userData.targetRotLerpTime = card.userData.targetPosLerpTime;
+				card.JumpStart.targetRotLerpTime = card.JumpStart.targetPosLerpTime;
 
-				card.JumpStart.blocksLOS = true;
-				card.JumpStart.onCursorDown = function()
+				//card.JumpStart.blocksLOS = true;
+				card.JumpStart.onCursorDown["cardClicked"] = cardClicked;
+
+				card.JumpStart.onTick["cardTick"] = cardTick;
+				card.JumpStart.sync();
+			}
+
+			function cardClicked()
+			{
+				// GAME RULES FOR THIS PIECE
+				// 1. This card must be on the ground, facing down.
+				// 2. This card must be all the way up and expanded.
+
+				//var testPoint = new THREE.Vector3().copy(g_deckRigVerts[2]);
+				var testPoint = new THREE.Vector3().copy(g_deckRigVerts[g_cardMap[this.JumpStart.gridIndex]]);
+				testPoint.add(g_deck.position);
+//				testPoint.x = this.position.x;
+//				testPoint.z = this.position.z;
+
+				//console.log(g_deckRigVerts[g_cardMap[this.JumpStart.gridIndex]]);
+
+				var ruleFired = 0;
+
+				// RULE 1: Card is at its starting point.
+				if( testPoint.equals(this.position) )
+					ruleFired = 1;
+
+				// RULE 2: Card is at its end point.
+				if( !ruleFired )
 				{
-					if( g_gameState !== 1 )
+					testPoint.copy(g_deckRigVerts[g_cardMap[g_cardMap.length-1]]);
+					testPoint.add(g_deck.position);
+
+					//if( testPoint.equals(this.position) )
+					if( testPoint.distanceTo(this.position) < 1.0 * g_worldScale )
+						ruleFired = 2;
+				}
+
+				if( !ruleFired)
+					return;
+
+				if( ruleFired === 1 )
+				{
+					// Make sure the card is facing down
+					var dif = this.rotation.z / (Math.PI * 2.0);
+					dif = (dif > 0) ? Math.floor(dif) : Math.ceil(dif);
+					dif = this.rotation.z - (dif * Math.PI * 2.0);
+
+					if( dif >= Math.PI / 180.0 || dif <= -Math.PI / 180.0 )
 						return;
 
-					console.log("Game state 2");
-					g_gameState = 2;
+					// Check to make sure EVERY card is at its starting point
+					var twistedCount = 0;
+					var i, card, dif;
+					for( i = 0; i < g_cards.length; i++ )
+					{
+						card = g_cards[i];
+
+						testPoint = new THREE.Vector3().copy(g_deckRigVerts[g_cardMap[card.JumpStart.gridIndex]]);
+						testPoint.add(g_deck.position);
+
+						if( testPoint.distanceTo(card.position) > 1.0 * g_worldScale )
+							return;
+
+						dif = card.rotation.z / (Math.PI * 2.0);
+						dif = (dif > 0) ? Math.floor(dif) : Math.ceil(dif);
+						dif = card.rotation.z - (dif * Math.PI * 2.0);
+
+						if( dif >= Math.PI / 180.0 || dif <= -Math.PI / 180.0 )
+							twistedCount++;
+					}
+
+					if( twistedCount > 1 )
+						return;
 
 					// LERP the scale
-					this.userData.targetScale = new THREE.Vector3(1.5, 1.5, 1.5);
-					this.userData.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
+					this.JumpStart.targetScale = new THREE.Vector3(1.5, 1.5, 1.5);
+					this.JumpStart.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
 					this.userData.targetScaleLerp = 0.0;
-					this.userData.targetScaleLerpTime = 1.0;
+					this.JumpStart.targetScaleLerpTime = 1.0;
 
 					this.userData.targetScaleAnim = [
 						{
@@ -282,10 +416,48 @@
 					g_tossTarget.up = new THREE.Vector3(0, 1, 0);
 					g_tossTarget.lookAt(g_localUser.lookOrigin);
 
-					this.userData.targetPos = new THREE.Vector3().copy(g_tossTarget.position);
-					this.userData.targetPosOriginal = new THREE.Vector3().copy(this.position);
+					this.JumpStart.targetPos = new THREE.Vector3().copy(g_tossTarget.position);
+					this.JumpStart.targetPosOriginal = new THREE.Vector3().copy(this.position);
 					this.userData.targetPosLerp = 0.0;
-					this.userData.targetPosLerpTime = 1.0;
+					this.JumpStart.targetPosLerpTime = 1.0;
+					this.userData.targetPosCallback = function()
+					{
+						if( this.JumpStart.modelFile !== "models/SpookyMemory/card0.obj" )
+						{
+							//console.log(cards.length);
+							// Check if there are only 3 cards left
+							if( g_cards.length === 3 )
+								g_endGame = true;
+						}
+						else
+						{
+							this.userData.targetPosAnim = null;
+
+							var lifeCard = JumpStart.spawnInstance("models/SpookyMemory/card0.obj");
+
+							lifeCard.position.copy(this.position);
+							lifeCard.rotation.copy(this.rotation);
+							lifeCard.scale.copy(this.scale);
+
+							stopAllPathAnim(this);
+							var thisCard = this;
+
+							g_endGame = true;
+							makeEndCard(lifeCard, false);
+							JumpStart.unsyncObject(thisCard);
+
+							var cardCopy = g_cards.slice();
+							var i, card;
+							for( i = 0; i < cardCopy.length; i++ )
+							{
+								card = cardCopy[i];
+								if( card === thisCard )
+									continue;
+
+								JumpStart.unsyncObject(card);
+							}
+						}
+					};
 
 					this.userData.targetPosAnim = [
 						{
@@ -299,31 +471,39 @@
 							targetPosOriginal: null,
 							targetPosLerp: 0.0,
 							targetPosLerpTime: 1.0,
-							targetPosCallback: function()
-							{
-								console.log("Game state 1");
-								g_gameState = 1;
-								this.targetPosCallback = null;
-							}
+							targetPosCallback: cardPutDown
 						}
 					];
 
 					// LERP the rotation
-					//this.userData.targetRot = new THREE.Vector3().copy(g_deck.rotation);
+					//this.JumpStart.targetRot = new THREE.Vector3().copy(g_deck.rotation);
 					g_tossTarget.rotateX(Math.PI / 2.0);
 					g_tossTarget.rotateZ(Math.PI);
-					this.userData.targetRot = new THREE.Vector3().copy(g_tossTarget.rotation);
-					//this.userData.targetRot.x += Math.PI / 2.0
-			//		this.userData.targetRot.z += Math.PI;
+					this.JumpStart.targetRot = new THREE.Vector3().copy(g_tossTarget.rotation);
+					//this.JumpStart.targetRot.x += Math.PI / 2.0
+			//		this.JumpStart.targetRot.z += Math.PI;
 
-					this.userData.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
+					this.JumpStart.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
 					this.userData.targetRotLerp = 0.0;
-					this.userData.targetRotLerpTime = 1.0;
+					this.JumpStart.targetRotLerpTime = 1.0;
+
+/*
+					// How will we land?
+					var i, card;
+					for( i = 0; i < g_cards.length; i++ )
+					{
+						card = g_cards[i];
+						if( card.JumpStart.gridIndex === this.JumpStart.gridIndex && card.position.rotation.z === Math.PI )
+						{
+
+						}
+					}
+					*/
 
 					// Setup the rest of the animation
 					this.userData.targetRotAnim = [
 						{
-							targetRot: new THREE.Vector3().copy(this.userData.targetRot),
+							targetRot: new THREE.Vector3().copy(this.JumpStart.targetRot),
 							targetRotOriginal: null,
 							targetRotLerp: 0.0,
 							targetRotLerpTime: 2.0
@@ -335,57 +515,598 @@
 							targetRotLerpTime: 1.0
 						}
 					];
-				};
 
-				card.JumpStart.onTick = function()
+					this.JumpStart.sync();
+				}
+				else if( ruleFired === 2 )
 				{
+console.log('fire 2!');
+
+					var dest = new THREE.Vector3().copy(g_deck.position).add(g_deckRigVerts[g_cardMap[this.JumpStart.gridIndex]]);
+					this.JumpStart.targetPos = dest;
+					this.JumpStart.targetPosOriginal = new THREE.Vector3().copy(this.position);
+					this.userData.targetPosLerp = 0.0;
+					this.JumpStart.targetPosLerpTime = 1.0;
+					this.userData.targetPosCallback = cardPutDown;
+					this.userData.targetPosAnim = null;
+
+					this.JumpStart.targetScale = new THREE.Vector3().copy(g_deck.scale);
+					this.JumpStart.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
+					this.userData.targetScaleLerp = 0.0;
+					this.JumpStart.targetScaleLerpTime = 1.0;
+					this.userData.targetScaleCallback = null;
+					this.userData.targetScaleAnim = null;
+
+					// Find a good rotation!!
+					g_tossTarget.position.copy(g_deck.position);
+					g_tossTarget.rotation.copy(g_deck.rotation);
+
+					var targetPos = g_deckRigVerts[g_cardMap[this.JumpStart.gridIndex]];
+					g_tossTarget.translateX(targetPos.x);
+					g_tossTarget.translateY(targetPos.y);
+					g_tossTarget.translateZ(targetPos.z);
+
+					g_tossTarget.rotateZ(Math.PI);
+
+					// Now use the rotation
+					this.JumpStart.targetRot = new THREE.Vector3().copy(g_tossTarget.rotation);
+					this.JumpStart.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
+					this.userData.targetRotLerp = 0.0;
+					this.JumpStart.targetRotLerpTime = 1.0;
+					this.userData.targetRotCallback = null;
+					this.userData.targetRotAnim = null;
+
+					this.JumpStart.sync();
 					/*
-					if( this.position.y <= g_worldOffset.y && this.JumpStart.physicsState !== 0 )
+					this.userData.targetPosCallback =  function()
 					{
-						this.position.y = g_worldOffset.y;
-						this.JumpStart.makeStatic();
-			*/
+						console.log("Game state 1");
+						g_gameState = 1;
+						this.targetPosCallback = null;
+					}
+					*/
+				}
+			}
 
+			function cardPutDown()
+			{
+				//console.log("Card has been put down!!");
+				//console.log(this);
 
-			//			tossCard();
-			//		}
+				// WIN: There is exactly 1 other card facing up and it matches us.
+				// FAIL: Any other case.
+/*
+				var cardA = null;
+				var cardB = null;
 
+				var i, card;
+				for( i = 0; i < g_cards.length; i++ )
+				{
+					card = g_cards[i];
+					var dif = card.rotation.z / (Math.PI * 2.0);
+					dif = (dif > 0) ? Math.floor(dif) : Math.ceil(dif);
+					dif = card.rotation.z - (dif * Math.PI * 2.0);
+
+					if( dif > 0 )
+						dif -= Math.PI;
+					else
+						dif += Math.PI;
+			console.log("Dif here iszzz: " + dif);
+
+					if( dif < Math.PI / 180.0 && dif > -Math.PI / 180.0 )
+					{
+						if( !cardA )
+							cardA = card;
+						else
+						{
+							cardB = card;
+							break;
+						}
+					}
+				}
+
+				var win = (cardA && cardB && cardA.JumpStart.gridIndex === cardB.JumpStart.gridIndex);
+
+				if( win )
+					console.log("WIN!");
+				else
+				{
+					console.log("fail.");
+
+					// Flip both the cards back over.
+					if( cardA && cardB)
+					{
+						flipBackOver.call(cardA);
+						setTimeout(function(){ flipBackOver.call(cardB); }, 500);
+						//flipBackOver.call(cardB);
+					}
+					else if( cardA )
+					{
+						// stop our anmations over the network
+						stopAllPathAnim(cardA);
+
+						cardA.JumpStart.sync();
+					}
+				}
+				*/
+//console.log(g_cards.length);
+				var i, card;
+				for( i = 0; i < g_cards.length; i++ )
+				{
+//					console.log()
+					card = g_cards[i];
+					if( card === this )
+						continue;
+
+//					if( card.JumpStart.gridIndex !== this.JumpStart.gridIndex )
+//						continue;
+
+					var dif = card.rotation.z / (Math.PI * 2.0);
+					dif = (dif > 0) ? Math.floor(dif) : Math.ceil(dif);
+					dif = card.rotation.z - (dif * Math.PI * 2.0);
+
+					if( dif > 0 )
+						dif -= Math.PI;
+					else
+						dif += Math.PI;
+
+					if( dif < Math.PI / 180.0 && dif > -Math.PI / 180.0 )
+					{
+						//console.log(this.JumpStart.gridIndex + " vs " + card.JumpStart.gridIndex);
+						// Check if we are a match.
+						if( this.JumpStart.modelFile !== card.JumpStart.modelFile)
+						{
+							var thisCard = this;
+							setTimeout(function() { flipBackOver.call(thisCard); }, 500);
+							setTimeout(function() { flipBackOver.call(card); }, 1000);
+						}
+						else
+						{
+							var thisCard = this;
+							JumpStart.unsyncObject(thisCard);
+							JumpStart.unsyncObject(card);
+						}
+
+						return;
+					}
+				}
+
+				this.JumpStart.sync();
+			}
+
+			function stopAllPathAnim(cardA)
+			{
+				cardA.JumpStart.targetPos = new THREE.Vector3().copy(cardA.position);
+				cardA.JumpStart.targetPosOriginal = new THREE.Vector3().copy(cardA.position);
+				cardA.JumpStart.targetPosLerp = 0.0;
+				cardA.userData.targetPosCallback = null;
+				//delete cardA.userData.targetPosAnim;
+				cardA.userData.targetPosAnim = null;
+
+				cardA.JumpStart.targetRot = new THREE.Vector3().copy(cardA.rotation);
+				cardA.JumpStart.targetRotOriginal = new THREE.Vector3().copy(cardA.rotation);
+				cardA.JumpStart.targetRotLerp = 0.0;
+				cardA.userData.targetRotCallback = null;
+				cardA.userData.targetRotAnim = null;
+				//delete cardA.userData.targetRotAnim;
+
+				cardA.JumpStart.targetScale = new THREE.Vector3().copy(cardA.scale);
+				cardA.JumpStart.targetScaleOriginal = new THREE.Vector3().copy(cardA.scale);
+				cardA.JumpStart.targetScaleLerp = 0.0;
+				cardA.userData.targetScaleCallback = null;
+				cardA.userData.targetScaleAnim = null;
+				//delete cardA.userData.targetScaleAnim;
+
+				// Object still must be synced to save changes!!
+			}
+
+			function flipBackOver()
+			{
+				//console.log("Flip this over: ");
+				// LERP the scale
+				this.JumpStart.targetScale = new THREE.Vector3().copy(g_deck.scale);
+				this.JumpStart.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
+				this.userData.targetScaleLerp = 0.0;
+				this.JumpStart.targetScaleLerpTime = 0.5;
+
+				// LERP the position
+				g_tossTarget.position.copy(this.position);
+				g_tossTarget.rotation.copy(this.rotation);
+
+				g_tossTarget.translateY(-30);
+				g_tossTarget.translateX(-30);
+
+	//			var pos = new THREE.Vector3().copy(this.position);
+//				pos.y += 30;
+	//			pos.x += 30;
+				//console.log(g_tossTarget.position);
+
+				g_tossTarget.rotateZ(-Math.PI / 2.0);
+
+				this.JumpStart.targetPos = new THREE.Vector3().copy(g_tossTarget.position);
+				this.JumpStart.targetPosOriginal = new THREE.Vector3().copy(this.position);
+				this.userData.targetPosLerp = 0.0;
+				this.JumpStart.targetPosLerpTime = 0.5;
+
+				this.userData.targetPosAnim = [
+					{
+						targetPos: new THREE.Vector3().copy(this.position),
+						targetPosOriginal: null,
+						targetPosLerp: 0.0,
+						targetPosLerpTime: 0.5,
+						targetPosCallback: function()
+						{
+							stopAllPathAnim(this);
+							this.JumpStart.sync();
+						}
+					}
+				];
+
+				// LERP the rotation
+				this.JumpStart.targetRot = new THREE.Vector3().copy(g_tossTarget.rotation);
+				this.JumpStart.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
+				this.userData.targetRotLerp = 0.0;
+				this.JumpStart.targetRotLerpTime = 0.5;
+
+				g_tossTarget.rotateZ(-Math.PI / 2.0);
+
+				this.userData.targetRotAnim = [
+					{
+						targetRot: new THREE.Vector3().copy(g_tossTarget.rotation),
+						targetRotOriginal: null,
+						targetRotLerp: 0.0,
+						targetRotLerpTime: 0.5,
+						targetRotCallback: function()
+						{
+							stopAllPathAnim(this);
+							this.JumpStart.sync();
+						}
+					}
+				];
+
+				this.JumpStart.sync();
+			}
+
+			function cardSpawned()
+			{
+
+				//console.log("Spawning " + this.JumpStart.modelFile);
+				g_cards.push(this);
+			}
+
+			function lifeTick()
+			{
+				if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.targetPosLerp !== 1.0 )
+				{
+					//console.log("lerp it!");
 					doScaleLerp.call(this);
 					doRotationLerp.call(this);
-
-					var oldY = null;
-					if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.isTossing )
-						oldY = this.position.y;
-
 					doPositionLerp.call(this);
+				}
+				else
+				{
+					this.rotateZ(1.0 * g_deltaTime);
+					//console.log("spin");
+				}
+			}
 
-					if( oldY )
+			function newDeal()
+			{
+				dealPlease();
+				JumpStart.unsyncObject(this);
+			}
+
+			function lifeSpawn()
+			{
+				if( !g_endCard )
+					g_endCard = this;
+
+				if( this.JumpStart.modelFile === "models/SpookyMemory/card0.obj" )
+				{
+					document.getElementById("gameMsg").innerHTML = "<img src='misc/youlose.png' />";
+					//console.log("YOU LOSE!");
+				}
+				else
+				{				
+					document.getElementById("gameMsg").innerHTML = "<img src='misc/youwin.png' />";
+					//console.log("YOU WIN!");
+//					this.userData.targetPosLerp = 0.0;
+//					this.userData.targetScaleLerp = 0.0;
+//					this.userData.targetRotLerp = 0.0;
+				}
+			}
+
+			function winRemoved()
+			{
+				if( g_endCard === this )
+					g_endCard = null;
+
+				document.getElementById("gameMsg").innerHTML = "";
+				g_endGame = false;
+
+				g_scene.remove(this);
+			}
+
+			function cardRemoved()
+			{
+//				console.log(arguments);
+//				console.log("Removing: " + this.JumpStart.modelFile);
+				g_cards.splice(g_cards.indexOf(this), 1);
+//				console.log(g_cards.length + " cards left.");
+
+				// Make some particles!!
+				var i, particle;
+				for( i = 0; i < 16; i++ )
+				{
+					particle = JumpStart.spawnInstance("models/SpookyMemory/pixel1.obj");
+					particle.JumpStart.blocksLOS = false;
+					particle.position.copy(this.position);
+					particle.rotation.copy(this.rotation);
+
+					var scale = Math.random();
+					scale *= 0.7;
+
+					if( scale < 0.5 )
+						scale = 0.5;
+
+					particle.scale.multiplyScalar(scale);
+
+					var randoX = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoX *= -1.0;
+
+					var randoY = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoY *= -1.0;
+
+					var randoZ = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoZ *= -1.0;
+
+					particle.translateX(randoX);
+
+					if( randoY > 0 )
+						particle.translateY(randoY);
+
+					particle.translateZ(randoZ);
+
+					particle.position.y = this.position.y;
+
+			//		ball.lookAt(particle.position);
+			//		particle.rotation.copy(ball.rotation);
+
+					particle.lookAt(this.position);
+			//		particle.rotation.multiplyScalar(-1.0);
+
+					particle.position.y = this.position.y;// 15.0;
+
+					particle.userData.shock = 2.0;
+					particle.userData.life = 0.05;
+					particle.scale.multiplyScalar(10.0);
+
+					particle.JumpStart.onTick = function()
 					{
-						var scalar = Math.abs(0.5 - this.userData.targetPosLerp);
-						var yPos = this.position.y;
+						particle.userData.shock -= g_deltaTime;
 
-						if( this.userData.targetPosLerp <= 0.5 )
+						if( particle.userData.shock <= 0.0 )
 						{
-							yPos = oldY + (700.0 * g_deltaTime * scalar);
-						}
-						else if( this.userData.targetPosLerp > 0.5 && this.userData.targetPosLerp < 1.0 )
-						{
-							yPos = oldY - (700.0 * g_deltaTime * scalar);
-						}
+							if( this.userData.hasOwnProperty("will") )
+								this.userData.will -= 1.0 * g_deltaTime;
 
-						if( yPos < this.userData.targetPos.y )
-							this.position.y = this.userData.targetPos.y;
+							if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+							{
+								var randoPitch = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoPitch *= -1.0;
+
+								var randoYaw = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoYaw *= -1.0;
+
+								var randoRoll = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoRoll *= -1.0;
+
+								this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+								this.userData.will = 3.0 * Math.random();
+							}
+
+							this.userData.life -= g_deltaTime;
+							if( this.userData.life <= 0 )
+							{
+								// Leave this in will make it scale down x2 as fast after life is gone.
+								this.scale.x -= 6.0 * g_deltaTime;
+								this.scale.y -= 6.0 * g_deltaTime;
+								this.scale.z -= 6.0 * g_deltaTime;
+							}
+
+							this.rotateX(this.userData.direction.x * g_deltaTime);
+							this.rotateY(this.userData.direction.y * g_deltaTime);
+							this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+							this.translateZ(15.0 * g_deltaTime);
+							this.position.y += 10.0 * g_deltaTime;
+						}
 						else
-							this.position.y = yPos;
+						{
+							this.translateZ(200.0 * g_deltaTime);
+						}
+
+						this.scale.x -= 6.0 * g_deltaTime;
+						this.scale.y -= 6.0 * g_deltaTime;
+						this.scale.z -= 6.0 * g_deltaTime;
+
+						if( this.scale.x <= 0.1 )
+							g_scene.remove(this);
+					};
+				}
+
+				// Is there only 1 card left?
+				if( g_cards.length === 1 && !g_endCard && g_endGame )
+				{
+					g_endGame = false;
+
+					var thisCard = g_cards[0];
+
+					var testPoint = new THREE.Vector3().copy(g_deckRigVerts[g_cardMap[thisCard.JumpStart.gridIndex]]);
+					testPoint.add(g_deck.position);
+
+					if( testPoint.equals(thisCard.position) )
+					{
+
+						var lifeCard = JumpStart.spawnInstance("models/SpookyMemory/card.obj");
+						//lifeCard.JumpStart.
+
+						lifeCard.position.copy(thisCard.position);
+						lifeCard.rotation.copy(thisCard.rotation);
+						lifeCard.scale.copy(thisCard.scale);
+
+						JumpStart.unsyncObject(thisCard);
+
+						//console.log("remove card 0 of " + g_cards.length);
+//						stopAllPathAnim(thisCard);
+						makeEndCard(lifeCard, true);
+
+//						JumpStart.unsyncObject(thisCard);
 					}
-				};
+				}
+
+				g_scene.remove(this);
+			}
+
+			function makeEndCard(card, animate)
+			{
+				// LERP the scale
+				card.JumpStart.onSpawn["lifeSpawn"] = lifeSpawn;
+				card.JumpStart.onTick["lifeTick"] = lifeTick;
+				card.JumpStart.onCursorDown["newDeal"] = newDeal;
+				card.JumpStart.onNetworkRemoved["winRemoved"] = winRemoved;
+				card.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+				card.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+
+				if( animate )
+				{
+					//console.log("animated!!");
+					card.JumpStart.pathSync = true;
+					card.JumpStart.targetScale = new THREE.Vector3(1.5, 1.5, 1.5);
+					card.JumpStart.targetScaleOriginal = new THREE.Vector3().copy(card.scale);
+					card.userData.targetScaleLerp = 0.0;
+					card.JumpStart.targetScaleLerpTime = 2.0;
+
+					// LERP the position
+					g_tossTarget.position.copy(g_deck.position);
+					g_tossTarget.rotation.copy(g_deck.rotation);
+
+					var targetPos = g_deckRigVerts[g_cardMap[g_cardMap.length-1]];
+					g_tossTarget.translateX(targetPos.x);
+					g_tossTarget.translateY(targetPos.y);
+					g_tossTarget.translateZ(targetPos.z);
+
+					g_tossTarget.up = new THREE.Vector3(0, 1, 0);
+					g_tossTarget.lookAt(g_localUser.lookOrigin);
+
+					card.JumpStart.targetPos = new THREE.Vector3().copy(g_tossTarget.position);
+					card.JumpStart.targetPosOriginal = new THREE.Vector3().copy(card.position);
+					card.userData.targetPosLerp = 0.0;
+					card.JumpStart.targetPosLerpTime = 2.0;
+					card.userData.targetPosCallback = function()
+					{
+						stopAllPathAnim(this);
+
+						this.JumpStart.pathSync = false;
+						this.JumpStart.sync();
+					};
+
+					// LERP the rotation
+					g_tossTarget.rotateX(Math.PI / 2.0);
+					g_tossTarget.rotateZ(Math.PI);
+					card.JumpStart.targetRot = new THREE.Vector3().copy(g_tossTarget.rotation);
+					card.JumpStart.targetRotOriginal = new THREE.Vector3().copy(card.rotation);
+					card.userData.targetRotLerp = 0.0;
+					card.JumpStart.targetRotLerpTime = 2.0;
+				}
+//console.log("a");
+				g_endCard = card;
+				card.JumpStart.sync();
+//console.log("b");
+			}
+
+//var printedstuff = new Array();
+//var testerCard = null;
+			function cardTick()
+			{
+				/*
+				if( printedstuff.indexOf(this) === -1 )
+				{
+					printedstuff.push(this);
+					console.log("ITEM");
+					console.log(this);
+				}
+				*/
+//				if( !testerCard )
+//					testerCard = this;
+
+//				if( this !== testerCard )
+//					return;
+
+				//console.log("tick");
+//				console.log(this.userData.targetPosLerp);
+//				console.log(this.JumpStart.targetPosOriginal);
+//				console.log(this.JumpStart.targetPos);
+//				delete this.JumpStart.onTick;
+//				this.JumpStart.sync();
+//				return;
+
+				/*
+				if( this.position.y <= g_worldOffset.y && this.JumpStart.physicsState !== 0 )
+				{
+					this.position.y = g_worldOffset.y;
+					this.JumpStart.makeStatic();
+		*/
+
+
+		//			tossCard();
+		//		}
+
+				doScaleLerp.call(this);
+				doRotationLerp.call(this);
+
+				var oldY = null;
+				var goodIsTossing = (g_deck && this.JumpStart.hasOwnProperty("targetPosOriginal") && g_deck.position.distanceTo(this.JumpStart.targetPosOriginal) <= 1.0 * g_worldScale);
+
+				//if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.isTossing )
+				if( this.userData.hasOwnProperty("targetPosLerp") && goodIsTossing )
+					oldY = this.position.y;
+
+				doPositionLerp.call(this);
+
+				if( oldY )
+				{
+					var scalar = Math.abs(0.5 - this.userData.targetPosLerp);
+					var yPos = this.position.y;
+
+					if( this.userData.targetPosLerp <= 0.5 )
+					{
+						yPos = oldY + (700.0 * g_deltaTime * scalar);
+					}
+					else if( this.userData.targetPosLerp > 0.5 && this.userData.targetPosLerp < 1.0 )
+					{
+						yPos = oldY - (700.0 * g_deltaTime * scalar);
+					}
+
+					if( yPos < this.JumpStart.targetPos.y )
+						this.position.y = this.JumpStart.targetPos.y;
+					else
+						this.position.y = yPos;
+				}
 			}
 
 			function doScaleLerp()
 			{
+				//console.log("scale lerp");
 				if( this.userData.hasOwnProperty("targetScaleLerp") && this.userData.targetScaleLerp < 1.0 )
 				{
-					this.userData.targetScaleLerp += (1.0/this.userData.targetScaleLerpTime) * g_deltaTime;
+					this.userData.targetScaleLerp += (1.0/this.JumpStart.targetScaleLerpTime) * g_deltaTime;
 
 					var justFinished = false;
 					if( this.userData.targetScaleLerp >= 1.0 )
@@ -394,21 +1115,21 @@
 						justFinished = true;
 					}
 
-					this.scale.lerpVectors(this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
+					this.scale.lerpVectors(this.JumpStart.targetScaleOriginal, this.JumpStart.targetScale, this.userData.targetScaleLerp);
 
 					if( justFinished )
 					{
-						if( this.userData.hasOwnProperty("targetScaleAnim") && this.userData.targetScaleAnim.length > 0 )
+						if( this.userData.hasOwnProperty("targetScaleAnim") && this.userData.targetScaleAnim && this.userData.targetScaleAnim.length > 0 )
 						{
 							var nextTarget = this.userData.targetScaleAnim.shift();
 							if( !nextTarget.targetScaleOriginal )
 								nextTarget.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
 
 							// Set our new targets.
-							this.userData.targetScale.copy(nextTarget.targetScale);
-							this.userData.targetScaleOriginal.copy(nextTarget.targetScaleOriginal);
+							this.JumpStart.targetScale.copy(nextTarget.targetScale);
+							this.JumpStart.targetScaleOriginal.copy(nextTarget.targetScaleOriginal);
 							this.userData.targetScaleLerp = nextTarget.targetScaleLerp;
-							this.userData.targetScaleLerpTime = nextTarget.targetScaleLerpTime;
+							this.JumpStart.targetScaleLerpTime = nextTarget.targetScaleLerpTime;
 						}
 					}
 				}
@@ -418,7 +1139,7 @@
 			{
 				if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.targetPosLerp < 1.0 )
 				{
-					this.userData.targetPosLerp += (1.0/this.userData.targetPosLerpTime) * g_deltaTime;
+					this.userData.targetPosLerp += (1.0/this.JumpStart.targetPosLerpTime) * g_deltaTime;
 
 					var justFinished = false;
 					if( this.userData.targetPosLerp >= 1.0 )
@@ -427,7 +1148,7 @@
 						justFinished = true;
 					}
 
-					this.position.lerpVectors(this.userData.targetPosOriginal, this.userData.targetPos, this.userData.targetPosLerp);
+					this.position.lerpVectors(this.JumpStart.targetPosOriginal, this.JumpStart.targetPos, this.userData.targetPosLerp);
 
 					if( justFinished )
 					{
@@ -436,19 +1157,21 @@
 
 						this.userData.targetPosCallback = null;
 
-						if( this.userData.hasOwnProperty("targetPosAnim") && this.userData.targetPosAnim.length > 0 )
+						if( this.userData.hasOwnProperty("targetPosAnim") && this.userData.targetPosAnim && this.userData.targetPosAnim.length > 0 )
 						{
 							var nextTarget = this.userData.targetPosAnim.shift();
 							if( !nextTarget.targetPosOriginal )
 								nextTarget.targetPosOriginal = new THREE.Vector3().copy(this.position);
 
 							// Set our new targets.
-							this.userData.targetPos.copy(nextTarget.targetPos);
-							this.userData.targetPosOriginal.copy(nextTarget.targetPosOriginal);
+							this.JumpStart.targetPos.copy(nextTarget.targetPos);
+							this.JumpStart.targetPosOriginal.copy(nextTarget.targetPosOriginal);
 							this.userData.targetPosLerp = nextTarget.targetPosLerp;
-							this.userData.targetPosLerpTime = nextTarget.targetPosLerpTime;
+							this.JumpStart.targetPosLerpTime = nextTarget.targetPosLerpTime;
 							if( typeof nextTarget.targetPosCallback === "function" )
 								this.userData.targetPosCallback = nextTarget.targetPosCallback;
+
+							this.JumpStart.sync();
 						}
 					}
 				}
@@ -456,9 +1179,10 @@
 
 			function doRotationLerp()
 			{
+				//console.log("rot lerp");
 				if( this.userData.hasOwnProperty("targetRotLerp") && this.userData.targetRotLerp < 1.0 )
 				{
-					this.userData.targetRotLerp += (1.0/this.userData.targetRotLerpTime) * g_deltaTime;
+					this.userData.targetRotLerp += (1.0/this.JumpStart.targetRotLerpTime) * g_deltaTime;
 
 					var justFinished = false;
 					if( this.userData.targetRotLerp >= 1.0 )
@@ -467,26 +1191,33 @@
 						justFinished = true;
 					}
 
-					var myQuaternionA = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
-					var myQuaternionB = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
+					var myQuaternionA = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.JumpStart.targetRotOriginal, 'XYZ'));
+					var myQuaternionB = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.JumpStart.targetRot, 'XYZ'));
 
 					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
 					this.quaternion.copy(myQuaternionA);
-			//		this.rotation.lerpVectors(this.userData.targetRotOriginal, this.userData.targetRot, this.userData.targetRotLerp);
+			//		this.rotation.lerpVectors(this.JumpStart.targetRotOriginal, this.JumpStart.targetRot, this.userData.targetRotLerp);
 
 					if( justFinished )
 					{
-						if( this.userData.hasOwnProperty("targetRotAnim") && this.userData.targetRotAnim.length > 0 )
+						if( typeof this.userData.targetRotCallback === "function" )
+							this.userData.targetRotCallback.call(this);
+
+						this.userData.targetRotCallback = null;
+
+						if( this.userData.hasOwnProperty("targetRotAnim") && this.userData.targetRotAnim && this.userData.targetRotAnim.length > 0 )
 						{
 							var nextTarget = this.userData.targetRotAnim.shift();
 							if( !nextTarget.targetRotOriginal )
 								nextTarget.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
 
 							// Set our new targets.
-							this.userData.targetRot.copy(nextTarget.targetRot);
-							this.userData.targetRotOriginal.copy(nextTarget.targetRotOriginal);
+							this.JumpStart.targetRot.copy(nextTarget.targetRot);
+							this.JumpStart.targetRotOriginal.copy(nextTarget.targetRotOriginal);
 							this.userData.targetRotLerp = nextTarget.targetRotLerp;
-							this.userData.targetRotLerpTime = nextTarget.targetRotLerpTime;
+							this.JumpStart.targetRotLerpTime = nextTarget.targetRotLerpTime;
+							if( typeof nextTarget.targetRotCallback === "function" )
+								this.userData.targetRotCallback = nextTarget.targetRotCallback;
 						}
 					}
 				}

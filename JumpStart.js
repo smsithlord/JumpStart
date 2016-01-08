@@ -1,5 +1,5 @@
 // Declare some globals
-var g_materialCreator, g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_crosshair, g_lookHit, g_numSyncedInstances, g_networkReady, g_floorPlane, g_roofPlane, g_westPlane, g_northPlane, g_eastPlane, g_southPlane, g_hoveredObject;
+var g_gamepadsEnabled, g_gamepads, g_activeGamepad, g_materialCreator, g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_crosshair, g_lookHit, g_numSyncedInstances, g_networkReady, g_floorPlane, g_roofPlane, g_westPlane, g_northPlane, g_eastPlane, g_southPlane, g_hoveredObject;
 
 // Extend the window object.
 window.JumpStart = new jumpStart();
@@ -35,8 +35,8 @@ else
 
 	window.addEventListener( 'resize', function() { JumpStart.onWindowResize(); }, false );
 	window.addEventListener( 'mousemove', function(e) { JumpStart.onMouseMove(e); }, false);
-	window.addEventListener( 'mousedown', function(e) { JumpStart.onMouseDown(e); }, false);
-	window.addEventListener( 'mouseup', function(e) { JumpStart.onMouseUp(e); }, false);
+	window.addEventListener( 'mousedown', function(e) { JumpStart.onMouseDown(e); e.preventDefault(); return false; }, false);
+	window.addEventListener( 'mouseup', function(e) { JumpStart.onMouseUp(e); e.preventDefault(); return false; }, false);
 	document.body.style.backgroundColor = "rgba(0, 0, 0, 1.0)";
 }
 
@@ -67,9 +67,17 @@ function jumpStart()
 	this.infoSlate = null;
 	this.requestedRoomId = null;
 	this.fpsSlate = null;
+	this.webLook = false;
+	this.webLookPrev = null;
+	this.webMouse = null;
+	this.gamepads = null;
+	this.gamepadsEnabled = false;
+	this.activeGamepad = null;
+	this.boundFadeObjects = new Array();
 
 	// Any properties of a scene object's JumpStart sub-object that are NOT whitelisted get auto-synced.
-	this.noSyncProperties = ["addDataListener", "setTint", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
+	//this.noSyncProperties = ["addDataListener", "setTint", "setColor", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
+	this.noSyncProperties = ["addDataListener", "setTint", "setColor", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
 
 	this.networkReady = false;	// Know if we are networked & ready to go.
 	this.localDataListeners = {};	// Need to simulate network activity locally
@@ -103,6 +111,7 @@ function jumpStart()
 		"worldScale": 1.0,
 		"scaleWithEnclosure": false,
 		"showFPS": true,
+		"raycastEnabled": true,
 		"showCrosshair": true,
 		"showCursorPlanes": false,
 		"enabledCursorEvents":
@@ -138,6 +147,17 @@ function jumpStart()
 	this.worldOffset = new THREE.Vector3();
 	this.webMode = !(window.hasOwnProperty("altspace") && window.altspace.inClient);
 }
+
+jumpStart.prototype.makeInvisible = function(sceneObject)
+{
+	sceneObject.traverse(function(child)
+	{
+		if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+		{
+			child.material.visible = false;
+		}
+	}.bind(this));
+};
 
 jumpStart.prototype.connectToFirebase = function()
 {
@@ -347,8 +367,13 @@ jumpStart.prototype.spawnCursorPlane = function(userParams)
 	}
 	else
 	{
+		/*
 		cursorPlane = new THREE.Mesh(
 			new THREE.PlaneGeometry(params.width, params.height),
+			new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: this.options["showCursorPlanes"] })
+		);*/
+cursorPlane = new THREE.Mesh(
+			new THREE.BoxGeometry(params.width, params.height, depth),
 			new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: this.options["showCursorPlanes"] })
 		);
 	}
@@ -387,9 +412,19 @@ jumpStart.prototype.spawnCursorPlane = function(userParams)
 	return cursorPlane;
 };
 
-jumpStart.prototype.onMouseDown = function()
+jumpStart.prototype.onMouseDown = function(e)
 {
-	this.onCursorDown();
+	if( e.button === 0 )
+	{
+		this.onCursorDown();
+	}
+	else if( e.button === 2 )
+	{
+//		this.webLook = true;
+
+		var pos = new THREE.Vector3().copy(this.cursorRay.origin).add(this.cursorRay.direction);
+		g_camera.lookAt(pos);
+	}
 };
 
 jumpStart.prototype.onCursorDown = function()
@@ -398,7 +433,30 @@ jumpStart.prototype.onCursorDown = function()
 		this.onCursorUp();
 
 	// FIXME: Add options for how non-JumpStart objects interact with raycasting and mouse events.
-	var intersects = this.rayCaster.intersectObjects(this.scene.children, true);
+	var intersects;
+	if( this.options.raycastEnabled )
+	{
+		if( typeof g_rayCastObjects !== "undefined" )
+		{
+			/*
+			var rayCastObjects = g_rayCastObjects.slice(0);
+			rayCastObjects.push(this.floorPlane);
+			rayCastObjects.push(this.roofPlane);
+			rayCastObjects.push(this.westPlane);
+			rayCastObjects.push(this.northPlane);
+			rayCastObjects.push(this.eastPlane);
+			rayCastObjects.push(this.southPlane);
+
+			intersects = this.rayCaster.intersectObjects(rayCastObjects, true);
+			*/
+
+			intersects = this.rayCaster.intersectObjects(g_rayCastObjects, true);
+		}
+		else
+			intersects = this.rayCaster.intersectObjects(this.scene.children, true);
+	}
+	else
+		intersects = this.rayCaster.intersectObjects([this.floorPlane, this.roofPlane, this.westPlane, this.northPlane, this.eastPlane, this.southPlane], true);
 
 	var sceneObject;
 	var x, y;
@@ -431,9 +489,16 @@ jumpStart.prototype.onCursorDown = function()
 	}
 };
 
-jumpStart.prototype.onMouseUp = function()
+jumpStart.prototype.onMouseUp = function(e)
 {
-	this.onCursorUp();
+	if( e.button === 0 )
+	{
+		this.onCursorUp();
+	}
+	else if( e.button === 2 )
+	{
+		this.webLook = false;
+	}
 };
 
 jumpStart.prototype.onCursorUp = function()
@@ -462,24 +527,72 @@ jumpStart.prototype.onMouseMove = function(e)
 		return;
 
 	// Fill with 2D position for now
-	var mouse3D = new THREE.Vector3(0, 0, 0);
-	mouse3D.x = (e.clientX / window.innerWidth) * 2 - 1;
-	mouse3D.y = -(e.clientY / window.innerHeight) * 2 + 1;
-	mouse3D.z = 0.5;
+	if( !this.webLook )
+	{
+//		console.log(e.clientX + " " + e.clientY + " vs " + window.innerWidth + "  " + window.innerHeight);
+		var mouse3D = new THREE.Vector3(0, 0, 0);
+		mouse3D.x = (e.clientX / window.innerWidth) * 2 - 1;
+		mouse3D.y = -(e.clientY / window.innerHeight) * 2 + 1;
+		mouse3D.z = 0.5;
 
-	// Convert the 2D position to a 3D point
-	mouse3D.unproject(this.camera);
+		this.webMouse.x = mouse3D.x;
+		this.webMouse.y = mouse3D.y;
 
-	// Get a look vector from the camera to mouse3D
-	var direction = new THREE.Vector3();
-	direction = mouse3D.sub(this.camera.position).normalize();
+		// Convert the 2D position to a 3D point
+		mouse3D.unproject(this.camera);
 
-	this.futureCursorRay = { "origin": this.camera.position, "direction": direction };
+		// Get a look vector from the camera to mouse3D
+		var direction = new THREE.Vector3();
+		direction = mouse3D.sub(this.camera.position).normalize();
+
+		this.futureCursorRay = { "origin": this.camera.position, "direction": direction };
+	}
+	else
+	{
+		console.log("Delta: " + (this.webLookPrev.x - e.clientX));
+
+		var mouse3D = new THREE.Vector3(0, 0, 0);
+
+		var valX = (e.clientX / window.innerWidth) * 2 - 1;
+		if( valX > 0.0001 )
+			valX = (window.innerWidth / 2.0) + 1;
+		else if( valX < -0.0001 )
+			valX = (window.innerWidth / 2.0) - 1;
+
+		var valY = -(e.clientY / window.innerHeight) * 2 + 1;
+		if( valY > 0.0001 )
+			valY = (window.innerHeight / 2.0) - 1;
+		else if( valY < -0.0001 )
+			valY = (window.innerHeight / 2.0) + 1;
+
+		mouse3D.x = (valX / window.innerWidth) * 2 - 1;
+		mouse3D.y = -(valY / window.innerHeight) * 2 + 1;
+//		mouse3D.x = this.webMouse.x + ((this.webLookPrev.x - e.clientX) / 0.01);
+//		mouse3D.y = this.webMouse.y;// + (((this.webLookPrev.y - e.clientY) / window.innerHeight) * 2 + 1);
+		mouse3D.z = 0.5;
+
+		this.webMouse.x = mouse3D.x;
+		this.webMouse.y = mouse3D.y;
+		this.webLookPrev.x = e.clientX;
+		this.webLookPrev.y = e.clientY;
+
+		// Convert the 2D position to a 3D point
+		mouse3D.unproject(this.camera);
+
+		// Get a look vector from the camera to mouse3D
+		var direction = new THREE.Vector3();
+		direction = mouse3D.sub(this.camera.position).normalize();
+
+		this.futureCursorRay = { "origin": this.camera.position, "direction": direction };
+	}
 }
 
 jumpStart.prototype.onCursorMove = function(e)
 {
-	this.futureCursorRay = e.cursorRay;
+	if( e.hasOwnProperty("ray") )
+		this.futureCursorRay = e.ray;
+	else
+		this.futureCursorRay = e.cursorRay;	// Only needed until 0.1 is completely depreciated
 };
 
 jumpStart.prototype.processCursorMove = function()
@@ -509,7 +622,31 @@ jumpStart.prototype.processCursorMove = function()
 	// B. Raycast, then filter for eligible objects.
 	// Currently using option B cuz its like 3am right now...
 
-	var intersects = this.rayCaster.intersectObjects(this.scene.children, true);
+	var intersects;
+	var intersects;
+	if( this.options.raycastEnabled )
+	{
+		if( typeof g_rayCastObjects !== "undefined" )
+		{
+			/*
+			var rayCastObjects = g_rayCastObjects.slice(0);
+			rayCastObjects.push(this.floorPlane);
+			rayCastObjects.push(this.roofPlane);
+			rayCastObjects.push(this.westPlane);
+			rayCastObjects.push(this.northPlane);
+			rayCastObjects.push(this.eastPlane);
+			rayCastObjects.push(this.southPlane);
+
+			intersects = this.rayCaster.intersectObjects(rayCastObjects, true);
+			*/
+
+			intersects = this.rayCaster.intersectObjects(g_rayCastObjects, true);
+		}
+		else
+			intersects = this.rayCaster.intersectObjects(this.scene.children, true);
+	}
+	else
+		intersects = this.rayCaster.intersectObjects([this.floorPlane, this.roofPlane, this.westPlane, this.northPlane, this.eastPlane, this.southPlane], true);
 
 	function unhoverObject(sceneObject)
 	{
@@ -525,6 +662,10 @@ jumpStart.prototype.processCursorMove = function()
 	{
 		if( intersects[x].object.hasOwnProperty("isCursorPlane") )
 		{
+//			console.log(intersects[x].object.blocksLOS);
+			if( intersects[x].object.hasOwnProperty("blocksLOS") && !intersects[x].object.blocksLOS )
+				continue;
+
 			var goodPoint = true;
 
 			// Make sure it's a INWARD surface
@@ -671,6 +812,9 @@ jumpStart.prototype.hideInfoSlate = function()
 
 jumpStart.prototype.destroyInfoSlate = function()
 {
+	if( !this.infoSlate )
+		return;
+	
 	this.infoSlate.className = "zoomOutOfLoading";
 
 	setTimeout(function()
@@ -733,14 +877,18 @@ jumpStart.prototype.initiate = function()
 	if( this.options["titleImageURL"] !== "" )
 	{
 		imgCount++;
-		html += "<div id='titleImageSlate' style='position: relative; left: 0; right: 0;''><center><img src='";
+		html += "<div id='titleImageSlate' style='position: relative; left: 0; right: 0;''><center><img id='titleImageElem' src='";
 		html += this.options["titleImageURL"];
 		html += "' onload='var elem = document.getElementById(\"loadingSlate\"); if( typeof elem.loadedImageCount === \"undefined\" ) elem.loadedImageCount = 0; elem.loadedImageCount++; if( elem.loadedImageCount == " + imgCount + " ) { elem.className = \"zoomIntoLoading\"; elem.style.display = \"block\"; JumpStart.finishInit(); }' /></center></div>";
 		//html += "' /></center></div>";
 	}
 
+	var logo = "jumpstartlogo.png";
+	if( !this.webMode )
+		logo = "loadingAlt.png";
+
 	html += "</td></tr><tr><td height='1%' align='center' valign='middle'>";
-	html += "<img src='misc/jumpstartlogo.png' id='loadingLogo' onload='var elem = document.getElementById(\"loadingSlate\"); if( typeof elem.loadedImageCount === \"undefined\" ) elem.loadedImageCount = 0; elem.loadedImageCount++; if( elem.loadedImageCount == " + imgCount + " ) { elem.className = \"zoomIntoLoading\"; elem.style.display = \"block\"; JumpStart.finishInit(); }' />";
+	html += "<img src='misc/" + logo + "' id='loadingLogo' onload='var elem = document.getElementById(\"loadingSlate\"); if( typeof elem.loadedImageCount === \"undefined\" ) elem.loadedImageCount = 0; elem.loadedImageCount++; if( elem.loadedImageCount == " + imgCount + " ) { elem.className = \"zoomIntoLoading\"; elem.style.display = \"block\"; JumpStart.finishInit(); }' />";
 	//html += "<img src='misc/jumpstartlogo.png' id='loadingLogo' />";
 	html += "</td></tr><tr><td align='center' valign='top' height='100'>";
 	html += "<div id='loadingMsg'>Initializing...</div>";
@@ -776,6 +924,10 @@ jumpStart.prototype.finishInit = function()
 			"scaledHeight": Math.round(commonVal * (1 / this.worldScale)),
 			"scaledDepth": Math.round(commonVal * (1 / this.worldScale))
 		};
+
+		this.webLookPrev = { "x": commonVal / 2.0, "y": commonVal / 2.0};
+		this.webMouse = {"x": commonVal / 2.0, "y": commonVal / 2.0}
+
 		this.localUser = { "userId": "WebUser" + Date.now(), "displayName": "WebUser", "trackingSkeleton": null };
 
 		this.localUser.displayName = "WebUser" + Date.now();
@@ -794,6 +946,44 @@ jumpStart.prototype.finishInit = function()
 			}
 		}
 		*/
+
+		// Web controls
+		/*
+var element = document.body;
+				var pointerlockchange = function ( event ) {
+
+					if ( document.pointerLockElement === element || document.mozPointerLockElement === element || document.webkitPointerLockElement === element ) {
+						controlsEnabled = true;
+						controls.enabled = true;
+						blocker.style.display = 'none';
+					} else {
+						controls.enabled = false;
+						blocker.style.display = '-webkit-box';
+						blocker.style.display = '-moz-box';
+						blocker.style.display = 'box';
+						instructions.style.display = '';
+					}
+
+					console.log("alpha");
+				};
+				var pointerlockerror = function ( event ) {
+					console.log("beta");
+//					instructions.style.display = '';
+				};
+				// Hook pointer lock state change events
+				document.addEventListener( 'pointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'mozpointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'webkitpointerlockchange', pointerlockchange, false );
+				document.addEventListener( 'pointerlockerror', pointerlockerror, false );
+				document.addEventListener( 'mozpointerlockerror', pointerlockerror, false );
+				document.addEventListener( 'webkitpointerlockerror', pointerlockerror, false );
+				setTimeout(function(){ document.body.requestPointerLock(); }, 10000);
+*/
+		document.body.addEventListener("contextmenu", function(e){
+			e.preventDefault();
+			return false;
+		});
+
 	}
 	else
 	{
@@ -832,7 +1022,8 @@ jumpStart.prototype.finishInit = function()
 	//	depth = this.enclosure.innerDepth;
 
 	// Offset us if we are in the personal browser
-	if( this.enclosure.innerDepth === 100 || this.enclosure.innerDepth === 300 )
+	//if( this.enclosure.innerDepth === 100 || this.enclosure.innerDepth === 300 )
+	if( this.enclosure.innerDepth === 1.0 )
 	{
 		this.worldOffset.z = depth / (-2.0);
 
@@ -845,6 +1036,8 @@ jumpStart.prototype.finishInit = function()
 	}
 	else
 		this.personalBrowser = false;
+
+//			console.log(this.enclosure.innerDepth);
 
 //	this.enclosure.bounds = {};
 //	this.enclosure.bounds.bottomCenter = new THREE.Vector3(0, (-this.enclosure.innerHeight / 2.0) * scaledRatio, 0);
@@ -882,7 +1075,7 @@ jumpStart.prototype.finishInit = function()
 	if ( this.webMode )
 	{
 		this.renderer = new THREE.WebGLRenderer({ alpha: true });
-		this.renderer.setClearColor( 0x00ff00, 0.1 );
+		this.renderer.setClearColor( 0x00ff00, 0.3 );
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
 		document.body.appendChild( this.renderer.domElement );
 
@@ -995,6 +1188,8 @@ jumpStart.prototype.finishInit = function()
 		this.eastPlane = eastPlane;
 	}
 
+	g_gamepads = this.gamepads;
+	g_gamepadsEnabled = this.gamepadsEnabled;
 	g_localUser = this.localUser;
 	g_worldOffset = this.worldOffset;
 	g_worldScale = this.worldScale;
@@ -1014,6 +1209,7 @@ jumpStart.prototype.finishInit = function()
 	g_northPlane = this.northPlane;
 	g_eastPlane = this.eastPlane;
 	g_southPlane = this.southPlane;
+	g_activeGamepad = this.activeGamepad;
 
 	// We are ready to rock-n-roll!!
 	this.initialized = true;
@@ -1073,18 +1269,28 @@ jumpStart.prototype.reallyFinishInit = function()
 {
 	function prepPrecache()
 	{
-		// WE ALSO HAVE SOME STUFF TO "CACHE" IF IN DEBUG MODE...
-		// Inject the css if in debug mode
-		if( JumpStart.options.debugMode )
+		if( !JumpStart.webMode )
 		{
-			JumpStart.debugui = new jumpStartDebugUI();
+			JumpStart.gamepadsEnabled = true;
 
-			var templateElem = document.getElementById("JumpStartDebugElements");
-			if( templateElem )
+			this.gamepads = altspace.getGamepads();
+			g_gamepads = this.gamepads;
+		}
+		else
+		{
+			// FIXME: This webMode check for controller support sucks!
+//			var gamepadSupportAvailable = !!navigator.webkitGetGamepads || !!navigator.webkitGamepads || !!navigator.getGamePads || !!navigator.gamepads;
+
+			JumpStart.gamepadsEnabled = true;//gamepadSupportAvailable;
+
+			if( JumpStart.gamepadsEnabled )
 			{
-				var container = document.createElement("div");
-				container.innerHTML = templateElem.innerHTML;
-				document.body.appendChild(container);
+				if( !!navigator.getGamepads )
+					this.gamepads = navigator.getGamepads();
+				else
+					this.gamepads = navigator.webkitGetGamepads();
+
+				g_gamepads = this.gamepads;
 			}
 		}
 
@@ -1166,47 +1372,10 @@ jumpStart.prototype.doneCaching = function()
 
 		if(  JumpStart.options.firebase.rootUrl !== "" && JumpStart.options.firebase.appId !== "" )
 		{
-			var readyRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey).child('ready');
-			readyRef.once("value", function(snapshot) {
-				var ready = snapshot.val();
+			JumpStartRoomCheck();
 
-				if( typeof ready !== "undefined" && ready )
-					JumpStart.localUser.firstUser = false;
-				else
-					JumpStart.localUser.firstUser = true;
-
-				if( JumpStart.firebaseSync.firebaseRoom )
-				{
-					if( !JumpStart.personalBrowser || !JumpStart.options.firebase["suppressPersonalBrowser"] )
-					{
-						var roomRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey);
-						roomRef.child("ready").set(true, function(errorObject)
-						{
-							if (errorObject) {
-								console.error("firebase operation failed", errorObject);
-								JumpStart.localUser.firstUser = false;
-							}
-
-							// Now we're ready for game logic
-							JumpStart.showLoadingMsg("Connected.");
-							onReady();
-						});
-					}
-					else
-					{
-						JumpStart.showLoadingMsg("Connected.");
-						onReady();
-					}
-				}
-				else
-				{
-					if( JumpStart.requestedRoomId )
-					{
-						JumpStart.showLoadingMsg("<font style='color: #ff0000; font-weight: 900;'>FAILED to connect to Firebase room.  Reloading...</font>");
-						location.reload();
-					}
-				}
-			});
+			if( !g_doneChecking )
+				g_checkRoom = setInterval(JumpStartRoomCheck, 2000);
 		}
 		else
 		{
@@ -1221,6 +1390,84 @@ jumpStart.prototype.doneCaching = function()
 	}
 };
 
+var g_doneChecking = false;
+var g_checkingRoom = false;
+var g_checkRoom = null;
+function JumpStartRoomCheck()
+{
+	if( g_checkingRoom )
+		return;
+
+	g_checkingRoom = true;
+	var readyRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey).child('ready');
+	readyRef.once("value", function(snapshot) {
+		var ready = snapshot.val();
+
+		if( typeof ready !== "undefined" && ready )
+			JumpStart.localUser.firstUser = false;
+		else
+			JumpStart.localUser.firstUser = true;
+
+		if( JumpStart.firebaseSync.firebaseRoom )
+		{
+			if( !JumpStart.personalBrowser || !JumpStart.options.firebase["suppressPersonalBrowser"] )
+			{
+				var roomRef = JumpStart.firebaseSync.firebaseRoot.child(JumpStart.firebaseSync.appId).child('rooms').child(JumpStart.firebaseSync.roomKey);
+				roomRef.child("ready").set(true, function(errorObject)
+				{
+					if (errorObject) {
+						console.error("firebase operation failed", errorObject);
+						JumpStart.localUser.firstUser = false;
+					}
+
+					// Now we're ready for game logic
+					JumpStart.showLoadingMsg("Connected.");
+					onReady();
+
+					g_checkingRoom = false;
+					g_doneChecking = true;
+					if( g_checkRoom )
+					{
+						clearInterval(g_checkRoom);
+						g_checkRoom = null;
+					}
+				});
+			}
+			else
+			{
+				JumpStart.showLoadingMsg("Connected.");
+				onReady();
+
+				g_checkingRoom = false;
+				g_doneChecking = true;
+				if( g_checkRoom )
+					{
+						clearInterval(g_checkRoom);
+						g_checkRoom = null;
+					}
+			}
+		}
+		else
+		{
+			g_checkingRoom = false;
+			
+			if( JumpStart.requestedRoomId )
+			{
+//				JumpStart.showLoadingMsg("<font style='color: #ff0000; font-weight: 900;'>FAILED to connect to Firebase room.  Reloading...</font>");
+//							location.reload();
+			}
+			else
+			{
+				if( g_checkRoom )
+				{
+					clearInterval(g_checkRoom);
+					g_checkRoom = null;
+				}
+			}
+		}
+	});
+}
+
 jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 {
 	// 1. Copy everything that exists in syncData into JumpStart
@@ -1228,6 +1475,9 @@ jumpStart.prototype.networkSpawn = function(key, syncData, isInitial)
 
 	if( this.pendingObjects.hasOwnProperty(key) )
 		delete this.pendingObjects[key];
+
+	if( typeof syncData === 'undefined' )
+		return;
 
 	var instance = this.spawnInstance(syncData.modelFile, {'key': key, 'syncData': syncData});
 
@@ -1313,8 +1563,11 @@ jumpStart.prototype.updateJumpStartProperties = function(instance, syncData)
 		//console.log(instance.JumpStart.velocity);
 //		console.log((instance.JumpStart.appliedForce.equals(syncData.appliedForce) && instance.JumpStart.velocity.equals(syncData.velocity)));
 //		instance.JumpStart.velocity.copy(syncData.velocity);
-		instance.JumpStart.velocity.add(instance.JumpStart.appliedForce);
-//		instance.JumpStart.velocity.copy(instance.JumpStart.appliedForce);
+
+
+
+//		instance.JumpStart.velocity.add(instance.JumpStart.appliedForce);
+		instance.JumpStart.velocity.copy(instance.JumpStart.appliedForce);
 	}
 
 	if( syncData.hasOwnProperty('networkRemovedListeners') )
@@ -1512,20 +1765,71 @@ jumpStart.prototype.run = function()
 			html += JumpStart.options["titleImageURL"];
 			html += "'' /></center></div>";
 			*/
+
+			function getRealTop(elem, in_top, in_scale)
+			{
+				var rect = elem.getBoundingClientRect();
+
+				var scale;
+				if( typeof in_scale === 'undefined' )
+					scale = rect.width / elem.offsetWidth;
+				else
+					scale = in_scale;
+					
+				var top;
+				if( typeof in_top === 'undefined' )
+					top = 0;
+				else
+					top = in_top;
+
+				if( !elem.parentNode || elem.parentNode === document.body )
+					return {"top": (top + rect.top), "scale": scale};
+
+				var parentRect = elem.parentNode.getBoundingClientRect();
+
+				top = (parentRect.top + rect.top);
+
+				if( elem.parentNode && elem.parentNode !== document.body )
+				{
+					var values = getRealTop(elem.parentNode, top, scale);
+					return {"top": values.top, "scale": values.scale};
+				}
+				else
+					return {"top": top, "scale": scale};
+			}
+
 			var elem = document.getElementById("titleImageSlate");
-			var distFromTop = elem.offsetTop;
+			var simpleDist = elem.offsetTop;
+			var values = getRealTop(elem);
+
+			var distFromTop = Math.round(values.top);
 
 			elem.parentElement.removeChild(elem);
 
 			elem.style.position = "absolute";
-			elem.style.top = distFromTop + "px";
+			if( distFromTop === 0 )
+			{
+				elem.style.top = simpleDist + "px";
+				values.scale = 1.0;
+			}
+			else
+				elem.style.top = (distFromTop) + "px";
+
+			elem.style.transform = "scale(" + values.scale + ")";
+			elem.style.webkitTransform = "scale(" + values.scale + ")";
 			document.body.appendChild(elem);
+
+			var delay = 0.1;
+			if( values.scale === 1.0 )
+				delay = 1000;
 
 			setTimeout(function()
 			{
 				var elem = document.getElementById("titleImageSlate");
 				elem.style.top = 0;
-			}, 1000);
+				elem.style.transform = "scale(1.0)";
+				elem.style.webkitTransform = "scale(1.0)";
+			}, delay);
 
 			//elem.style.top = "0";
 //			return;
@@ -1558,12 +1862,110 @@ jumpStart.prototype.run = function()
 		//this.clock.start();
 		// Start the game loop
 		this.onTick();
+
+		// Init some stuff for Altspace
+//		/*
+		if( !this.webMode )
+		{
+			var x, clone;
+			for( x in this.models )
+			{
+				clone = this.models[x].object.clone();
+//				clone.JumpStart.blocksLOS = false;
+				clone.scale.set(0.0001, 0.0001, 0.0001);
+				this.scene.add(clone);
+//				JumpStart.makeInvisible(clone);
+//				this.scene.remove(clone);
+			}
+		}
+//		*/
 	}
 };
 
 var frameSamples = new Array();
 jumpStart.prototype.onTick = function()
 {
+	if( !this.initialized )
+		return;
+
+	if( this.gamepadsEnabled )
+	{
+		if( this.webMode )
+		{
+			if( !!navigator.getGamepads )
+				this.gamepads = navigator.getGamepads();
+			else
+				this.gamepads = navigator.webkitGetGamepads();
+		}
+		else
+			this.gamepads = altspace.getGamepads();
+		
+		g_gamepads = this.gamepads;	// probably not needed
+
+		var myGamepad = null;
+
+		if( this.activeGamepad )
+			myGamepad = this.activeGamepad;
+		else
+		{
+			var x, gamepad;
+			for( x in this.gamepads )
+			{
+				gamepad = this.gamepads[x];
+				if( typeof gamepad !== "undefined" && typeof gamepad.buttons !== "undefined" && gamepad.buttons.length > 0 )
+				{
+					var needsBreak = false;
+					var i;
+					for( i = 0; i < gamepad.buttons.length; i++ )
+					{
+						if( gamepad.buttons[i].value )
+						{
+							myGamepad = gamepad;
+							needsBreak = true;
+							break;
+						}
+					}
+
+					if( needsBreak )
+						break;
+				}
+			}
+
+			this.activeGamepad = myGamepad;
+			g_activeGamepad = this.activeGamepad;
+		}
+
+		if( myGamepad && typeof myGamepad.buttons !== "undefined" )
+		{
+			var i;
+			for( i = 0; i < myGamepad.buttons.length; i++ )
+			{
+				var buttonIndex = i;
+
+				var button = myGamepad.buttons[buttonIndex];
+				if( !button.hasOwnProperty("previousValue") )
+					button.previousValue = false;
+				
+				if( button.previousValue !== button.value )
+				{
+					// Button has been pressed!
+					if( button.value )
+					{
+						if( window.hasOwnProperty("onGamepadButtonDown") )
+							onGamepadButtonDown(button, buttonIndex)
+					}
+					else
+					{
+						if( window.hasOwnProperty("onGamepadButtonUp") )
+							onGamepadButtonUp(button, buttonIndex)
+					}
+				}
+
+				button.previousValue = button.value;
+			}
+		}
+	}
+
 	if( this.fpsSlate )
 	{
 		var timeScale = 1.0;
@@ -1589,15 +1991,25 @@ jumpStart.prototype.onTick = function()
 
 	function recursive(parentObject)
 	{
-		var sceneObject;
-		var x, y, z;
+		var childrenSnapshot = new Array();
+		var x;
 		for( x in parentObject.children )
+			childrenSnapshot.push(parentObject.children[x]);
+
+//		if( typeof g_rayCastObjects !== "undefined" )
+//			childrenSnapshot.push(parentObject);
+
+		var sceneObject;
+		var i, x, y, z;
+//		for( x in parentObject.children )
+		for( i = 0; i < childrenSnapshot.length; i++ )
 		{
 			if( parentObject !== g_scene && !parentObject.hasOwnProperty("JumpStart") )
 				continue;
 
-			sceneObject = parentObject.children[x];
-			if( !sceneObject.hasOwnProperty("JumpStart") )
+			//sceneObject = parentObject.children[x];
+			sceneObject = childrenSnapshot[i];
+			if( sceneObject === undefined || !sceneObject.hasOwnProperty("JumpStart") )
 				continue;
 
 			// Fix up anything the local app dev assigned to listeners
@@ -1615,7 +2027,7 @@ jumpStart.prototype.onTick = function()
 					sceneObject.JumpStart.velocity = new THREE.Vector3(0, 0, 0);
 
 				var state = sceneObject.JumpStart.physicsState;
-				if( state === 1 )
+				if( (state & 0x1) && !(state & 0x2) )
 				{
 					// Gravity is a bit much, so cut it in half.
 					sceneObject.JumpStart.velocity.y -= 9.8 * g_deltaTime;
@@ -1688,7 +2100,15 @@ console.log("subbing " + velLen);
 					sceneObject.JumpStart.velocity.y = -sceneObject.JumpStart.velocity.y;
 				}
 
-				sceneObject.position.add(sceneObject.JumpStart.velocity);
+				var deltaPos = new THREE.Vector3().copy(sceneObject.JumpStart.velocity).multiplyScalar(60.0).multiplyScalar(JumpStart.deltaTime);
+				if( !(state & 0x4) )
+					sceneObject.position.add(deltaPos);
+				else
+				{
+					sceneObject.translateX(deltaPos.x);
+					sceneObject.translateY(deltaPos.y);
+					sceneObject.translateZ(deltaPos.z);
+				}
 			}
 
 			if( sceneObject.JumpStart.hasOwnProperty("onTick") )
@@ -1697,8 +2117,17 @@ console.log("subbing " + velLen);
 					sceneObject.JumpStart.onTick[y].call(sceneObject);
 			}
 
+			// If this has bound-fade on, adjust the scale according to
+			// how close it is to the edge of the enclosure. (at the end of this tick)
+			if( sceneObject.userData.hasOwnProperty("boundFade") && sceneObject.userData.boundFade )
+				this.boundFadeObjects.push(sceneObject);
+
 			if( sceneObject.children.length > 0 )
-				recursive.call(this, sceneObject);
+			{
+//				// Also disable recursive calls onto children when manually controlling raycast objects
+//				if( typeof g_rayCastObjects === "undefined" )
+					recursive.call(this, sceneObject);
+			}
 		}
 	}
 
@@ -1720,6 +2149,14 @@ console.log("subbing " + velLen);
 
 	// FIXME: We should really prep event listeners before processing cursor move, in case any of them have new listeners assigned with the = function syntax.
 	this.processCursorMove();
+
+/*
+	if( this.webMode && this.webLook )
+	{
+		var pos = new THREE.Vector3().copy(this.cursorRay.origin).add(this.cursorRay.direction);
+		g_camera.lookAt(pos);
+	}
+	*/
 
 /*
 	// Do post-tick stuff for cursor planes
@@ -1757,7 +2194,75 @@ console.log("subbing " + velLen);
 
 	requestAnimationFrame( function(){ JumpStart.onTick(); } );
 
-	recursive.call(this, this.scene);
+//	this.boundFadeObjects = new Array();
+
+	var i, fadeObject;
+	for( i = 0; i < this.boundFadeObjects.length; i++ )
+	{
+		fadeObject = this.boundFadeObjects[i];
+
+		if( fadeObject === undefined || fadeObject.userData.boundFadeScale === undefined )
+			continue;
+
+		//fadeObject.userData.boundFadeScale !== undefined
+		fadeObject.scale.copy(fadeObject.userData.boundFadeScale);
+	}
+
+	this.boundFadeObjects = new Array();
+
+/*
+	if( typeof g_rayCastObjects !== "undefined" )
+	{
+		console.log("here");
+		for( i = 0; i < g_rayCastObjects.length; i++ )
+		{
+			recursive.call(this, g_rayCastObjects[i]);
+		}
+	}
+	else
+
+*/
+		recursive.call(this, this.scene);
+
+	var pos = new THREE.Vector3();
+	var boundScaleAmount, boundScaleDif, testDif;
+	for( i = 0; i < this.boundFadeObjects.length; i++ )
+	{
+		if( this.boundFadeObjects[i] === undefined )
+			continue;
+
+		fadeObject = this.boundFadeObjects[i];
+		pos.setFromMatrixPosition(fadeObject.matrixWorld);
+		pos.multiplyScalar(1.0 / this.worldScale);
+
+		boundScaleDif = -this.worldOffset.y - Math.abs(pos.x);
+
+		testDif = -this.worldOffset.y - Math.abs(pos.y);
+		if( testDif < boundScaleDif )
+			boundScaleDif = testDif;
+
+		testDif = -this.worldOffset.y - Math.abs(pos.z);
+		if( testDif < boundScaleDif )
+			boundScaleDif = testDif;
+
+		if( boundScaleDif < 20.0 )
+		{
+			if( !fadeObject.userData.hasOwnProperty("boundFadeScale") )
+				fadeObject.userData.boundFadeScale = new THREE.Vector3();
+
+			fadeObject.userData.boundFadeScale.copy(fadeObject.scale);
+
+			if( boundScaleDif < 0 )
+				fadeObject.scale.set(0.0001, 0.0001, 0.0001);
+			else
+			{
+				boundScaleAmount = 20.0 / boundScaleDif;
+				fadeObject.scale.multiplyScalar(1.0 / boundScaleAmount);
+			}
+		}
+		else if( fadeObject.userData.hasOwnProperty("boundFadeScale") )
+			delete fadeObject.userData.boundFadeScale;
+	}
 
 	var enclosurePlanes = [
 		{"plane": this.floorPlane, "axis": "y", "greater": false},
@@ -1864,6 +2369,60 @@ jumpStart.prototype.setOptions = function(options)
 		this.options.enabledCursorEvents.cursorMove = true;
 };
 
+/*
+jumpStart.prototype.loadMaterial = function(fileName, inBaseUrl)
+{
+	alt.multiloader.init({
+		crossOrigin: 'anonymous',
+		baseUrl: inBaseUrl,
+	});
+
+	var req = new alt.multiloader.LoadRequest();
+	var names = Object.keys(CONFIG.pieces);
+
+	req.mtlUrls.push(file+'.mtl');
+
+	var boardFile = CONFIG.board.modelFile;
+	req.objUrls.push(boardFile+'.obj');
+	req.mtlUrls.push(boardFile+'.mtl');
+	alt.multiloader.load(req, function(){//onComplete
+		if(req.error) {
+			throw new Error(req.error);
+		}
+		for(var i=0; i < req.objects.length; i++) {
+			var object = req.objects[i];
+			if(i+1 === req.objects.length) {//board is last object
+				object.name = 'board';
+				board = object;
+				continue;
+			}
+			object.scale.set(modelScale, modelScale, modelScale);
+			object.userData.pieceType = names[i];
+			object.userData.pieceColor = 'white';
+			whitePieces[i] = object;
+			var objectClone = object.clone();
+			objectClone.userData.pieceColor = 'black';
+			blackPieces[i] = objectClone;
+			//Set the black color later.
+		}
+		onComplete();
+	});
+};
+
+jumpStart.prototype.loadModelWithMaterial = function(modelFile, materialFile)
+{
+	this.modelLoader.batchName = "batch" + Date.now();
+
+	JumpStart.models.push({"fileName": fileName, "batchName": JumpStart.modelLoader.batchName});
+	
+//	if( JumpStart.options.legacyLoader )
+//		JumpStart.objectLoader.load(fileName, JumpStart.modelLoader.batchCallbackFactory(fileName, JumpStart.modelLoader.batchName));
+//	else
+//	{
+		JumpStart.objectLoader.load(modelFile, materialFile, JumpStart.modelLoader.batchCallbackFactory(modelFile, JumpStart.modelLoader.batchName));
+//	}
+};
+*/
 jumpStart.prototype.loadModels = function()
 {
 	// Handle various argument types.
@@ -1960,66 +2519,76 @@ jumpStart.prototype.spawnInstance = function(fileName, userOptions)
 	// do work
 
 	var clone;
-	var x;
-	for( x in this.models )
+
+	if( fileName && fileName !== "" )
 	{
-		if( this.models[x].fileName === fileName && this.models[x].hasOwnProperty("object") )
+		var x;
+		for( x in this.models )
 		{
-			// Clone the model
-			clone = this.models[x].object.clone();
-
-			// Set the position
-			if( !options.parent )
-				clone.position.copy(this.worldOffset);
-
-			// Set the orientation
-			clone.rotation.set(0.0, 0.0, 0.0);
-
-			// Add the instance to the scene
-			if( !options.parent )
-				this.scene.add(clone);
-			else
-				options.parent.add(clone);
-
-			this.prepInstance.call(clone, fileName);
-
-			if( !this.webMode )
+			if( this.models[x].fileName === fileName && this.models[x].hasOwnProperty("object") )
 			{
-				clone.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
-				clone.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
+				// Clone the model
+				clone = this.models[x].object.clone();
+				break;
 			}
+		}
+	}
+	else
+		clone = new THREE.Object3D();
 
-			// Add this object to the synced instance list
+	if( clone )
+	{
+		// Set the position
+		if( !options.parent )
+			clone.position.copy(this.worldOffset);
+
+		// Set the orientation
+		clone.rotation.set(0.0, 0.0, 0.0);
+
+		// Add the instance to the scene
+		if( !options.parent )
+			this.scene.add(clone);
+		else
+			options.parent.add(clone);
+
+		this.prepInstance.call(clone, fileName);
+
+		if( !this.webMode )
+		{
+			clone.addEventListener("cursordown", function(e) { JumpStart.pendingClick = true; });
+			clone.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
+		}
+
+		// Add this object to the synced instance list
 //			/*
-			if( options.key !== "" )
-			{
-				this.syncedInstances[options.key] = clone;
-				clone.JumpStart.key = options.key;
-				this.numSyncedInstances++;
-				g_numSyncedInstances = this.numSyncedInstances;
+		if( options.key !== "" )
+		{
+			this.syncedInstances[options.key] = clone;
+			clone.JumpStart.key = options.key;
+			this.numSyncedInstances++;
+			g_numSyncedInstances = this.numSyncedInstances;
 
-				this.firebaseSync.addObject(clone, options.key, options.syncData);
-			}
+			this.firebaseSync.addObject(clone, options.key, options.syncData);
+		}
 //			*/
-			
-			// Mark the material as needing to be updated
-			/*
-			var y, mesh;
-			for( y in clone.children )
-			{
-				mesh = clone.children[y];
+		
+		// Mark the material as needing to be updated
+		/*
+		var y, mesh;
+		for( y in clone.children )
+		{
+			mesh = clone.children[y];
 
-				if( mesh.material )
-				{
+			if( mesh.material )
+			{
 //					mesh.material.needsUpdate = true;
-					console.log(mesh.material.needsUpdate);
-					document.getElementById("info").innerHTML = mesh.material.needsUpdate;
-				}
+				console.log(mesh.material.needsUpdate);
+				document.getElementById("info").innerHTML = mesh.material.needsUpdate;
 			}
+		}
 */
 //			console.log("Spawned an object");
-			return clone;
-		}
+		return clone;
 	}
 
 	console.log("Model is not precached" + fileName);
@@ -2067,7 +2636,7 @@ jumpStart.prototype.prepInstance = function(modelFile)
 			{
 				if( !JumpStart.webMode )
 				{
-					tintColor.multiplyScalar(0.8);
+					tintColor.multiplyScalar(0.5);
 					this.userData.tintColor = tintColor;
 
 					this.traverse(function(child)
@@ -2091,7 +2660,7 @@ jumpStart.prototype.prepInstance = function(modelFile)
 			{
 				if( !JumpStart.webMode )
 				{
-					tintColor.multiplyScalar(0.8);
+					tintColor.multiplyScalar(0.5);
 					this.userData.tintColor = tintColor;
 
 					this.traverse(function(child)
@@ -2111,6 +2680,17 @@ jumpStart.prototype.prepInstance = function(modelFile)
 					}.bind(this));
 				}
 			}
+		}.bind(this),
+		"setColor": function(color)
+		{
+			this.traverse(function(child)
+			{
+				if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+				{
+					child.material.color = color;
+					child.material.needsUpdate = true;
+				}
+			}.bind(this));
 		}.bind(this),
 		"addDataListener": function(property, listener)
 		{
@@ -2532,11 +3112,16 @@ jumpStart.prototype.applyForce = function(sceneObject, force)
 		this.makePhysics(sceneObject);
 
 	// FIXME FIX ME: This only works because it is an error to assign a vector this way!!!
-	sceneObject.JumpStart.appliedForce = force;
+//	sceneObject.JumpStart.appliedForce = force;
+	sceneObject.JumpStart.appliedForce.copy(force);
+
 //	sceneObject.JumpStart.appliedForce.copy(force);
 //	sceneObject.JumpStart.appliedForce.copy(sceneObject.JumpStart.velocity);
 //	sceneObject.JumpStart.appliedForce.add(force);
-	sceneObject.JumpStart.velocity.add(force);
+
+
+	sceneObject.JumpStart.velocity.copy(force);
+//	sceneObject.JumpStart.velocity.add(force);
 };
 
 jumpStart.prototype.stopSyncing = function(sceneObject)
@@ -3012,4 +3597,42 @@ __hash = function(value) {
   }
 
   return CRC_str;
+};
+
+
+
+// First attempt at adding hierarchy support to Object.lookAt()
+// WestLangley
+// EDIT: Second attempt -- added zz85's lookAtWorld() and worldToLocal()
+
+THREE.Object3D.prototype.worldToLocal = function ( vector ) {
+    
+    if ( !this.__inverseMatrixWorld ) this.__inverseMatrixWorld = new THREE.Matrix4();
+    
+    return this.__inverseMatrixWorld.getInverse( this.matrixWorld ).multiplyVector3( vector );
+    
+};
+
+THREE.Object3D.prototype.lookAtWorld = function( vector ) {
+
+    // todo: need to check for parent...
+    this.parent.worldToLocal( vector );
+    
+    this.lookAt( vector );
+
+};
+ 
+THREE.Object3D.prototype.lookAt2 = function(vector) {
+    
+    // todo: need to check for parent...
+    var vec3 = new THREE.Matrix4().getInverse(this.parent.matrixWorld).multiplyVector3(vector.clone());
+
+    this.matrix.lookAt(vec3, this.position, this.up);
+
+    if (this.rotationAutoUpdate) {
+
+        this.rotation.getRotationFromMatrix(this.matrix);
+
+    }
+
 };

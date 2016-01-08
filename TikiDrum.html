@@ -5,10 +5,15 @@
 		<title>Tiki Drum</title>
 
 		<!-- AltspaceVR SDK Core Includes -->
-		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<!-- <script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script> -->
+		<script src="http://sdk.altvr.com/libs/three.js/r73/build/three.min.js"></script>
 		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
 		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
 		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<script src="http://sdk.altvr.com/libs/three.js/r73/examples/js/geometries/TextGeometry.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r73/examples/js/utils/FontUtils.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r73/examples/fonts/helvetiker_regular.typeface.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
 		<script src="FirebaseSync.js"></script>
@@ -23,7 +28,29 @@
 
 	<body>
 
-		<div id="scores" style="position: fixed; text-align: right; top: 0; right: 0;"><div id="ball">&nbsp;</div><br /></div>
+		<style>
+			#highscores
+			{
+				font-family: Arial;
+				font-size: 40px;
+				font-weight: bold;
+			}
+
+			#highscores td
+			{
+				padding-left: 20px;
+				padding-right: 20px;
+			}
+		</style>
+
+		<div style="position: absolute; top: 0; left: 0; right: 0;">
+		<center>
+			<br /><br /><br /><br />
+			<div><table id="highscores"></table></div>
+		</center>
+		</div>
+
+		<div id="scores" style="position: fixed; display: none; text-align: right; top: 0; right: 0;"><div id="ball">&nbsp;</div><br /></div>
 
 		<!-- JumpStart SDK Core Include -->
 		<script src="JumpStart.js"></script>
@@ -91,6 +118,44 @@
 				JumpStart.precacheSound("sounds/TikiDrum/cymb9");
 				JumpStart.precacheSound("sounds/TikiDrum/cymb10");
 
+				var params = {
+					size: 10.0,
+					height: 1,
+					font: "helvetiker",
+					curveSegments: 1
+				};
+
+				var geometry;
+//				if( JumpStart.webMode )
+					geometry = new THREE.TextGeometry("Please Wait", params);
+//				else
+//					geometry = new THREE.TextGeometry("Please Wait");
+
+				var material = new THREE.MeshBasicMaterial({color:'white'});
+				var pleaseWait = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+
+				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				// Make JumpStart think that it is pre-cached.
+				JumpStart.models.push({textOffset: displacement, object: pleaseWait, fileName: "Please Wait", batch: "text"});
+
+//				if( JumpStart.webMode )
+					geometry = new THREE.TextGeometry("Click to Join", params);
+//				else
+//					geometry = new THREE.TextGeometry("Click to Join");
+
+				var material = new THREE.MeshBasicMaterial({color:'white'});
+				var clickToJoin = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+
+				displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				// Make JumpStart think that it is pre-cached.
+				JumpStart.models.push({textOffset: displacement, object: clickToJoin, fileName: "Click to Join", batch: "text"});
+
 				JumpStart.loadModels(myModels).then(function() {
 
 					// Finally call JumpStart.doneCaching() to signify you are done.
@@ -98,6 +163,9 @@
 					JumpStart.doneCaching();
 				});
 			}
+
+			var g_pleaseWait = null;
+			var g_clickToJoin = null;
 
 			function onReady()
 			{
@@ -123,14 +191,129 @@
 					return;
 				}
 
-				if( !JumpStart.webMode )
-					g_timeScale = 0.7;
+//				if( !JumpStart.webMode )
+//					g_timeScale = 0.7;
 
 				// The first user
 				if( g_localUser.firstUser )
 				{
 
 				}
+
+				g_pleaseWait = JumpStart.spawnInstance(null);
+				g_pleaseWait.userData.hidden = false;
+				g_pleaseWait.JumpStart.blocksLOS = false;
+				g_pleaseWait.rotateX(-Math.PI / 2.0);
+				g_pleaseWait.JumpStart.onTick = function()
+				{
+					if( !g_myDrum )
+						return;
+
+					if( !g_myDrum.userData.pleaseWait )
+					{
+						if( !this.userData.hidden )
+						{
+							this.userData.hidden = true;
+							this.scale.set(0.0001, 0.0001, 0.0001);
+						}
+					}
+					else
+					{
+						if( this.userData.hidden )
+							this.userData.hidden = false;
+
+						this.scale.copy(g_myDrum.scale);
+						this.position.copy(g_myDrum.position);
+						this.translateY(-25.0);
+					}
+				}
+
+				var text = JumpStart.spawnInstance("Please Wait", {parent: g_pleaseWait});
+
+				if( !JumpStart.webMode )
+				{
+					text.scale.z = 0.1;
+					text.scale.multiplyScalar(0.1);
+				}
+
+				//geometry.computeBoundingBox();
+				var offset = new THREE.Vector3();
+				var i;
+				for( i = 0; i < JumpStart.models.length; i++ )
+				{
+					if( JumpStart.models[i].fileName === "Please Wait" )
+					{
+						offset.copy(JumpStart.models[i].textOffset);
+						break;
+					}
+				}
+
+				offset.multiply(text.scale);
+				text.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				g_clickToJoin = JumpStart.spawnInstance(null);
+				g_clickToJoin.userData.hidden = false;
+				g_clickToJoin.JumpStart.blocksLOS = false;
+				g_clickToJoin.rotateX(-Math.PI / 2.0);
+				g_clickToJoin.JumpStart.onTick = function()
+				{
+					if( !g_myDrum )
+						return;
+
+					if( g_myDrum.userData.pleaseWait || (beatLoop &&
+						g_highScores && (g_highScores.JumpStart.scores["player1"] === g_localUser.displayName ||
+							g_highScores.JumpStart.scores["player2"] === g_localUser.displayName)) )
+					{
+						if( !this.userData.hidden )
+						{
+							this.userData.hidden = true;
+
+							g_myDrum.JumpStart.clickToJoin = false;
+							//g_myDrum.JumpStart.sync();
+							DoAutoSync(g_myDrum, true);
+
+							this.scale.set(0.0001, 0.0001, 0.0001);
+						}
+					}
+					else
+					{
+						if( this.userData.hidden )
+						{
+							this.userData.hidden = false;
+
+							g_myDrum.JumpStart.clickToJoin = false;
+							DoAutoSync(g_myDrum, true);
+							//g_myDrum.JumpStart.sync();
+						}
+
+						this.scale.copy(g_myDrum.scale);
+						this.position.copy(g_myDrum.position);
+						this.translateY(-25.0);
+					}
+				}
+
+				text = JumpStart.spawnInstance("Click to Join", {parent: g_clickToJoin});
+
+//				if( !JumpStart.webMode )
+//				{
+//					text.scale.z = 0.1;
+//					text.scale.multiplyScalar(0.1);
+//				}
+
+				//geometry.computeBoundingBox();
+
+				offset = new THREE.Vector3();
+				for( i = 0; i < JumpStart.models.length; i++ )
+				{
+					if( JumpStart.models[i].fileName === "Click to Join" )
+					{
+						offset.copy(JumpStart.models[i].textOffset);
+						break;
+					}
+				}
+
+				offset.multiply(text.scale);
+				text.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
 
 				setTimeout(function()
 				{
@@ -140,6 +323,10 @@
 					if( !g_myDrum )
 					{
 						g_myDrum = JumpStart.spawnInstance("models/TikiDrum/drum.obj");
+						g_myDrum.JumpStart.ownerName = g_localUser.displayName;
+//						g_myDrum.JumpStart.pleaseWait = false;
+//						g_myDrum.JumpStart.clickToJoin = false;
+						g_myDrum.JumpStart.lerpSync = true;
 						g_myDrum.JumpStart.owner = g_localUser.displayName;
 						g_myDrum.JumpStart.score = 0;
 						g_myDrum.JumpStart.bestScore = 0;
@@ -149,6 +336,28 @@
 						g_myDrum.JumpStart.onSpawn["drumSpawn"] = drumSpawn;
 
 						g_myDrum.JumpStart.onTick["drumTick"] = drumTick;
+
+						if( !g_highScores )
+						{
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.clickToJoin = true;
+						}
+						else if( g_highScores.JumpStart.scores["player1"] === g_localUser.displayName || g_highScores.JumpStart.scores["player2"] === g_localUser.displayName )
+						{
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.clickToJoin = false;
+						}
+						else if( g_highScores.JumpStart.scores["player1"] === "OPEN" || g_highScores.JumpStart.scores["player2"] === "OPEN" )
+						{
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.clickToJoin = true;	
+						}
+
+//						g_myDrum.userData.lastSyncPos = new THREE.Vector3().copy(g_myDrum.position);
+//						g_myDrum.userData.lastSyncTime = g_clock.elapsedTime;
+
+						//g_myDrum.JumpStart.sync();
+						DoAutoSync(g_myDrum, true);
 					}
 
 					if( !g_globalBall )
@@ -182,8 +391,8 @@
 						var max = 10.0;
 
 						// Make some adjustments if running inside of Altspace
-						if( !JumpStart.webMode )
-							max = 15.0;
+//						if( !JumpStart.webMode )
+//							max = 15.0;
 
 						var shadowScale = this.position.distanceTo(g_globalBall.position) / 20.0;
 						shadowScale = (shadowScale - max) / (max - min);
@@ -219,6 +428,12 @@
 			{
 				if( (typeof forceSync !== "undefined" && forceSync) || (sceneObject.position.distanceTo(sceneObject.userData.lastSyncPos) > 5.0 && g_clock.elapsedTime - sceneObject.userData.lastSyncTime > 0.1) )
 				{
+//					if( (typeof forceSync === "undefined" || !forceSync) && g_myDrum && sceneObject === g_myDrum && (!g_clickToJoin.userData.hidden || !g_pleaseWait.userData.hidden) )
+//						return;
+
+					if( typeof forceSync !== "undefined" && !forceSync && g_myDrum && g_myDrum === sceneObject && (g_myDrum.JumpStart.pleaseWait || g_myDrum.JumpStart.clickToJoin) )
+						return;
+
 					sceneObject.userData.lastSyncPos.copy(sceneObject.position);
 					sceneObject.userData.lastSyncTime = g_clock.elapsedTime;
 
@@ -241,8 +456,29 @@
 					if( !g_myDrum )
 					{
 						g_myDrum = this;
+						g_myDrum.JumpStart.ownerName = g_localUser.displayName;
+
+						if( !g_highScores )
+						{
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.clickToJoin = true;
+						}
+						else if( g_highScores.JumpStart.scores["player1"] === g_localUser.displayName || g_highScores.JumpStart.scores["player2"] === g_localUser.displayName )
+						{
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.clickToJoin = false;
+						}
+						else if( g_highScores.JumpStart.scores["player1"] === "OPEN" || g_highScores.JumpStart.scores["player2"] === "OPEN" )
+						{
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.clickToJoin = true;	
+						}
+
 						g_myDrum.userData.lastSyncPos = new THREE.Vector3().copy(g_myDrum.position);
 						g_myDrum.userData.lastSyncTime = g_clock.elapsedTime;
+
+						//g_myDrum.JumpStart.sync();
+						DoAutoSync(g_myDrum, true);
 					}
 
 					// Drum shadow.
@@ -255,6 +491,7 @@
 
 					this.JumpStart.onCursorDown = function()
 					{
+						var needSync = false;
 						if( g_myBall && this.children.indexOf(g_myBall) >= 0 )
 						{
 							g_globalBall = g_myBall;
@@ -281,13 +518,18 @@
 							g_globalBall.JumpStart.makePhysics();
 							g_globalBall.JumpStart.onTick["ballin"] = ballin;
 							g_globalBall.JumpStart.onSpawn["globalBallSpawned"] = globalBallSpawned;
+							g_globalBall.JumpStart.owner = g_localUser.displayName;
 							g_globalBall.JumpStart.sync();
 
 							if( this.JumpStart.score > this.JumpStart.bestScore )
 								this.JumpStart.bestScore = this.JumpStart.score;
 
-							this.JumpStart.score = 0;
-							this.JumpStart.sync();
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.clickToJoin = false;
+							g_myDrum.JumpStart.score = 0;
+
+							needSync = true;
+							//this.JumpStart.sync();
 						}
 						else if( g_globalBall && g_globalBall.position.y - g_worldOffset.y < 20 + 0.5 && g_globalBall.position.y - g_worldOffset.y > 20 - 0.5 )
 						{
@@ -296,18 +538,104 @@
 
 							g_globalBall.JumpStart.makePhysics();
 							g_globalBall.JumpStart.score = 0;
+							g_globalBall.JumpStart.owner = g_localUser.displayName;
 							g_globalBall.JumpStart.sync();
 
 							if( this.JumpStart.score > this.JumpStart.bestScore )
 								this.JumpStart.bestScore = this.JumpStart.score;
 
-							this.JumpStart.score = 0;
-							this.JumpStart.sync();
+							g_myDrum.JumpStart.clickToJoin = false;
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.score = 0;
+
+							needSync = true;
+							//this.JumpStart.sync();
+						}
+						//else if( g_myDrum.JumpStart.clickToJoin )
+						else if( !g_clickToJoin.userData.hidden )
+						{
+							g_myDrum.JumpStart.clickToJoin = false;
+							g_myDrum.JumpStart.pleaseWait = false;
+							g_myDrum.JumpStart.score = 0;
+							needSync = true;
+						}
+
+						if( needSync )
+						{
+							// High scores
+							if( !g_highScores )
+							{
+								g_highScores = JumpStart.spawnInstance("models/TikiDrum/pixel2.obj");
+								g_highScores.JumpStart.blocksLOS = false;
+								g_highScores.scale.set(0.0001, 0.0001, 0.0001);
+								g_highScores.position.set(0, -100.0, 0);
+								g_highScores.JumpStart.onSpawn["highScores"] = highScores;
+								g_highScores.JumpStart.scores = {};
+
+								g_highScores.JumpStart.scores["player1"] = g_localUser.displayName;
+								g_highScores.JumpStart.scores["player2"] = "OPEN";
+								g_highScores.JumpStart.sync();
+							}
+							else if( g_highScores.JumpStart.scores["player1"] !== g_localUser.displayName && g_highScores.JumpStart.scores["player2"] !== g_localUser.displayName)
+							{
+								if( g_highScores.JumpStart.scores["player1"] === "OPEN" )
+									g_highScores.JumpStart.scores["player1"] = g_localUser.displayName;
+								else if( g_highScores.JumpStart.scores["player2"] === "OPEN" )
+									g_highScores.JumpStart.scores["player2"] = g_localUser.displayName;
+//								else
+//									return;
+
+								g_highScores.JumpStart.sync();
+							}
+
+							//this.JumpStart.sync();
+							DoAutoSync(g_myDrum, true);
 						}
 					};
 				}
 				else
 				{
+					var drumName = JumpStart.spawnInstance(null, {parent: this});
+					drumName.JumpStart.blocksLOS = false;
+					drumName.rotateX(-Math.PI / 2.0);
+					drumName.translateY(-20);
+
+					var params = {
+						size: 10.0,
+						height: 1,
+						font: "helvetiker",
+						curveSegments: 1
+					};
+
+					var geometry;
+//					if( JumpStart.webMode )
+						geometry = new THREE.TextGeometry(this.JumpStart.ownerName, params);
+//					else
+//						geometry = new THREE.TextGeometry(this.JumpStart.ownerName);
+
+					var material = new THREE.MeshBasicMaterial({color:'white'});
+					var pleaseWait = new THREE.Mesh(geometry, material);
+
+					geometry.computeBoundingBox();
+
+					var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+					// Make JumpStart think that it is pre-cached.
+					JumpStart.models.push({textOffset: displacement, object: pleaseWait, fileName: this.JumpStart.ownerName, batch: "text"});
+
+					var text = JumpStart.spawnInstance(this.JumpStart.ownerName, {parent: drumName});
+
+//					if( !JumpStart.webMode )
+//					{
+//						text.scale.z = 0.1;
+//						text.scale.multiplyScalar(0.1);
+//					}
+
+					var offset = new THREE.Vector3().copy(displacement);
+
+					offset.multiply(text.scale);
+					text.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
 					this.userData.hideMe = true;
 					this.userData.hideMeScale = 0.0;
 					this.scale.set(0.0001, 0.0001, 0.0001);
@@ -363,7 +691,16 @@
 					}
 
 					// Sync our drum position to everybody else.
-					DoAutoSync(this);
+					//if( !g_pleaseWait || !g_clickToJoin || (!g_pleaseWait.userData.hidden && !g_clickToJoin.userData.hidden) )
+					//if( !this.JumpStart.pleaseWait && (!g_clickToJoin || !g_clickToJoin.userData.hidden))
+						DoAutoSync(this);
+				}
+				else
+				{
+					// LERP us if we are not our own drum!
+					doScaleLerp.call(this);
+					doRotationLerp.call(this);
+					doPositionLerp.call(this);
 				}
 
 				if( !this.userData.hasOwnProperty("lastMoved") )
@@ -453,6 +790,117 @@
 				}
 			}
 
+			function doScaleLerp()
+			{
+				if( this.userData.hasOwnProperty("targetScaleLerp") && this.userData.targetScaleLerp < 1.0 )
+				{
+					this.userData.targetScaleLerp += (1.0/this.userData.targetScaleLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetScaleLerp >= 1.0 )
+					{
+						this.userData.targetScaleLerp = 1.0;
+						justFinished = true;
+					}
+
+					this.scale.lerpVectors(this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
+
+					if( justFinished )
+					{
+						if( this.userData.hasOwnProperty("targetScaleAnim") && this.userData.targetScaleAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetScaleAnim.shift();
+							if( !nextTarget.targetScaleOriginal )
+								nextTarget.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
+
+							// Set our new targets.
+							this.userData.targetScale.copy(nextTarget.targetScale);
+							this.userData.targetScaleOriginal.copy(nextTarget.targetScaleOriginal);
+							this.userData.targetScaleLerp = nextTarget.targetScaleLerp;
+							this.userData.targetScaleLerpTime = nextTarget.targetScaleLerpTime;
+						}
+					}
+				}
+			}
+
+			function doPositionLerp()
+			{
+				if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.targetPosLerp < 1.0 )
+				{
+					this.userData.targetPosLerp += (1.0/this.userData.targetPosLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetPosLerp >= 1.0 )
+					{
+						this.userData.targetPosLerp = 1.0;
+						justFinished = true;
+					}
+
+					this.position.lerpVectors(this.userData.targetPosOriginal, this.userData.targetPos, this.userData.targetPosLerp);
+
+					if( justFinished )
+					{
+						if( typeof this.userData.targetPosCallback === "function" )
+							this.userData.targetPosCallback.call(this);
+
+						this.userData.targetPosCallback = null;
+
+						if( this.userData.hasOwnProperty("targetPosAnim") && this.userData.targetPosAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetPosAnim.shift();
+							if( !nextTarget.targetPosOriginal )
+								nextTarget.targetPosOriginal = new THREE.Vector3().copy(this.position);
+
+							// Set our new targets.
+							this.userData.targetPos.copy(nextTarget.targetPos);
+							this.userData.targetPosOriginal.copy(nextTarget.targetPosOriginal);
+							this.userData.targetPosLerp = nextTarget.targetPosLerp;
+							this.userData.targetPosLerpTime = nextTarget.targetPosLerpTime;
+							if( typeof nextTarget.targetPosCallback === "function" )
+								this.userData.targetPosCallback = nextTarget.targetPosCallback;
+						}
+					}
+				}
+			}
+
+			function doRotationLerp()
+			{
+				if( this.userData.hasOwnProperty("targetRotLerp") && this.userData.targetRotLerp < 1.0 )
+				{
+					this.userData.targetRotLerp += (1.0/this.userData.targetRotLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetRotLerp >= 1.0 )
+					{
+						this.userData.targetRotLerp = 1.0;
+						justFinished = true;
+					}
+
+					var myQuaternionA = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
+					var myQuaternionB = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
+
+					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
+					this.quaternion.copy(myQuaternionA);
+			//		this.rotation.lerpVectors(this.userData.targetRotOriginal, this.userData.targetRot, this.userData.targetRotLerp);
+
+					if( justFinished )
+					{
+						if( this.userData.hasOwnProperty("targetRotAnim") && this.userData.targetRotAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetRotAnim.shift();
+							if( !nextTarget.targetRotOriginal )
+								nextTarget.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
+
+							// Set our new targets.
+							this.userData.targetRot.copy(nextTarget.targetRot);
+							this.userData.targetRotOriginal.copy(nextTarget.targetRotOriginal);
+							this.userData.targetRotLerp = nextTarget.targetRotLerp;
+							this.userData.targetRotLerpTime = nextTarget.targetRotLerpTime;
+						}
+					}
+				}
+			}
+
 			function addTikiBallChildren(ball)
 			{
 				// Spawn hoop children
@@ -515,7 +963,7 @@
 
 				var drumCollision = false;
 				var zMin;
-				if( ballPos.distanceTo(drumPos) < 30.0 && (!g_myDrum.userData.hasOwnProperty("hideMe") || !g_myDrum.userData.hideMe) )
+				if( ballPos.distanceTo(drumPos) < 30.0 && (!g_myDrum.userData.hasOwnProperty("hideMe") || !g_myDrum.userData.hideMe) && !g_myDrum.JumpStart.pleaseWait && !g_myDrum.JumpStart.clickToJoin )
 				{
 					zMin = g_worldOffset.y + 40.0;
 					drumCollision = true;
@@ -667,7 +1115,8 @@
 								if( g_myDrum.JumpStart.score > g_myDrum.JumpStart.bestScore )
 								{
 									g_myDrum.JumpStart.bestScore = g_myDrum.JumpStart.score;
-									g_myDrum.JumpStart.sync();
+									//g_myDrum.JumpStart.sync();
+									DoAutoSync(g_myDrum, true);
 								}
 
 								g_myDrum.userData.scoreReset = true;
@@ -700,9 +1149,116 @@
 
 			//		JumpStart.killSound(beatLoop);
 					beatLoop = null;
+
+
+					var needsSync = true;
+					if( g_highScores.JumpStart.scores["player1"] === g_localUser.displayName )
+					{
+						g_highScores.JumpStart.scores["player1"] = "OPEN";
+						g_highScores.JumpStart.scores["player2"] = "OPEN";
+					}
+					else if( g_highScores.JumpStart.scores["player2"] === g_localUser.displayName )
+					{
+						if( g_highScores.JumpStart.scores["player2"] === "OPEN" )
+						{
+							g_highScores.JumpStart.scores["player1"] = "OPEN";
+							g_highScores.JumpStart.scores["player2"] = "OPEN";
+						}
+						else
+						{
+							if( g_myDrum )
+							{	
+								g_myDrum.JumpStart.pleaseWait = true;
+								g_myDrum.JumpStart.clickToJoin = false;
+								//g_myDrum.JumpStart.sync();
+								DoAutoSync(g_myDrum, true);
+							}
+
+							needsSync = false;
+						}
+					}
+					else
+						needsSync = false;
+
+					if( needsSync )
+					{
+						g_highScores.JumpStart.sync();
+
+						if( g_myDrum )
+						{	
+							g_myDrum.JumpStart.pleaseWait = true;
+							g_myDrum.JumpStart.clickToJoin = false;
+							DoAutoSync(g_myDrum, true);
+							//g_myDrum.JumpStart.sync();
+						}
+					}
 				}
 			}
 
+			function highScores()
+			{
+				g_highScores = this;
+				g_highScores.JumpStart.addDataListener("scores", function(oldValue, value, isLocal) {
+					if( value["player1"] === "OPEN" || value["player2"] === "OPEN" && g_myDrum && g_myDrum.JumpStart.pleaseWait )
+					{
+						g_myDrum.JumpStart.pleaseWait = false;
+						g_myDrum.JumpStart.clickToJoin = true;
+					}
+					else if( value["player1"] !== "OPEN" && value["player2"] !== "OPEN" && g_myDrum.JumpStart.clickToJoin )
+					{
+						g_myDrum.JumpStart.pleaseWait = true;
+						g_myDrum.JumpStart.clickToJoin = false;
+					}
+
+/*
+					var scoresArray = new Array();
+					var i;
+					for( i in value )
+					{
+						scoresArray.push(value[i]);
+					}
+
+					scoresArray.sort(function(a, b) { return (a.high - b.high) * (-1); });
+					*/
+					var table = document.getElementById("highscores");
+
+					// Remove all old rows
+					var targetRows = table.getElementsByTagName("tr");
+					while( targetRows.length > 0 )
+					{
+						table.removeChild(targetRows[0]);
+						targetRows = table.getElementsByTagName("tr");
+					}
+
+					// Add new rows
+					var x, playerScore, row, nameCol, scoreCol;
+					for( x in value )
+					{
+						playerScore = value[x];
+						row = document.createElement("tr");
+
+						nameCol = document.createElement("td");
+						if( x === "player1" )
+							nameCol.innerHTML = "Player 1: ";
+						else
+							nameCol.innerHTML = "Player 2: ";
+
+						scoreCol = document.createElement("td");
+
+						var stuff = playerScore;
+						if( stuff === "OPEN" )
+							stuff = "<font style='color: orange;'>" + stuff + "</font>";
+
+						scoreCol.innerHTML = stuff;
+
+						row.appendChild(nameCol);
+						row.appendChild(scoreCol);
+						table.appendChild(row);
+					}
+				});
+			}
+
+			var g_highScores = null;
 			function MakeDrumHitParticles(ball)
 			{
 				//if( !beatLoop || beatLoop.flexVolume === 0.0 )
@@ -713,6 +1269,7 @@
 						beatLoop = new SeamlessLoop();
 						beatLoop.addUri("sounds/TikiDrum/beat.ogg", 15603.7, "beat");
 						beatLoop.start("beat");
+
 						//beatLoop = JumpStart.playSound("sounds/TikiDrum/beat", 0.3, true);
 					}
 					else
@@ -720,12 +1277,12 @@
 						beatLoop.play();
 					}
 
-					beatLoop.volume(0.3);
+					beatLoop.volume(0.03);
 					//beatLoop.flexVolume = 0.3;
 				}
 
 				var randIndex = Math.round(Math.random() * 10);
-				JumpStart.playSound("sounds/TikiDrum/cymb" + randIndex, 1.0, false);
+				JumpStart.playSound("sounds/TikiDrum/cymb" + randIndex, 0.2, false);
 
 			//	var oldBallLook = new THREE.Vector3().copy(ball.rotation);
 

@@ -68,8 +68,10 @@ body
 
 #titleImageSlate
 {
-	-webkit-transition: top 1s;
-	transition: top 1s;
+	-webkit-transition: all 1s;
+	transition: all 1s;
+	/*-webkit-transition: top 1s;
+	transition: top 1s;*/
 }
 
 .zoomIntoLoading

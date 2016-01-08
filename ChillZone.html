@@ -1,0 +1,720 @@
+<!-- Powered by the JumpStart Game Engine -->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Chill Zone</title>
+
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+	</head>
+
+	<body>
+
+		<div style="position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 999999;">
+			<table width="100%" height="100%"><tr><td valign="middle" align="center">
+				<iframe id="bigScreen" src="bigScreen.html" width="600" height="338" frameborder="0"></iframe>
+			</td></tr></table>
+		</div>
+
+		<div style="position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 999999;">
+			<table width="100%" height="100%"><tr><td valign="bottom" align="center">
+				<form id="urlInputForm">
+					<input type="text" placeholder="CTRL + V to paste" id="urlInput" style="display: none; position: relative; top: -100px;" />
+				</form>
+			</td></tr></table>
+		</div>
+
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
+
+		<script>
+			var urlForm = document.getElementById("urlInputForm");
+			urlForm.addEventListener("submit", function(e)
+			{
+				var elem = document.getElementById("urlInput");
+				spawnUrl(elem.value);
+				elem.style.display = "none";
+				elem.value = "";
+
+				e.preventDefault();
+				return false;
+			}, true);
+			function bigScreen()
+			{
+				this.elem = document.getElementById("bigScreen");
+				this.youTubeId = "";
+				this.youTubeAutoPlay = 1;
+				this.youTubeControls = 0;
+				this.youTubeQuality = "medium";	// hd720
+				this.youTubeRelated = 0;
+				this.youTubePolicy = 3;
+				this.youTubeLoop = 0;
+			}
+
+			bigScreen.prototype.extractYouTubeList = function(url)
+			{
+				var channelType = "";
+				var isPlaylist = 0;
+				var found = url.indexOf("list=");
+
+				if( found >= 0 && url.indexOf("youtube.com/") >= 0 ) {
+				  isPlaylist = 1;
+				  url = url.substring(found+5);
+				}
+				else {
+				  found = url.indexOf("youtube.com/user/");
+
+				  if( found >= 0 ) {
+				    url = url.substring(found+17);
+				  }
+				  else {
+				    found = url.indexOf("youtube.com/channel/");
+
+				    if( found >= 0 ) {
+				      url = url.substring(found+20);
+				    }
+				  }
+				}
+
+				if( isPlaylist )
+					channelType = "playlist";
+				else
+					channelType = "channel";
+
+				if( found >= 0 ) {
+				  found = url.indexOf("/");
+				  if( found == -1 ) found = url.indexOf("?");
+				  if( found == -1 ) found = url.indexOf("&");
+				  if( found >= 0 ) {
+				    url = url.substring(0, found);
+				  }
+
+				  var channelID = url;
+				  return {"listId": channelID, "listType": channelType};
+				}
+				else
+					return null;
+/*
+				var isPlaylist = 0;
+				var found = url.indexOf("list=");
+
+				if( found >= 0 && url.indexOf("youtube.com/") >= 0 ) {
+				  isPlaylist = 1;
+				  url = url.substring(found+5);
+				}
+				else {
+				  found = url.indexOf("youtube.com/user/");
+
+				  if( found >= 0 ) {
+				    url = url.substring(found+17);
+				  }
+				  else {
+				    found = url.indexOf("youtube.com/channel/");
+
+				    if( found >= 0 ) {
+				      url = url.substring(found+20);
+				    }
+				  }
+				}
+
+				if( found >= 0 ) {
+				  found = url.indexOf("/");
+				  if( found == -1 ) found = url.indexOf("?");
+				  if( found == -1 ) found = url.indexOf("&");
+				  if( found >= 0 ) {
+				    url = url.substring(0, found);
+				  }
+
+				  var channelID = url;
+
+				  var xmlhttp;
+				  xmlhttp=new XMLHttpRequest();
+
+				  xmlhttp.onreadystatechange = function() {
+				    if( xmlhttp.readyState == 4 ) {
+				      if( xmlhttp.status != 200) {
+				        callback();
+				      }
+				      else {
+				        var response = JSON.parse(xmlhttp.responseText);
+
+				        scraper.data = new Array();
+
+				        var videoArray = response.data.items;
+				        for( var i = 0; i < videoArray.length; i++ ) {
+				          console.log("ID is: " + videoArray[i].id);
+				          var video;
+				          if( isPlaylist ) {
+				            video = videoArray[i].video;
+				          }
+				          else {
+				            video = videoArray[i];
+				          }
+
+				          var videoItem = {};
+				          videoItem["title"] = video.title;
+				          videoItem["type"] = "youtube";
+
+				          videoItem["title"] = video.title;
+				          videoItem["screenshot_url"] = "http://img.youtube.com/vi/" + video.id + "/0.jpg";
+				          videoItem["description"] = video.description;
+				          videoItem["file_location"] = "http://www.youtube.com/watch?v=" + video.id;
+				          videoItem["type"] = "youtube";
+
+				          scraper.data.push(videoItem);
+				        }
+
+				        callback(scraper);
+				      }
+				    }
+				  };
+
+				  var requestURL = isPlaylist ? requestURL = "http://gdata.youtube.com/feeds/api/playlists/" : "http://gdata.youtube.com/feeds/api/videos?author=";
+				  requestURL += channelID;
+				  requestURL += isPlaylist ? "?v=2&alt=jsonc" : "&v=2&orderby=updated&alt=jsonc";
+
+				  xmlhttp.open("GET",requestURL,true);
+				  xmlhttp.send();      
+				}
+				else
+					callback();
+				*/
+			}
+
+			bigScreen.prototype.fetchYouTubeList = function(tubeList, callback)
+			{
+				var isPlaylist = (tubeList.listType === "playlist") ? 1 : 0;
+				var found;
+
+				var channelID = tubeList.listId;
+
+				var xmlhttp;
+				xmlhttp=new XMLHttpRequest();
+
+				xmlhttp.onreadystatechange = function()
+				{
+					if( xmlhttp.readyState == 4 )
+					{
+						if( xmlhttp.status != 200)
+							callback([]);
+						else
+						{
+							var response = JSON.parse(xmlhttp.responseText);
+						    scraper.data = new Array();
+
+						    var videos = new Array();
+						    var videoArray = response.data.items;
+						    for( var i = 0; i < videoArray.length; i++ )
+						    {
+								//console.log("ID is: " + videoArray[i].id);
+
+								var video;
+								if( isPlaylist )
+									video = videoArray[i].video;
+								else
+									video = videoArray[i];
+
+//								var videoItem = {};
+//								videoItem["title"] = video.title;
+//								videoItem["screenshot_url"] = "http://img.youtube.com/vi/" + video.id + "/0.jpg";
+//								videoItem["description"] = video.description;
+//								videoItem["file_location"] = "http://www.youtube.com/watch?v=" + video.id;
+//								videoItem["type"] = "youtube";
+
+								videos.push(video.id);
+						    }
+
+//							callback(videos);
+						}
+					}
+				};
+
+				var requestURL = isPlaylist ? requestURL = "http://gdata.youtube.com/feeds/api/playlists/" : "http://gdata.youtube.com/feeds/api/videos?author=";
+				requestURL += channelID;
+				requestURL += isPlaylist ? "?v=2&alt=jsonc" : "&v=2&orderby=updated&alt=jsonc";
+
+				xmlhttp.open("GET",requestURL,true);
+				xmlhttp.send();
+			}
+
+			bigScreen.prototype.extractYouTubeId = function(url)
+			{
+				var tubeValue =  "";
+
+				var found = url.indexOf("youtube.com/embed/");
+
+				if( found >= 0 )
+					tubeValue = url.substring(found+18);
+
+				if( tubeValue === "" )
+				{
+					found = url.indexOf("youtu.be/");
+
+					if( found >= 0 )
+						tubeValue = url.substring(found+9);
+				}
+
+				if( tubeValue === "" )
+				{
+					found = url.indexOf("youtube.com/watch?v=");
+
+					if( found >= 0 )
+						tubeValue = url.substring(found+20);
+				}
+
+				if( tubeValue === "" )
+				{
+					found = url.indexOf("youtube");
+					if( found >= 0 )
+					{
+						found = url.indexOf("&v=");
+						if( found >= 0 )
+						{
+							var foundPound = url.lastIndexOf("#");
+							if( foundPound >= 0 && foundPound > found )
+								tubeValue = url.substring(found+3, foundPound-found-3);
+							else
+								tubeValue = url.substring(found+3);
+						}
+					}
+				}
+
+				return tubeValue;
+			};
+
+			bigScreen.prototype.generateYouTubeThumbnailUrl = function(tubeId)
+			{
+				return "http://img.youtube.com/vi/" + tubeId + "/0.jpg";
+			}
+
+			bigScreen.prototype.showURL = function(url)
+			{
+				// IS this a YouTube URL?
+				var tubeValue = this.extractYouTubeId(url);
+
+				var goToUrl = url;
+				if( tubeValue !== "" )
+				{
+					goToUrl = "http://www.jumpstartsdk.com/live/view_youtube.php?id=";
+					goToUrl += tubeValue;
+					goToUrl += "&rel=" + this.youTubeRelated;
+					goToUrl += "&iv_load_policy=" + this.youTubePolicy;
+					goToUrl += "&autoplay=" + this.youTubeAutoPlay;
+					goToUrl += "&loop=" + this.youTubeLoop;
+				}
+				else
+				{
+					this.elem.style.overflow = "auto";
+				}
+
+				this.elem.src = goToUrl;
+			};
+
+			var g_bigScreen = new bigScreen();
+		</script>
+
+		<!-- Window-Level Event Callbacks -->
+		<script>
+
+			// Configure JumpStart.  You really only need to list
+			// properties you want non-default values for.
+			var myOptions =
+			{
+				"legacyLoader": false,
+				"worldScale": 2.0,
+				"scaleWithEnclosure": true,
+				"showCrosshair": true,
+				"showCursorPlanes": false,
+				"camera":
+				{
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+					"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+				}/*,
+				"firebase":
+				{
+					"rootUrl": "https://jump-start.firebaseio.com/",
+					"appId": "JumpStart",
+					"suppressPersonalBrowser": true
+				}*/
+			};
+
+			JumpStart.setOptions(myOptions);
+
+			// Window-level callback for onPrecache event
+			function onPrecache()
+			{
+				/*
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+				*/
+
+				// Precaching is important with networked apps!!
+				// Networked objects might get spawned before the
+				// local client gets the onReady window-level callback!!
+
+				// You can think of precaching sounds as synchronous (but it's not)
+//				JumpStart.precacheSound("sounds/JumpStart/trumpet");
+//				JumpStart.precacheSound("sounds/JumpStart/cashout");
+
+				// Precache any models that your app needs (asynchronous)
+				var myModels = ["models/JumpStart/jewel.obj"];//, "models/ChillZone/menuItemOff.obj"
+				JumpStart.loadModels(myModels).then(function() {
+
+					// All assets cached.
+					JumpStart.doneCaching();
+				});
+			}
+
+			// Window-level callback for onReady event
+			function onReady()
+			{
+				/*
+				if( !JumpStart.requestedRoomId )
+					return;
+
+				// Do nothing if we are not in an enclosure yet.
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
+					{
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
+
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+
+				// Only the 1st user needs to create the networked object
+				if( g_localUser.firstUser )
+				{
+					// Spawn a jewel block
+					var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
+
+					// Do something each render tick
+					myInstance.JumpStart.onTick["spinObject"] = spinObject;
+
+					// Do something on spawn
+					myInstance.JumpStart.onSpawn["prepJewel"] = prepJewel;
+
+					// Do something when it's clicked
+					myInstance.JumpStart.onCursorDown["growObject"] = growObject;
+					myInstance.JumpStart.onCursorUp["shrinkObject"] = shrinkObject;
+
+					// Do something when it's hovered over
+					myInstance.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+					myInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+
+					// Sync this object's state to the network
+					myInstance.JumpStart.sync();
+
+
+
+					// Spawn a grass block
+					var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
+
+					// Adjust the Object3D's position and scale
+					var offset = new THREE.Vector3(100.0, 0.0, 0.0);
+					myOtherInstance.position.add(offset);
+					myOtherInstance.scale.multiplyScalar(2.0);
+
+					// Must block line-of-sight to be hoverable!!
+					myOtherInstance.JumpStart.blocksLOS = true;	// TRUE by default anyways
+
+					// Do something when it's hovered over
+					myOtherInstance.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+					myOtherInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+
+					// Make the grass spin only when hovered
+					myOtherInstance.JumpStart.onTick["hoverSpin"] = hoverSpin;
+
+					// Sync this object's state to the network
+					myOtherInstance.JumpStart.sync();
+				}
+
+
+				// Spawn a virtual mouse pad.
+				// This is an invisible plane that the user's 3D cursor will collide with.
+				// More details on how to use these in future examples! (sry)
+				var instance = JumpStart.spawnCursorPlane({
+					"position": new THREE.Vector3(-40, 10.0, 0).add(g_worldOffset),
+					"rotation": new THREE.Vector3(0, 0, 0),
+					"width": "33.3",
+					"height": "33.3"
+				});
+*/
+
+//				g_menuSpawnNew = JumpStart.spawnInstance("models/ChillZone/menuItemOff.obj");
+//				g_menuCancel.
+
+				var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
+				myInstance.JumpStart.onCursorDown["urlInput"] = urlInput;
+
+//				spawnUrl("https://www.youtube.com/watch?v=R6bWUv7eMD8");
+
+				// Start the simulation
+				JumpStart.run();
+			}
+
+			var g_timeScale = 0.5;
+
+			// Window-level callback for onTick event
+			function onTick()
+			{
+				// do work
+				if( !JumpStart.webMode && g_bigScreen.elem.src.indexOf("view_youtube.php?id=") >= 0 && typeof g_bigScreen.elem.contentWindow.AASetYouTubeVolume === "function" )
+				{
+					var maxDistance = 500;
+
+//					var flexVolume = g_localUser.lookOrigin.distanceTo(g_worldOffset) / maxDistance;
+
+					var joint = g_localUser.trackingSkeleton.getJoint("Eye");
+					var scaledJointPosition = new THREE.Vector3().copy(joint.position).multiplyScalar(1/g_worldScale);
+
+					var flexVolume = scaledJointPosition.distanceTo(g_worldOffset) / maxDistance;
+					if( flexVolume > 1.0 )
+						flexVolume = 1.0;
+
+					var volume = 100 - (100 * flexVolume);
+					g_bigScreen.elem.contentWindow.AASetYouTubeVolume(volume);
+				}
+				else
+				{
+//					console.log(typeof g_bigScreen.elem.contentWindow.AASetYouTubeVolume);
+				}
+			}
+
+			// Window-level callback for onCursorDown event
+			function onCursorDown()
+			{
+				// do work
+			}
+
+			// Window-level callback for onCursorUp event
+			function onCursorUp()
+			{
+				// do work
+			}
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+			var g_count = 0;
+
+			function urlInput()
+			{
+				var elem = document.getElementById("urlInput");
+				elem.style.display = "block";
+				elem.focus();
+			}
+
+			function spawnUrl(url)
+			{
+				function spawnMesh(success, parentInstance)
+				{
+					function getRandomColor()
+					{
+						var letters = '0123456789abcdef'.split('');
+						var color = '#';
+						for (var i = 0; i < 6; i++ )
+							color += letters[Math.floor(Math.random() * 16)];
+
+						return color;
+					}
+
+					var geometry = new THREE.BoxGeometry(50, 28, 0);
+					var material;
+
+////////////
+	// CUSTOM //
+	////////////
+	
+	/////// draw text on canvas /////////
+
+	// create a canvas element
+	var canvas1 = document.createElement('canvas');
+	var context1 = canvas1.getContext('2d');
+	context1.font = "Bold 40px Arial";
+	context1.fillStyle = "rgba(255,0,0,0.95)";
+    context1.fillText('Hello, world!', 0, 50);
+    
+	// canvas contents will be used for a texture
+	var texture1 = new THREE.Texture(canvas1) 
+	texture1.needsUpdate = true;
+      
+    
+					if( JumpStart.webMode || !success )
+						material = new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: true });
+					else
+						material = new THREE.MeshBasicMaterial({map: texture1, visible: true});
+
+//side:THREE.DoubleSide
+
+					var thumbnail = new THREE.Mesh(geometry, material);
+
+					parentInstance.add(thumbnail);
+					parentInstance.JumpStart.makePhysics();
+				}
+
+//myInstance
+
+				function imageLoadCallbackFactory (success, parentInstance)
+				{
+					return function()
+					{
+						spawnMesh(success, parentInstance);
+					};
+				}
+/*
+				function callback(videos)
+				{
+					var i, instance, rando;
+					for( i = 0; i < videos.length; i++ )
+					{
+
+						instance = spawnThubnail(videos[i].url);
+
+						rando = g_worldOffset.y * Math.random();
+						rando *= (Math.random() > 0.5) ? 1.0 : -1.0;
+						instance.position.x += rando;
+
+						rando = g_worldOffset.y * Math.random();
+						rando *= (Math.random() > 0.5) ? 1.0 : -1.0;
+						instance.position.z += rando;
+
+						instance.position.y = -g_worldOffset.y;
+						g_count++;
+					}
+				}
+*/
+
+//				var tubeList = g_bigScreen.extractYouTubeList(url);
+//				if( tubeList )
+//				{
+//					var videos = g_bigScreen.fetchYouTubeList(tubeList, callback);
+//					return;
+//				}
+//				else
+//				var tubeId = g_bigScreen.extractYouTubeId(url);
+//				if( tubeId )
+//					spawnThumbnail(url);
+
+
+//				function spawnThumbnail(url)
+//				{
+					// Create the physical object
+					var myInstance = JumpStart.spawnInstance();
+					myInstance.position.set(0, 0, 0);
+					myInstance.JumpStart.linkURL = url;
+					myInstance.JumpStart.onCursorDown["showURL"] = showURL;
+					myInstance.JumpStart.onTick["fallTick"] = fallTick;
+
+					var rando = g_worldOffset.y * Math.random();
+					rando *= (Math.random() > 0.5) ? 1.0 : -1.0;
+					myInstance.position.x += rando;
+
+					rando = g_worldOffset.y * Math.random();
+					rando *= (Math.random() > 0.5) ? 1.0 : -1.0;
+					myInstance.position.z += rando;
+
+					myInstance.position.y = -g_worldOffset.y;
+
+					var tubeId = g_bigScreen.extractYouTubeId(url);
+					if( tubeId !== "" )
+						var texture = THREE.ImageUtils.loadTexture(g_bigScreen.generateYouTubeThumbnailUrl(tubeId), {},
+						imageLoadCallbackFactory(true, myInstance), imageLoadCallbackFactory(false, myInstance));
+					else
+						imageLoadCallbackFactory(false, myInstance).call();
+
+//					return myInstance;	// NOTE: It will not actually exist in the scene yet.
+//				}
+			}
+/*
+			function showContextMenu()
+			{
+				console.log("SHOW IT!");
+			}
+*/
+			function showURL()
+			{
+				g_bigScreen.showURL(this.JumpStart.linkURL);
+			}
+
+			function fallTick()
+			{
+				if( this.position.y < g_worldOffset.y + 15 )
+				{
+					this.position.y = g_worldOffset.y + 15;
+					this.JumpStart.makeStatic();
+					this.rotation.x = 0;
+					this.rotation.z = 0;
+				}
+			}
+
+			function spinObject()
+			{
+				this.rotateY(1.0 * g_deltaTime);
+			}
+
+			function growObject()
+			{
+				this.scale.multiplyScalar(2.0);
+			}
+
+			function shrinkObject()
+			{
+				this.scale.multiplyScalar(0.5);
+			}
+
+			function highlightOnObject()
+			{
+				var myColor = new THREE.Color(1.5, 1.5, 1.5);
+				this.JumpStart.setTint(myColor);
+			}
+
+			function highlightOffObject()
+			{
+				var myColor = new THREE.Color(1.0, 1.0, 1.0);
+				this.JumpStart.setTint(myColor);
+			}
+
+			function hoverSpin()
+			{
+				if( g_hoveredObject === this )
+					this.rotateY(1.0 * g_deltaTime);
+			}
+
+			function prepJewel(isLocal)
+			{
+				// Play a sound when this object is spawned.
+				// Use a different sound depending on if we created
+				// this object or somebody else did over the network.
+
+				if( isLocal )
+					JumpStart.playSound("sounds/JumpStart/trumpet", 0.5, false);
+				else
+					JumpStart.playSound("sounds/JumpStart/cashout", 0.5, false);
+			}
+		</script>
+	</body>
+</html>

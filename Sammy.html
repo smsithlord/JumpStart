@@ -1,0 +1,540 @@
+<!-- Powered by the JumpStart Game Engine -->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Sammy</title>
+
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+	</head>
+
+	<body>
+
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
+
+		<!-- Window-Level Event Callbacks -->
+		<script>
+
+			// Configure JumpStart.  You really only need to list
+			// properties you want non-default values for.
+			var myOptions =
+			{
+				"legacyLoader": false,
+				"worldScale": 2.0,
+				"scaleWithEnclosure": true,
+				"showCrosshair": false,
+				"showCursorPlanes": false,
+				"camera":
+				{
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+					"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+				}/*,
+				"firebase":
+				{
+					"rootUrl": "https://jump-start.firebaseio.com/",
+					"appId": "JumpStart",
+					"suppressPersonalBrowser": true
+				}*/
+			};
+
+			JumpStart.setOptions(myOptions);
+
+			var g_sammy = null;
+			// Window-level callback for onPrecache event
+			function onPrecache()
+			{
+				if( JumpStart.personalBrowser )//|| !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+
+				// Precaching is important with networked apps!!
+				// Networked objects might get spawned before the
+				// local client gets the onReady window-level callback!!
+
+				// You can think of precaching sounds as synchronous (but it's not)
+//				JumpStart.precacheSound("sounds/JumpStart/trumpet");
+//				JumpStart.precacheSound("sounds/JumpStart/cashout");
+
+				// Precache any models that your app needs (asynchronous)
+				var myModels = [
+					"models/Sammy/bugbody.obj",
+					"models/Sammy/bugeyes.obj",
+					"models/Sammy/bugdish.obj",
+					"models/Sammy/bugrig.obj",
+					"models/Sammy/bugrearleft.obj",
+					"models/Sammy/bugmidleft.obj",
+					"models/Sammy/bugfrontleft.obj",
+					"models/Sammy/bugrearright.obj",
+					"models/Sammy/bugmidright.obj",
+					"models/Sammy/bugfrontright.obj"
+				];
+
+				JumpStart.loadModels(myModels).then(function() {
+
+					// All assets cached.
+					JumpStart.doneCaching();
+				});
+			}
+
+			// Window-level callback for onReady event
+			function onReady()
+			{
+//				if( !JumpStart.requestedRoomId )
+//					return;
+
+				// Do nothing if we are not in an enclosure yet.
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
+					{
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
+
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+
+				if( g_localUser.firstUser )
+				{
+
+				}
+
+				//var bug = JumpStart.spawnInstance("models/Sammy/bugfull.obj");
+
+//				setTimeout(function() {
+					if( !g_sammy )
+					{
+						var bug = JumpStart.spawnInstance();
+						bug.JumpStart.onSpawn["bugSpawn"] = bugSpawn;
+						bug.JumpStart.onTick["bugTick"] = bugTick;
+		//				bug.scale.set(1, 1, 1).multiplyScalar(g_worldScale);
+						bug.position.copy(g_worldOffset);
+						bug.rotation.set(0, 0, 0);
+						bug.JumpStart.wonderOrigin = new THREE.Vector3().copy(bug.position);
+		//				bug.lookAt(g_camera.position);
+						bug.JumpStart.sync();
+
+						g_sammy = bug;
+					}
+//				}, 2000);
+
+				// Start the simulation
+				JumpStart.run();
+			}
+
+			// Window-level callback for onTick event
+			function onTick()
+			{
+				// do work
+			}
+
+			// Window-level callback for onCursorDown event
+			function onCursorDown()
+			{
+				// do work
+			}
+
+			// Window-level callback for onCursorUp event
+			function onCursorUp()
+			{
+				// do work
+			}
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+			function doScaleLerp()
+			{
+				//console.log("scale lerp");
+				if( this.userData.hasOwnProperty("targetScaleLerp") && this.userData.targetScaleLerp < 1.0 )
+				{
+					this.userData.targetScaleLerp += (1.0/this.JumpStart.targetScaleLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetScaleLerp >= 1.0 )
+					{
+						this.userData.targetScaleLerp = 1.0;
+						justFinished = true;
+					}
+
+					this.scale.lerpVectors(this.JumpStart.targetScaleOriginal, this.JumpStart.targetScale, this.userData.targetScaleLerp);
+
+					if( justFinished )
+					{
+						if( this.userData.hasOwnProperty("targetScaleAnim") && this.userData.targetScaleAnim && this.userData.targetScaleAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetScaleAnim.shift();
+							if( !nextTarget.targetScaleOriginal )
+								nextTarget.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
+
+							// Set our new targets.
+							this.JumpStart.targetScale.copy(nextTarget.targetScale);
+							this.JumpStart.targetScaleOriginal.copy(nextTarget.targetScaleOriginal);
+							this.userData.targetScaleLerp = nextTarget.targetScaleLerp;
+							this.JumpStart.targetScaleLerpTime = nextTarget.targetScaleLerpTime;
+						}
+					}
+				}
+			}
+
+			function doPositionLerp()
+			{
+				if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.targetPosLerp < 1.0 )
+				{
+					this.userData.targetPosLerp += (1.0/this.JumpStart.targetPosLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetPosLerp >= 1.0 )
+					{
+						this.userData.targetPosLerp = 1.0;
+						justFinished = true;
+					}
+
+					this.position.lerpVectors(this.JumpStart.targetPosOriginal, this.JumpStart.targetPos, this.userData.targetPosLerp);
+
+					if( justFinished )
+					{
+						if( typeof this.userData.targetPosCallback === "function" )
+							this.userData.targetPosCallback.call(this);
+
+						this.userData.targetPosCallback = null;
+
+						if( this.userData.hasOwnProperty("targetPosAnim") && this.userData.targetPosAnim && this.userData.targetPosAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetPosAnim.shift();
+							if( !nextTarget.targetPosOriginal )
+								nextTarget.targetPosOriginal = new THREE.Vector3().copy(this.position);
+
+							// Set our new targets.
+							this.JumpStart.targetPos.copy(nextTarget.targetPos);
+							this.JumpStart.targetPosOriginal.copy(nextTarget.targetPosOriginal);
+							this.userData.targetPosLerp = nextTarget.targetPosLerp;
+							this.JumpStart.targetPosLerpTime = nextTarget.targetPosLerpTime;
+							if( typeof nextTarget.targetPosCallback === "function" )
+								this.userData.targetPosCallback = nextTarget.targetPosCallback;
+
+							this.JumpStart.sync();
+						}
+					}
+				}
+			}
+
+			function doRotationLerp()
+			{
+				//console.log("rot lerp");
+				if( this.userData.hasOwnProperty("targetRotLerp") && this.userData.targetRotLerp < 1.0 )
+				{
+					this.userData.targetRotLerp += (1.0/this.JumpStart.targetRotLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetRotLerp >= 1.0 )
+					{
+						this.userData.targetRotLerp = 1.0;
+						justFinished = true;
+					}
+
+					var myQuaternionA = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.JumpStart.targetRotOriginal, 'XYZ'));
+					var myQuaternionB = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.JumpStart.targetRot, 'XYZ'));
+
+					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
+					this.quaternion.copy(myQuaternionA);
+			//		this.rotation.lerpVectors(this.JumpStart.targetRotOriginal, this.JumpStart.targetRot, this.userData.targetRotLerp);
+
+					if( justFinished )
+					{
+						if( typeof this.userData.targetRotCallback === "function" )
+							this.userData.targetRotCallback.call(this);
+
+						this.userData.targetRotCallback = null;
+
+						if( this.userData.hasOwnProperty("targetRotAnim") && this.userData.targetRotAnim && this.userData.targetRotAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetRotAnim.shift();
+							if( !nextTarget.targetRotOriginal )
+								nextTarget.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
+
+							// Set our new targets.
+							this.JumpStart.targetRot.copy(nextTarget.targetRot);
+							this.JumpStart.targetRotOriginal.copy(nextTarget.targetRotOriginal);
+							this.userData.targetRotLerp = nextTarget.targetRotLerp;
+							this.JumpStart.targetRotLerpTime = nextTarget.targetRotLerpTime;
+							if( typeof nextTarget.targetRotCallback === "function" )
+								this.userData.targetRotCallback = nextTarget.targetRotCallback;
+						}
+					}
+				}
+			}
+
+			function bugTick()
+			{
+				function randoNinjaStop()
+				{
+					var rando = Math.random();
+					if( rando > 0.9 )
+						return true;
+					else
+						return false;
+				}
+
+				function randoTurn()
+				{
+					var rando = Math.random();
+					if( rando < 0.2 )
+						return 1.0;
+					else if( rando > 0.8 )
+						return -1.0;
+					else
+						return 0;
+				}
+
+				function randoTurnSpeed()
+				{
+					var rando = Math.random() * 0.7;
+
+//					if( Math.random() > 0.5 )
+//						rando *= -1.0;
+
+					return rando;
+				}
+
+				if( !this.userData.hasOwnProperty("turnDirection") )
+				{
+					this.userData.turnDirection = randoTurn();
+					this.userData.turnSpeed = randoTurnSpeed();
+					this.userData.turnLife = 1.0 * Math.random();
+				}
+
+				var boost = 1.0;
+				if( this.userData.ninjaStop )
+					boost = 2.0;
+
+				this.userData.turnLife -= boost * g_deltaTime;
+
+				if( this.userData.turnLife < 0 )
+				{
+					this.userData.turnLife = 1.0;
+					this.userData.turnDirection = randoTurn();
+					this.userData.turnSpeed = randoTurnSpeed();
+
+					if( randoNinjaStop() )
+						this.userData.ninjaStop = true;
+					else
+						this.userData.ninjaStop = false;
+				}
+
+				var speed = 13.0;
+
+				if( !this.userData.ninjaStop )
+				{
+					this.translateZ(speed * g_deltaTime);
+
+					if( this.position.distanceTo(this.JumpStart.wonderOrigin) > 150.0 )
+					{
+//						var oldYAW = this.rotation.y;
+						this.lookAt(this.JumpStart.wonderOrigin);
+//						this.rotation.y = oldYAW;
+					}
+					else
+						this.rotateY(this.userData.turnSpeed * this.userData.turnDirection * g_deltaTime);
+				}
+			}
+
+			function flipFlopWalk()
+			{
+				this.userData.direction *= -1.0;
+
+				this.userData.targetRotAnim = [{
+					targetRot: new THREE.Vector3(0, this.userData.direction * (Math.PI/14.0), 0),
+					targetRotOriginal: null,
+					targetRotLerp: 0.0,
+					targetRotLerpTime: 0.8,
+					targetRotCallback: flipFlopWalk
+				}];
+			}
+
+			function legWalk()
+			{
+				if( this.userData.parentBug.userData.hasOwnProperty("ninjaStop") && this.userData.parentBug.userData.ninjaStop )
+				{
+					this.rotation.set(0, 0, 0);
+					return;
+				}
+
+				doScaleLerp.call(this);
+				doRotationLerp.call(this);
+				doPositionLerp.call(this);
+
+				if( this.userData.direction < 0 )
+				{
+					if( this.userData.targetRotLerp <= 0.5 )
+						this.rotateZ((Math.PI * this.userData.targetRotLerp) * 0.3);
+					else
+						this.rotateZ((Math.PI * (1.0 - this.userData.targetRotLerp)) * 0.3);
+				}
+			}
+
+			function legWalk2()
+			{
+				if( this.userData.parentBug.userData.hasOwnProperty("ninjaStop") && this.userData.parentBug.userData.ninjaStop )
+				{
+					this.rotation.set(0, 0, 0);
+					return;
+				}
+
+				doScaleLerp.call(this);
+				doRotationLerp.call(this);
+				doPositionLerp.call(this);
+
+				if( this.userData.direction > 0 )
+				{
+					if( this.userData.targetRotLerp <= 0.5 )
+						this.rotateZ(-(Math.PI * this.userData.targetRotLerp) * 0.3);
+					else
+						this.rotateZ(-(Math.PI * (1.0 - this.userData.targetRotLerp)) * 0.3);
+				}
+			}
+
+			function bugSpawn()
+			{
+				g_sammy = this;
+				
+				// attach all our parts
+				var verts;
+				var x;
+				for( x in JumpStart.models )
+				{
+					if( JumpStart.models[x].fileName === "models/Sammy/bugrig.obj" )
+					{
+						verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
+						break;
+					}
+				}
+
+				var bugJoints = {"body": verts[4], "dish": verts[7], "eyes": verts[8], "rearleft": verts[1], "midleft": verts[0], "frontleft": verts[3], "rearright": verts[6], "midright": verts[5], "frontright": verts[2]};
+
+				var body = JumpStart.spawnInstance("models/Sammy/bugbody.obj", {"parent": this});
+				body.position.copy(bugJoints.body);
+				body.JumpStart.blocksLOS = false;
+
+				var dish = JumpStart.spawnInstance("models/Sammy/bugdish.obj", {"parent": this});
+				dish.position.copy(bugJoints.dish);
+				dish.JumpStart.blocksLOS = false;
+
+				dish.JumpStart.onTick = function()
+				{
+					this.rotateY(2.0 * g_deltaTime);
+				};
+
+				var eyes = JumpStart.spawnInstance("models/Sammy/bugeyes.obj", {"parent": this});
+				eyes.position.copy(bugJoints.eyes);
+				eyes.JumpStart.blocksLOS = false;
+
+				var rearleft = JumpStart.spawnInstance("models/Sammy/bugrearleft.obj", {"parent": this});
+				rearleft.JumpStart.blocksLOS = false;
+				rearleft.position.copy(bugJoints.rearleft);
+				rearleft.userData.direction = -1.0;
+				rearleft.JumpStart.targetRot = new THREE.Vector3(0, (Math.PI/14.0), 0);
+				rearleft.userData.targetRotLerp = 0.0;
+				rearleft.JumpStart.targetRotOriginal = new THREE.Vector3(0, 0, 0);
+				rearleft.JumpStart.targetRotLerpTime = 0.4;
+				rearleft.userData.targetRotCallback = flipFlopWalk;
+				rearleft.userData.parentBug = this;
+
+				rearleft.JumpStart.onTick = legWalk;
+
+				var midleft = JumpStart.spawnInstance("models/Sammy/bugmidleft.obj", {"parent": this});
+				midleft.position.copy(bugJoints.midleft);
+				midleft.JumpStart.blocksLOS = false;
+				midleft.userData.direction = 1.0;
+				midleft.JumpStart.targetRot = new THREE.Vector3(0, (Math.PI/7.0), 0);
+				midleft.userData.targetRotLerp = 0.0;
+				midleft.JumpStart.targetRotOriginal = new THREE.Vector3(0, 0, 0);
+				midleft.JumpStart.targetRotLerpTime = 0.4;
+				midleft.userData.targetRotCallback = flipFlopWalk;
+				midleft.userData.parentBug = this;
+
+				midleft.JumpStart.onTick = legWalk;
+
+				var frontleft = JumpStart.spawnInstance("models/Sammy/bugfrontleft.obj", {"parent": this});
+				frontleft.position.copy(bugJoints.frontleft);
+				frontleft.JumpStart.blocksLOS = false;
+				frontleft.userData.direction = -1.0;
+				frontleft.JumpStart.targetRot = new THREE.Vector3(0, (Math.PI/14.0), 0);
+				frontleft.userData.targetRotLerp = 0.0;
+				frontleft.JumpStart.targetRotOriginal = new THREE.Vector3(0, 0, 0);
+				frontleft.JumpStart.targetRotLerpTime = 0.4;
+				frontleft.userData.targetRotCallback = flipFlopWalk;
+				frontleft.userData.parentBug = this;
+
+				frontleft.JumpStart.onTick = legWalk;
+
+				var rearright = JumpStart.spawnInstance("models/Sammy/bugrearright.obj", {"parent": this});
+				rearright.position.copy(bugJoints.rearright);
+				rearright.JumpStart.blocksLOS = false;
+				rearright.userData.direction = -1.0;
+				rearright.JumpStart.targetRot = new THREE.Vector3(0, (Math.PI/7.0), 0);
+				rearright.userData.targetRotLerp = 0.0;
+				rearright.JumpStart.targetRotOriginal = new THREE.Vector3(0, 0, 0);
+				rearright.JumpStart.targetRotLerpTime = 0.4;
+				rearright.userData.targetRotCallback = flipFlopWalk;
+				rearright.userData.parentBug = this;
+
+				rearright.JumpStart.onTick = legWalk2;
+
+				var midright = JumpStart.spawnInstance("models/Sammy/bugmidright.obj", {"parent": this});
+				midright.position.copy(bugJoints.midright);
+				midright.JumpStart.blocksLOS = false;
+				midright.userData.direction = 1.0;
+				midright.JumpStart.targetRot = new THREE.Vector3(0, (Math.PI/7.0), 0);
+				midright.userData.targetRotLerp = 0.0;
+				midright.JumpStart.targetRotOriginal = new THREE.Vector3(0, 0, 0);
+				midright.JumpStart.targetRotLerpTime = 0.4;
+				midright.userData.targetRotCallback = flipFlopWalk;
+				midright.userData.parentBug = this;
+
+				midright.JumpStart.onTick = legWalk2;
+
+				var frontright = JumpStart.spawnInstance("models/Sammy/bugfrontright.obj", {"parent": this});
+				frontright.position.copy(bugJoints.frontright);
+				frontright.JumpStart.blocksLOS = false;
+				frontright.userData.direction = -1.0;
+				frontright.JumpStart.targetRot = new THREE.Vector3(0, (Math.PI/7.0), 0);
+				frontright.userData.targetRotLerp = 0.0;
+				frontright.JumpStart.targetRotOriginal = new THREE.Vector3(0, 0, 0);
+				frontright.JumpStart.targetRotLerpTime = 0.4;
+				frontright.userData.targetRotCallback = flipFlopWalk;
+				frontright.userData.parentBug = this;
+
+				frontright.JumpStart.onTick = legWalk2;
+
+/*
+				var eyes = JumpStart.spawnInstance("models/Sammy/bugeyes.obj", {"parent": this});
+				eyes.position.copy(bugJoints.eyes);
+				eyes.JumpStart.blocksLOS = false;
+*/
+//				this.lookAt(g_camera.position);
+			}
+		</script>
+	</body>
+</html>

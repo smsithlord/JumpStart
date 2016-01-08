@@ -52,8 +52,9 @@
 			// Window-level callback for onPrecache event
 			function onPrecache()
 			{
-			//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
-			//	allDataRef.remove();
+//				var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+//				allDataRef.remove();
+//				return;
 
 				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
 				{
@@ -268,9 +269,6 @@
 
 			function onCursorDown()
 			{
-				if( g_previewBlock.hasOwnProperty('isInvalid') && g_previewBlock.isInvalid )
-					return;
-
 				spawnBlock();
 			}
 
@@ -331,7 +329,16 @@
 
 			function spawnBlock()
 			{
+				if( g_previewBlock.hasOwnProperty('isInvalid') && g_previewBlock.isInvalid )
+					return null;
+
 				if( g_MaxBlocks <= g_numSyncedInstances )
+					return null;
+
+				var amount = -g_worldOffset.y + 1;
+				if( g_previewBlock.position.x > amount || g_previewBlock.position.x < -amount ||
+					g_previewBlock.position.y > amount || g_previewBlock.position.y < -amount ||
+					g_previewBlock.position.z > amount || g_previewBlock.position.z < -amount )
 					return null;
 
 				var instance = JumpStart.spawnInstance(g_BlockTypes[g_CurrentBlockType]);
@@ -510,12 +517,14 @@
 			{
 				if( e.keyCode == 0 || e.keyCode == 32 )
 				{
+					/*
 					var hitBlock = g_lookHit.object.parent;
 					if( hitBlock.hasOwnProperty('isBlock') )
 					{
 						hitBlock.JumpStart.blocksLOS = false;
 						JumpStart.removeSyncedObject(hitBlock);
-					}
+					}*/
+					deleteBlock();
 				}
 				else if( e.keyCode == 88 )
 				{
@@ -545,6 +554,43 @@
 					this.position.y = g_worldOffset.y;
 					this.JumpStart.physicsState = 0;
 					this.userData.terminal = 5.0;
+				}
+			}
+
+			function deleteBlock()
+			{
+				var hitBlock = g_lookHit.object.parent;
+				if( hitBlock.hasOwnProperty('isBlock') )
+				{
+					hitBlock.JumpStart.blocksLOS = false;
+					JumpStart.removeSyncedObject(hitBlock);
+				}
+			}
+
+			function onGamepadButtonDown(button, index)
+			{
+				console.log("wtf");
+				
+				if( index === 0 )
+				{
+					// A BUTTON
+					if( JumpStart.webMode )
+						spawnBlock();	// This action is already captured by JumpStart's onCursorDown event inside of AltspaceVR
+				}
+				else if( index === 2 )
+				{
+					// X BUTTON
+					deleteBlock();
+				}
+				else if( index === 4 )
+				{
+					// L BUTTON
+					JumpStart.pendingEventA = function() { CycleBlock(1); };
+				}
+				else if( index === 5 )
+				{
+					// R BUTTON
+					JumpStart.pendingEventA = function() { CycleBlock(-1); };
 				}
 			}
 		</script>

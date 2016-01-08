@@ -53,16 +53,16 @@
 			// Window-level callback for onPrecache event
 			function onPrecache()
 			{
+//				var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+//				allDataRef.remove();
+//				return;
+
 				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
 				{
 					JumpStart.doneCaching();
 					return;
 				}
 				
-				// CLear the database...
-			//	var allDataRef = JumpStart.firebaseSync.firebaseRoot;
-			//	allDataRef.remove();
-
 				// Precache anything that your app needs.
 				var myModels = ["models/FourInRow/slot.obj", "models/FourInRow/frame.obj", "models/FourInRow/pointer.obj", "models/FourInRow/chip.obj", "models/FourInRow/chip2.obj"];
 				JumpStart.loadModels(myModels).then(function() {
