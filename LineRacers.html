@@ -212,7 +212,16 @@
 						loadingLogoElem.src = "misc/beamnow.png";
 					}
 
-					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					var isGear = navigator.userAgent.match(/mobile/i);
+					if( !isGear )
+					{
+						JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					}
+					else
+					{
+						JumpStart.showLoadingMsg("Beam to begin. (<a href='http://www.jumpstartsdk.com/live/TikiDrum.html'>Tiki Drum</a>, <a href='http://www.jumpstartsdk.com/live/AirHockey.html'>Air Hockey</a>)");
+					}
+
 					return;
 				}
 
@@ -229,6 +238,10 @@
 				}
 
 				createStartButton();
+
+//				if( JumpStart.enclosure )
+//					console.log(Math.floor(JumpStart.enclosure.pixelsPerMeter));
+//					console.log(JumpStart.enclosure);
 
 				// START SIMULATION
 				JumpStart.run();
@@ -323,8 +336,13 @@
 							// Make fairy dust
 							var pos = new THREE.Vector3();
 
+							var maxParticles = 1;
+							var isGear = navigator.userAgent.match(/mobile/i);
+							if( isGear )
+								maxParticles = 0;
+
 							var i, particle;
-							for( i = 0; i < 1; i++ )
+							for( i = 0; i < maxParticles; i++ )
 							{
 								particle = JumpStart.spawnInstance("models/LineRacers/gold.obj");
 								particle.JumpStart.blocksLOS = false;
@@ -1000,9 +1018,14 @@
 				{
 					this.userData.lastParticle = 0.04;
 
+					var maxParticles = 1;
+					var isGear = navigator.userAgent.match(/mobile/i);
+					if( isGear )
+						maxParticles = 0;
+
 					// Make fairy dust
 					var i, particle;
-					for( i = 0; i < 1; i++ )
+					for( i = 0; i < maxParticles; i++ )
 					{
 						particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
 						particle.JumpStart.blocksLOS = false;
@@ -1177,8 +1200,13 @@
 								//this.userData.lastBoostTime = 0.2;
 								this.userData.lastBoostTime = 0.2 / this.userData.boost;
 
+								var maxParticles = 16;
+								var isGear = navigator.userAgent.match(/mobile/i);
+								if( isGear )
+									maxParticles = 0;
+
 								var i, particle;
-								for( i = 0; i < 16; i++ )
+								for( i = 0; i < maxParticles; i++ )
 								{
 									particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
 									particle.JumpStart.blocksLOS = false;
@@ -1384,8 +1412,13 @@
 								{
 									this.userData.lastParticle = 0.02;
 
+									var maxParticles = 1;
+									var isGear = navigator.userAgent.match(/mobile/i);
+									if( isGear )
+										maxParticles = 0;
+
 									var i, particle;
-									for( i = 0; i < 1; i++ )
+									for( i = 0; i < maxParticles; i++ )
 									{
 										particle = JumpStart.spawnInstance("models/LineRacers/gold.obj", {"parent": g_myCar});
 										particle.userData.isParticle = true;
@@ -1957,8 +1990,14 @@
 				var explosionLook = new THREE.Vector3().copy(explosion.rotation);
 
 				// Particles
+
+				var maxParticles = 16;
+				var isGear = navigator.userAgent.match(/mobile/i);
+				if( isGear )
+					maxParticles = 0;
+
 				var i, particle;
-				for( i = 0; i < 16; i++ )
+				for( i = 0; i < maxParticles; i++ )
 				{
 					particle = JumpStart.spawnInstance("models/LineRacers/pixel" + carColor + ".obj");
 					particle.JumpStart.blocksLOS = false;

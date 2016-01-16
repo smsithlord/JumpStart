@@ -1,0 +1,429 @@
+<!-- Powered by the JumpStart Game Engine -->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Gator Smasher</title>
+
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+	</head>
+
+	<body>
+
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
+
+		<!-- Window-Level Event Callbacks -->
+		<script>
+
+			// Configure JumpStart.  You really only need to list
+			// properties you want non-default values for.
+			var myOptions =
+			{
+				"legacyLoader": false,
+				"worldScale": 2.0,
+				"scaleWithEnclosure": true,
+				"showCrosshair": false,
+				"showCursorPlanes": false,
+				"camera":
+				{
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+					"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+				},
+				"firebase":
+				{
+					"rootUrl": "https://jump-start.firebaseio.com/",
+					"appId": "JumpStart",
+					"suppressPersonalBrowser": true
+				}
+			};
+
+			JumpStart.setOptions(myOptions);
+
+			var g_gators = new Array();
+
+			// Window-level callback for onPrecache event
+			function onPrecache()
+			{
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+
+				// Precaching is important with networked apps!!
+				// Networked objects might get spawned before the
+				// local client gets the onReady window-level callback!!
+
+				// You can think of precaching sounds as synchronous (but it's not)
+				JumpStart.precacheSound("sounds/JumpStart/trumpet");
+				JumpStart.precacheSound("sounds/JumpStart/cashout");
+
+				// Precache any models that your app needs (asynchronous)
+				var myModels = ["models/GatorSmasher/table.obj", "models/JumpStart/jewel.obj", "models/JumpStart/grass.obj", "models/GatorSmasher/smasher.obj", "models/GatorSmasher/croc.obj"];
+				JumpStart.loadModels(myModels).then(function() {
+
+					// All assets cached.
+					JumpStart.doneCaching();
+				});
+			}
+
+			var g_mySmasher = null;
+
+			// Window-level callback for onReady event
+			function onReady()
+			{
+				if( !JumpStart.requestedRoomId )
+					return;
+
+				// Do nothing if we are not in an enclosure yet.
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
+					{
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
+
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+
+				// Only the 1st user needs to create the networked object
+				if( g_localUser.firstUser )
+				{
+					var gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					//gator.JumpStart.blocksLOS = false;
+					gator.JumpStart.onTick["gatorTick"] = gatorTick;
+					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
+					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
+					gator.position.y += 45.0;
+					gator.position.z += 4.0;
+					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
+					gator.JumpStart.direction = 0;
+					gator.JumpStart.ownerId = "";
+					gator.JumpStart.active = false;
+					gator.JumpStart.sync();
+
+					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					//gator.JumpStart.blocksLOS = false;
+					gator.JumpStart.onTick["gatorTick"] = gatorTick;
+					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
+					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
+					gator.position.y += 45.0;
+					gator.position.z += 4.0;
+					gator.position.x += 15.0;
+					gator.rotateY(-0.25);
+					gator.JumpStart.direction = 0;
+					gator.JumpStart.ownerId = "";
+					gator.JumpStart.active = false;
+					gator.JumpStart.sync();
+
+					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					//gator.JumpStart.blocksLOS = false;
+					gator.JumpStart.onTick["gatorTick"] = gatorTick;
+					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
+					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
+					gator.position.y += 45.0;
+					gator.position.z += 4.0;
+					gator.position.x -= 15.0;
+					gator.rotateY(0.25);
+					gator.JumpStart.direction = 0;
+					gator.JumpStart.ownerId = "";
+					gator.JumpStart.active = false;
+					gator.JumpStart.sync();
+
+					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					//gator.JumpStart.blocksLOS = false;
+					gator.JumpStart.onTick["gatorTick"] = gatorTick;
+					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
+					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
+					gator.position.y += 45.0;
+					gator.position.z += 6.0;
+					gator.position.x += 27.0;
+					gator.rotateY(-0.3);
+					gator.JumpStart.direction = 0;
+					gator.JumpStart.ownerId = "";
+					gator.JumpStart.active = false;
+					gator.JumpStart.sync();
+
+					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					//gator.JumpStart.blocksLOS = false;
+					gator.JumpStart.onTick["gatorTick"] = gatorTick;
+					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
+					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
+					gator.position.y += 45.0;
+					gator.position.z += 6.0;
+					gator.position.x -= 27.0;
+					gator.rotateY(0.3);
+					gator.JumpStart.direction = 0;
+					gator.JumpStart.ownerId = "";
+					gator.JumpStart.active = false;
+					gator.JumpStart.sync();
+				}
+
+				var g_table = JumpStart.spawnInstance("models/GatorSmasher/table.obj");
+				g_table.JumpStart.blocksLOS = false;
+
+				setTimeout(function()
+				{
+					g_gators[1].JumpStart.direction = 1;
+					g_gators[1].JumpStart.ownerId = g_localUser.userId;
+					g_gators[1].JumpStart.active = true;
+					g_gators[1].JumpStart.sync();
+
+					if( g_mySmasher )
+						return;
+
+					g_mySmasher = JumpStart.spawnInstance("models/GatorSmasher/smasher.obj");
+					g_mySmasher.JumpStart.blocksLOS = false;
+					g_mySmasher.JumpStart.onSpawn["smasherSpawn"] = smasherSpawn;
+					g_mySmasher.JumpStart.onTick["smasherTick"] = smasherTick;
+					g_mySmasher.JumpStart.swinging = 0;
+					g_mySmasher.JumpStart.ownerId = g_localUser.userId;
+
+					g_mySmasher.position.z += 100.0;
+					g_mySmasher.JumpStart.sync();
+				}, 2000);
+
+				// Start the simulation
+				JumpStart.run();
+			}
+
+			function gatorSpawn(isLocal)
+			{
+				g_gators.push(this);
+				this.userData.offset = 0.0;
+				this.userData.maxOffset = 8.0;
+			}
+
+			function getNextGator()
+			{
+				var goodGators = new Array();
+
+				var i;
+				for( i = 0; i < g_gators.length; i++ )
+				{
+					if( !g_gators[i].JumpStart.active )
+						goodGators.push(g_gators[i]);
+				}
+
+				var result = null;
+				if( goodGators.length > 0 )
+					result = goodGators[Math.floor(Math.random() * goodGators.length)];
+
+				return result;
+			}
+
+			function gatorDown()
+			{
+				if( !this.JumpStart.active )
+					return;
+
+				this.JumpStart.direction = -1;
+				this.JumpStart.ownerId = g_localUser.userId;
+				this.JumpStart.active = false;
+				this.JumpStart.sync();
+			}
+
+			var offsetDelta = 16.0;
+			function gatorTick()
+			{
+
+				if( this.JumpStart.direction === 1 )
+					this.userData.offset += offsetDelta * g_deltaTime;
+				else if( this.JumpStart.direction === -1 )
+					this.userData.offset -= offsetDelta * g_deltaTime;
+
+				var needsSync = false;
+				if( this.userData.offset > this.userData.maxOffset )
+				{
+					this.userData.offset -= (offsetDelta * g_deltaTime) * 2.0;
+
+					if( this.JumpStart.ownerId === g_localUser.userId )
+					{
+						this.JumpStart.direction = 0;
+						needsSync = true;
+					}
+
+/*
+					if( this.JumpStart.ownerId === g_localUser.userId )
+					{
+						this.JumpStart.direction = -1;
+						needsSync = true;
+					}
+*/
+				}
+				else if( this.userData.offset < 0 )
+				{
+					this.userData.offset += offsetDelta * g_deltaTime;
+
+					if( this.JumpStart.ownerId === g_localUser.userId )
+					{
+						this.JumpStart.active = false;
+						this.JumpStart.direction = 0;
+						this.JumpStart.ownerId = "";
+						needsSync = true;
+
+						var nextGator= getNextGator();
+
+						if( nextGator )
+						{
+							nextGator.JumpStart.direction = 1;
+							nextGator.JumpStart.ownerId = g_localUser.userId;
+							nextGator.JumpStart.active = true;
+							nextGator.JumpStart.sync();
+						}
+					}
+				}
+
+				if( this.JumpStart.direction === 1 )
+					this.translateZ(offsetDelta * g_deltaTime);
+				else if( this.JumpStart.direction === -1 )
+					this.translateZ(-offsetDelta * g_deltaTime);
+
+				if( needsSync )
+					this.JumpStart.sync();
+			}
+
+			function smasherSpawn(isLocal)
+			{
+				if( this.JumpStart.ownerId === g_localUser.userId && !g_mySmasher )
+					g_mySmasher = this;
+
+				this.userData.swingRot = 0;
+				this.userData.maxSwingRot = Math.PI / 3.0;
+			}
+
+			var smashSpeed = 4.0;
+			function smasherTick()
+			{
+				var cameraPos = new THREE.Vector3();
+				if( JumpStart.webMode )
+					cameraPos.copy(g_camera.position);
+				else
+				{
+					var joint = g_localUser.trackingSkeleton.getJoint("Eye");
+
+					// Scale it
+					cameraPos.copy(joint.position).multiplyScalar(1/g_worldScale);
+				}
+
+				if( g_localUser.lookHit )
+				{
+					this.position.copy(cameraPos);
+					this.lookAt(g_localUser.lookHit.scaledPoint);
+
+					if( JumpStart.webMode )
+					{
+						this.translateZ(50.0);
+						this.translateY(-10.0);
+					}
+					else
+					{
+						this.translateZ(20.0);
+						this.translateY(-5.0);
+					}
+
+					this.lookAt(g_localUser.lookHit.scaledPoint);
+					this.rotateX(Math.PI / 2.0);
+				}
+
+				if( this.JumpStart.swinging === 1 )
+					this.userData.swingRot += smashSpeed * g_deltaTime;
+				else if( this.JumpStart.swinging === -1 )
+					this.userData.swingRot -= smashSpeed * g_deltaTime;
+
+				var needsSync = false;
+				if( this.userData.swingRot > this.userData.maxSwingRot )
+				{
+					this.userData.swingRot = this.userData.maxSwingRot;
+
+					if( this.JumpStart.ownerId === g_localUser.userId )
+					{
+						this.JumpStart.swinging = -1;
+						needsSync = true;
+					}
+				}
+				else if( this.userData.swingRot < 0 )
+				{
+					this.userData.swingRot = 0;
+
+					if( this.JumpStart.ownerId === g_localUser.userId )
+					{
+						this.JumpStart.swinging = 0;
+						needsSync = true;
+					}
+				}
+
+				if( this.JumpStart.swinging !== 0 )
+				{
+					this.rotateX(this.userData.swingRot);
+				}
+
+				if( needsSync )
+					this.JumpStart.sync();
+			}
+
+			// Window-level callback for onTick event
+			function onTick()
+			{
+				// do work
+			}
+
+			// Window-level callback for onCursorDown event
+			function onCursorDown()
+			{
+				// do work
+				if( g_mySmasher && g_mySmasher.JumpStart.swinging === 0 )
+				{
+					g_mySmasher.JumpStart.swinging = 1;
+					g_mySmasher.JumpStart.sync();
+				}
+			}
+
+			// Window-level callback for onCursorUp event
+			function onCursorUp()
+			{
+				// do work
+			}
+
+			if( JumpStart.webMode )
+			{
+				document.body.addEventListener('keydown', function(e)
+				{
+					if( e.keyCode === 83 )
+						g_camera.translateZ(20);
+					else if( e.keyCode === 87 )
+						g_camera.translateZ(-20);
+					else if( e.keyCode === 65 )
+						g_camera.translateX(-20);
+					else if( e.keyCode === 68 )
+						g_camera.translateX(20);
+				});
+			}
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+
+		</script>
+	</body>
+</html>

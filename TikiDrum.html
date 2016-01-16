@@ -43,6 +43,7 @@
 			}
 		</style>
 
+		<div id="gearSlate" style="display: none;">
 		<div style="position: absolute; top: 0; left: 0; right: 0;">
 		<center>
 			<br /><br /><br /><br />
@@ -51,6 +52,7 @@
 		</div>
 
 		<div id="scores" style="position: fixed; display: none; text-align: right; top: 0; right: 0;"><div id="ball">&nbsp;</div><br /></div>
+		</div>
 
 		<!-- JumpStart SDK Core Include -->
 		<script src="JumpStart.js"></script>
@@ -59,6 +61,7 @@
 		<script>
 			var myOptions =
 			{
+				"showFPS": false,
 				"titleImageURL": "misc/tikidrumtitle.png",
 				"legacyLoader": false,
 				"worldScale": 2.0,
@@ -89,6 +92,10 @@
 			var scoreBoard = document.getElementById("scores");
 			var beatLoop = null;
 			var g_timeScale = 1.0;
+
+			var isGear = navigator.userAgent.match(/mobile/i);
+			if( isGear )
+				g_timeScale = g_timeScale * 0.5;
 
 			function onPrecache()
 			{
@@ -189,6 +196,12 @@
 
 					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
 					return;
+				}
+
+				var isGear = navigator.userAgent.match(/mobile/i);
+				if( !isGear )
+				{
+					document.getElementById("gearSlate").style.display = "block";
 				}
 
 //				if( !JumpStart.webMode )
@@ -775,7 +788,9 @@
 				}
 
 				// Scores
-				if( this.userData.lastScore !== this.JumpStart.score )
+				var isGear = navigator.userAgent.match(/mobile/i);
+
+				if( this.userData.lastScore !== this.JumpStart.score && !isGear )
 				{
 					var elem = scoreBoard.querySelector("#p" + this.JumpStart.owner);
 					if( !elem )
@@ -1128,8 +1143,10 @@
 					}
 				}
 
+				var isGear = navigator.userAgent.match(/mobile/i);
+
 				// Scores
-				if( this.userData.lastScore !== this.JumpStart.score )
+				if( this.userData.lastScore !== this.JumpStart.score && !isGear )
 				{
 					var elem = scoreBoard.querySelector("#ball");
 					elem.innerHTML = "<h2>TOTAL: " + this.JumpStart.score + "</h1>";
@@ -1282,13 +1299,21 @@
 				}
 
 				var randIndex = Math.round(Math.random() * 10);
-				JumpStart.playSound("sounds/TikiDrum/cymb" + randIndex, 0.2, false);
+//				JumpStart.playSound("sounds/TikiDrum/cymb" + randIndex, 0.2, false);
 
 			//	var oldBallLook = new THREE.Vector3().copy(ball.rotation);
 
 					// Particles
 				var i, particle;
-				for( i = 0; i < 16; i++ )
+				var maxParticles = 16;
+
+				var isGear = navigator.userAgent.match(/mobile/i);
+				if( isGear )
+					maxParticles = 0;
+				else
+					JumpStart.playSound("sounds/TikiDrum/cymb" + randIndex, 0.2, false);
+
+				for( i = 0; i < maxParticles; i++ )
 				{
 					particle = JumpStart.spawnInstance("models/TikiDrum/pixel2.obj");
 					particle.JumpStart.blocksLOS = false;

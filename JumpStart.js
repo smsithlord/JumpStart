@@ -1023,7 +1023,7 @@ var element = document.body;
 
 	// Offset us if we are in the personal browser
 	//if( this.enclosure.innerDepth === 100 || this.enclosure.innerDepth === 300 )
-	if( this.enclosure.innerDepth === 1.0 )
+	if( this.enclosure.innerDepth === 1.0 || Math.floor(this.enclosure.pixelsPerMeter) === 645 )
 	{
 		this.worldOffset.z = depth / (-2.0);
 
