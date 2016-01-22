@@ -93,8 +93,7 @@
 			var beatLoop = null;
 			var g_timeScale = 1.0;
 
-			var isGear = navigator.userAgent.match(/mobile/i);
-			if( isGear )
+			if( g_isGear )
 				g_timeScale = g_timeScale * 0.5;
 
 			function onPrecache()
@@ -198,8 +197,7 @@
 					return;
 				}
 
-				var isGear = navigator.userAgent.match(/mobile/i);
-				if( !isGear )
+				if( !g_isGear )
 				{
 					document.getElementById("gearSlate").style.display = "block";
 				}
@@ -788,9 +786,7 @@
 				}
 
 				// Scores
-				var isGear = navigator.userAgent.match(/mobile/i);
-
-				if( this.userData.lastScore !== this.JumpStart.score && !isGear )
+				if( this.userData.lastScore !== this.JumpStart.score && !g_isGear )
 				{
 					var elem = scoreBoard.querySelector("#p" + this.JumpStart.owner);
 					if( !elem )
@@ -1143,10 +1139,8 @@
 					}
 				}
 
-				var isGear = navigator.userAgent.match(/mobile/i);
-
 				// Scores
-				if( this.userData.lastScore !== this.JumpStart.score && !isGear )
+				if( this.userData.lastScore !== this.JumpStart.score && !g_isGear )
 				{
 					var elem = scoreBoard.querySelector("#ball");
 					elem.innerHTML = "<h2>TOTAL: " + this.JumpStart.score + "</h1>";
@@ -1307,8 +1301,7 @@
 				var i, particle;
 				var maxParticles = 16;
 
-				var isGear = navigator.userAgent.match(/mobile/i);
-				if( isGear )
+				if( g_isGear )
 					maxParticles = 0;
 				else
 					JumpStart.playSound("sounds/TikiDrum/cymb" + randIndex, 0.2, false);

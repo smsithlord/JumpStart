@@ -66,6 +66,20 @@
 				"scaleWithEnclosure": true,
 				"showCrosshair": false,
 				"showCursorPlanes": false,
+				/*"enabledCursorEvents":
+				{
+					"cursorDown": true,
+					"cursorUp": true,
+					"cursorEnter": true,
+					"cursorLeave": true,
+					"cursorMove": true,
+					"bottomPlane": true,
+					"topPlane": false,
+					"northPlane": false,
+					"southPlane": false,
+					"eastPlane": false,
+					"westPlane": false
+				},*/
 				"camera":
 				{
 					"lookAtOrigin": true,
@@ -81,6 +95,8 @@
 			};
 
 			JumpStart.setOptions(myOptions);
+
+			var g_rayCastObjects = new Array();
 
 			// Window-level callback for onPrecache event
 			function onPrecache()
@@ -212,8 +228,7 @@
 						loadingLogoElem.src = "misc/beamnow.png";
 					}
 
-					var isGear = navigator.userAgent.match(/mobile/i);
-					if( !isGear )
+					if( !g_isGear )
 					{
 						JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
 					}
@@ -224,6 +239,13 @@
 
 					return;
 				}
+
+				g_rayCastObjects.push(JumpStart.floorPlane);
+//				rayCastObjects.push(JumpStart.roofPlane);
+				g_rayCastObjects.push(JumpStart.westPlane);
+				g_rayCastObjects.push(JumpStart.northPlane);
+				g_rayCastObjects.push(JumpStart.eastPlane);
+				g_rayCastObjects.push(JumpStart.southPlane);
 
 			//	console.log(JumpStart.webMode);
 				if( JumpStart.webMode )
@@ -337,8 +359,7 @@
 							var pos = new THREE.Vector3();
 
 							var maxParticles = 1;
-							var isGear = navigator.userAgent.match(/mobile/i);
-							if( isGear )
+							if( g_isGear )
 								maxParticles = 0;
 
 							var i, particle;
@@ -1019,8 +1040,7 @@
 					this.userData.lastParticle = 0.04;
 
 					var maxParticles = 1;
-					var isGear = navigator.userAgent.match(/mobile/i);
-					if( isGear )
+					if( g_isGear )
 						maxParticles = 0;
 
 					// Make fairy dust
@@ -1201,8 +1221,7 @@
 								this.userData.lastBoostTime = 0.2 / this.userData.boost;
 
 								var maxParticles = 16;
-								var isGear = navigator.userAgent.match(/mobile/i);
-								if( isGear )
+								if( g_isGear )
 									maxParticles = 0;
 
 								var i, particle;
@@ -1383,133 +1402,135 @@
 							this.userData.lastTracerElapsed = 0.0;
 
 							// Fire a new tracer
-							var tracer = JumpStart.spawnInstance("models/LineRacers/gold.obj", {"parent": g_myCar});
-							tracer.userData.isParticle = true;
-							tracer.JumpStart.hasLOS = false;
-				//			tracer.scale.set(0.5, 0.5, 0.5);
-
-							tracer.JumpStart.onTick = function()
+							if( !g_isGear )
 							{
-								if( !g_myCar || !g_arrow )
-									return;
+								var tracer = JumpStart.spawnInstance("models/LineRacers/gold.obj", {"parent": g_myCar});
+								tracer.userData.isParticle = true;
+								tracer.JumpStart.hasLOS = false;
+					//			tracer.scale.set(0.5, 0.5, 0.5);
 
-								this.translateZ(300.0 * g_deltaTime);
-								if( this.position.length() >= g_myCar.position.distanceTo(g_arrow.position) - 20 )
+								tracer.JumpStart.onTick = function()
 								{
-									g_myCar.remove(this);
-									return;
-								}
+									if( !g_myCar || !g_arrow )
+										return;
 
-								// Make fairy dust
-								var pos = new THREE.Vector3();
-
-								if( !this.userData.hasOwnProperty("lastParticle") )
-									this.userData.lastParticle = 0.0;
-
-								this.userData.lastParticle -= 1.0 * g_deltaTime;
-
-								if( this.userData.lastParticle <= 0.0 )
-								{
-									this.userData.lastParticle = 0.02;
-
-									var maxParticles = 1;
-									var isGear = navigator.userAgent.match(/mobile/i);
-									if( isGear )
-										maxParticles = 0;
-
-									var i, particle;
-									for( i = 0; i < maxParticles; i++ )
+									this.translateZ(300.0 * g_deltaTime);
+									if( this.position.length() >= g_myCar.position.distanceTo(g_arrow.position) - 20 )
 									{
-										particle = JumpStart.spawnInstance("models/LineRacers/gold.obj", {"parent": g_myCar});
-										particle.userData.isParticle = true;
-										particle.JumpStart.blocksLOS = false;
-
-										particle.position.copy(this.position);
-										particle.rotation.copy(this.rotation);
-										particle.scale.set(1, 1, 1);
-
-										var scale = Math.random();
-										if( scale < 0.5 )
-											scale = 0.5;
-
-										particle.scale.multiplyScalar(scale);
-
-										var randoX = 3.0 * Math.random();
-										if( Math.random() > 0.5 )
-											randoX *= -1.0;
-
-										var randoY = 3.0 * Math.random();
-										if( Math.random() > 0.5 )
-											randoY *= -1.0;
-
-										var randoZ = 3.0 * Math.random();
-										if( Math.random() > 0.5 )
-											randoZ *= -1.0;
-
-										particle.translateX(randoX);
-				//						particle.translateY(randoY);
-										particle.translateZ(randoZ);
-
-										particle.userData.life = 0.3;
-										particle.scale.multiplyScalar(4.0);
-
-										particle.JumpStart.onTick = function()
-										{
-											if( this.userData.hasOwnProperty("will") )
-												this.userData.will -= 1.0 * g_deltaTime;
-
-											if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
-											{
-												var randoPitch = 1.0 * Math.random();
-												if( Math.random() > 0.5 )
-													randoPitch *= -1.0;
-
-												var randoYaw = 1.0 * Math.random();
-												if( Math.random() > 0.5 )
-													randoYaw *= -1.0;
-
-												var randoRoll = 1.0 * Math.random();
-												if( Math.random() > 0.5 )
-													randoRoll *= -1.0;
-
-												this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
-												this.userData.will = 3.0 * Math.random();
-											}
-
-											this.userData.life -= g_deltaTime;
-
-											if( g_myCar && g_arrow && this.position.length() > g_arrow.position.distanceTo(g_myCar.position) - 15.0 )
-											{
-											//	this.scale.x += 2.0 * g_deltaTime;
-											//	this.scale.y += 2.0 * g_deltaTime;
-											//	this.scale.z += 2.0 * g_deltaTime;
-												g_myCar.remove(this);
-												return;
-											}
-
-											if( this.userData.life <= 0 )
-											{
-												//g_scene.remove(this);
-												//return;
-
-												this.scale.x -= 4.0 * g_deltaTime;
-												this.scale.y -= 4.0 * g_deltaTime;
-												this.scale.z -= 4.0 * g_deltaTime;
-											}
-
-				//							this.rotateX(this.userData.direction.x * g_deltaTime);
-											this.rotateY(this.userData.direction.y * g_deltaTime);
-				//							this.rotateZ(this.userData.direction.z * g_deltaTime);
-
-											this.translateZ(15.0 * g_deltaTime);
-				//							this.position.y += 10.0 * g_deltaTime;
-
-											if( g_myCar && this.scale.x <= 0.1 )
-												g_myCar.remove(this);
-										};
+										g_myCar.remove(this);
+										return;
 									}
-								}
-							};
+
+									// Make fairy dust
+									var pos = new THREE.Vector3();
+
+									if( !this.userData.hasOwnProperty("lastParticle") )
+										this.userData.lastParticle = 0.0;
+
+									this.userData.lastParticle -= 1.0 * g_deltaTime;
+
+									if( this.userData.lastParticle <= 0.0 )
+									{
+										this.userData.lastParticle = 0.02;
+
+										var maxParticles = 1;
+										if( g_isGear )
+											maxParticles = 0;
+
+										var i, particle;
+										for( i = 0; i < maxParticles; i++ )
+										{
+											particle = JumpStart.spawnInstance("models/LineRacers/gold.obj", {"parent": g_myCar});
+											particle.userData.isParticle = true;
+											particle.JumpStart.blocksLOS = false;
+
+											particle.position.copy(this.position);
+											particle.rotation.copy(this.rotation);
+											particle.scale.set(1, 1, 1);
+
+											var scale = Math.random();
+											if( scale < 0.5 )
+												scale = 0.5;
+
+											particle.scale.multiplyScalar(scale);
+
+											var randoX = 3.0 * Math.random();
+											if( Math.random() > 0.5 )
+												randoX *= -1.0;
+
+											var randoY = 3.0 * Math.random();
+											if( Math.random() > 0.5 )
+												randoY *= -1.0;
+
+											var randoZ = 3.0 * Math.random();
+											if( Math.random() > 0.5 )
+												randoZ *= -1.0;
+
+											particle.translateX(randoX);
+					//						particle.translateY(randoY);
+											particle.translateZ(randoZ);
+
+											particle.userData.life = 0.3;
+											particle.scale.multiplyScalar(4.0);
+
+											particle.JumpStart.onTick = function()
+											{
+												if( this.userData.hasOwnProperty("will") )
+													this.userData.will -= 1.0 * g_deltaTime;
+
+												if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+												{
+													var randoPitch = 1.0 * Math.random();
+													if( Math.random() > 0.5 )
+														randoPitch *= -1.0;
+
+													var randoYaw = 1.0 * Math.random();
+													if( Math.random() > 0.5 )
+														randoYaw *= -1.0;
+
+													var randoRoll = 1.0 * Math.random();
+													if( Math.random() > 0.5 )
+														randoRoll *= -1.0;
+
+													this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+													this.userData.will = 3.0 * Math.random();
+												}
+
+												this.userData.life -= g_deltaTime;
+
+												if( g_myCar && g_arrow && this.position.length() > g_arrow.position.distanceTo(g_myCar.position) - 15.0 )
+												{
+												//	this.scale.x += 2.0 * g_deltaTime;
+												//	this.scale.y += 2.0 * g_deltaTime;
+												//	this.scale.z += 2.0 * g_deltaTime;
+													g_myCar.remove(this);
+													return;
+												}
+
+												if( this.userData.life <= 0 )
+												{
+													//g_scene.remove(this);
+													//return;
+
+													this.scale.x -= 4.0 * g_deltaTime;
+													this.scale.y -= 4.0 * g_deltaTime;
+													this.scale.z -= 4.0 * g_deltaTime;
+												}
+
+					//							this.rotateX(this.userData.direction.x * g_deltaTime);
+												this.rotateY(this.userData.direction.y * g_deltaTime);
+					//							this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+												this.translateZ(15.0 * g_deltaTime);
+					//							this.position.y += 10.0 * g_deltaTime;
+
+												if( g_myCar && this.scale.x <= 0.1 )
+													g_myCar.remove(this);
+											};
+										}
+									}
+								};
+							}
 						}
 					}
 
@@ -1992,8 +2013,7 @@
 				// Particles
 
 				var maxParticles = 16;
-				var isGear = navigator.userAgent.match(/mobile/i);
-				if( isGear )
+				if( g_isGear )
 					maxParticles = 0;
 
 				var i, particle;
@@ -2250,6 +2270,21 @@
 						}
 					}
 				}
+			}
+
+			if( JumpStart.webMode )
+			{
+				document.body.addEventListener('keydown', function(e)
+				{
+					if( e.keyCode === 83 )
+						g_camera.translateZ(20);
+					else if( e.keyCode === 87 )
+						g_camera.translateZ(-20);
+					else if( e.keyCode === 65 )
+						g_camera.translateX(-20);
+					else if( e.keyCode === 68 )
+						g_camera.translateX(20);
+				});
 			}
 		</script>
 	</body>
