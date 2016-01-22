@@ -76,8 +76,8 @@ function jumpStart()
 	this.boundFadeObjects = new Array();
 
 	// Any properties of a scene object's JumpStart sub-object that are NOT whitelisted get auto-synced.
-	//this.noSyncProperties = ["addDataListener", "setTint", "setColor", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
-	this.noSyncProperties = ["addDataListener", "setTint", "setColor", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
+	//this.noSyncProperties = ["addDataListener", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
+	this.noSyncProperties = ["addDataListener", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
 
 	this.networkReady = false;	// Know if we are networked & ready to go.
 	this.localDataListeners = {};	// Need to simulate network activity locally
@@ -146,6 +146,7 @@ function jumpStart()
 	this.worldScale;
 	this.worldOffset = new THREE.Vector3();
 	this.webMode = !(window.hasOwnProperty("altspace") && window.altspace.inClient);
+	this.isGear = /mobile/i.test(navigator.userAgent);
 }
 
 jumpStart.prototype.makeInvisible = function(sceneObject)
@@ -1387,6 +1388,11 @@ jumpStart.prototype.doneCaching = function()
 	{
 		console.log("Your app is ready, but you have no onReady callback function!");
 		JumpStart.showLoadingMsg("Your app is missing its window-level onReady callback function.");
+	}
+
+	if (window.hasOwnProperty("onTouchpadGesture"))
+	{
+		altspace.addEventListener("touchpadgesture", onTouchpadGesture);
 	}
 };
 
@@ -2680,6 +2686,13 @@ jumpStart.prototype.prepInstance = function(modelFile)
 					}.bind(this));
 				}
 			}
+		}.bind(this),
+		"setVisible": function(visible)
+		{
+			this.traverse(function(child)
+			{
+				child.visible = visible;
+			}.bind(this));
 		}.bind(this),
 		"setColor": function(color)
 		{
