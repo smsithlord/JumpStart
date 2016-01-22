@@ -1311,7 +1311,7 @@ jumpStart.prototype.reallyFinishInit = function()
 
 		var myHandle = setInterval(function()
 		{
-			if( JumpStart.firebaseSync.roomKey === null )
+			if( !JumpStart.firebaseSync.roomKey )
 				return;
 
 			clearInterval(myHandle);
