@@ -287,7 +287,6 @@ FirebaseSync.prototype.getRoomKeyOrMarkAsNonExistent = function() {
 
 		} else {
 
-			// TODO: Warn user if multiple rooms with same roomId.
 			this.roomKey = querySnapshot.key();
 			this.roomUrl = document.URL;
 			console.log("Got roomId from page URL " + document.URL);
