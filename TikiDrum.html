@@ -93,9 +93,10 @@
 			var beatLoop = null;
 			var g_timeScale = 1.0;
 
-			var isGear = navigator.userAgent.match(/mobile/i);
-			if( isGear )
+			if( g_isGear )
 				g_timeScale = g_timeScale * 0.5;
+
+			var g_rayCastObjects = new Array();
 
 			function onPrecache()
 			{
@@ -198,8 +199,7 @@
 					return;
 				}
 
-				var isGear = navigator.userAgent.match(/mobile/i);
-				if( !isGear )
+				if( !g_isGear )
 				{
 					document.getElementById("gearSlate").style.display = "block";
 				}
@@ -414,6 +414,13 @@
 					};
 				}, 2000);
 
+				g_rayCastObjects.push(JumpStart.floorPlane);
+//				rayCastObjects.push(JumpStart.roofPlane);
+//				g_rayCastObjects.push(JumpStart.westPlane);
+//				g_rayCastObjects.push(JumpStart.northPlane);
+//				g_rayCastObjects.push(JumpStart.eastPlane);
+//				g_rayCastObjects.push(JumpStart.southPlane);
+
 				// START SIMULATION
 			//	JumpStart.run();
 			}
@@ -451,6 +458,115 @@
 					sceneObject.userData.lastSyncTime = g_clock.elapsedTime;
 
 					sceneObject.JumpStart.sync();
+				}
+			}
+
+			function onCursorDown()
+			{
+				if( !g_myDrum )
+					return;
+
+				var oldThis = g_myDrum;
+
+				var needSync = false;
+				if( g_myBall && oldThis.children.indexOf(g_myBall) >= 0 )
+				{
+					g_globalBall = g_myBall;
+					g_myBall = null;
+
+					var pos = new THREE.Vector3();
+					if( !JumpStart.webMode )
+							pos.copy(g_globalBall.position);
+
+					THREE.SceneUtils.detach(g_globalBall, oldThis, g_scene);
+
+					// Do some adjustments if we are rendering inside of Altspace
+					if( !JumpStart.webMode )
+					{
+						g_globalBall.scale.copy(oldThis.scale);
+						g_globalBall.position.copy(oldThis.position);
+						g_globalBall.rotation.copy(oldThis.rotation);
+
+						g_globalBall.translateX(pos.x);
+						g_globalBall.translateY(pos.y);
+						g_globalBall.translateZ(pos.z);
+					}
+
+					g_globalBall.JumpStart.makePhysics();
+					g_globalBall.JumpStart.onTick["ballin"] = ballin;
+					g_globalBall.JumpStart.onSpawn["globalBallSpawned"] = globalBallSpawned;
+					g_globalBall.JumpStart.owner = g_localUser.displayName;
+					g_globalBall.JumpStart.sync();
+
+					if( oldThis.JumpStart.score > oldThis.JumpStart.bestScore )
+						oldThis.JumpStart.bestScore = oldThis.JumpStart.score;
+
+					g_myDrum.JumpStart.pleaseWait = false;
+					g_myDrum.JumpStart.clickToJoin = false;
+					g_myDrum.JumpStart.score = 0;
+
+					needSync = true;
+					//oldThis.JumpStart.sync();
+				}
+				else if( g_globalBall && g_globalBall.position.y - g_worldOffset.y < 20 + 0.5 && g_globalBall.position.y - g_worldOffset.y > 20 - 0.5 )
+				{
+					g_globalBall.position.copy(oldThis.position);
+					g_globalBall.position.y = g_worldOffset.y + 150;
+
+					g_globalBall.JumpStart.makePhysics();
+					g_globalBall.JumpStart.score = 0;
+					g_globalBall.JumpStart.owner = g_localUser.displayName;
+					g_globalBall.JumpStart.sync();
+
+					if( oldThis.JumpStart.score > oldThis.JumpStart.bestScore )
+						oldThis.JumpStart.bestScore = oldThis.JumpStart.score;
+
+					g_myDrum.JumpStart.clickToJoin = false;
+					g_myDrum.JumpStart.pleaseWait = false;
+					g_myDrum.JumpStart.score = 0;
+
+					needSync = true;
+					//oldThis.JumpStart.sync();
+				}
+				//else if( g_myDrum.JumpStart.clickToJoin )
+				else if( !g_clickToJoin.userData.hidden )
+				{
+					g_myDrum.JumpStart.clickToJoin = false;
+					g_myDrum.JumpStart.pleaseWait = false;
+					g_myDrum.JumpStart.score = 0;
+					needSync = true;
+				}
+
+				if( needSync )
+				{
+					// High scores
+					if( !g_highScores )
+					{
+						g_highScores = JumpStart.spawnInstance("models/TikiDrum/pixel2.obj");
+						g_highScores.JumpStart.blocksLOS = false;
+						g_highScores.scale.set(0.0001, 0.0001, 0.0001);
+						g_highScores.position.set(0, -100.0, 0);
+						g_highScores.JumpStart.onSpawn["highScores"] = highScores;
+						g_highScores.JumpStart.scores = {};
+
+						g_highScores.JumpStart.scores["player1"] = g_localUser.displayName;
+						g_highScores.JumpStart.scores["player2"] = "OPEN";
+						g_highScores.JumpStart.sync();
+					}
+					else if( g_highScores.JumpStart.scores["player1"] !== g_localUser.displayName && g_highScores.JumpStart.scores["player2"] !== g_localUser.displayName)
+					{
+						if( g_highScores.JumpStart.scores["player1"] === "OPEN" )
+							g_highScores.JumpStart.scores["player1"] = g_localUser.displayName;
+						else if( g_highScores.JumpStart.scores["player2"] === "OPEN" )
+							g_highScores.JumpStart.scores["player2"] = g_localUser.displayName;
+//								else
+//									return;
+
+						g_highScores.JumpStart.sync();
+					}
+
+					//oldThis.JumpStart.sync();
+					DoAutoSync(g_myDrum, true);
 				}
 			}
 
@@ -501,110 +617,12 @@
 
 					drumShadow.scale.x = 0.8;
 					drumShadow.scale.z = 0.8;
-
+/*
 					this.JumpStart.onCursorDown = function()
 					{
-						var needSync = false;
-						if( g_myBall && this.children.indexOf(g_myBall) >= 0 )
-						{
-							g_globalBall = g_myBall;
-							g_myBall = null;
 
-							var pos = new THREE.Vector3();
-							if( !JumpStart.webMode )
-									pos.copy(g_globalBall.position);
-
-							THREE.SceneUtils.detach(g_globalBall, this, g_scene);
-
-							// Do some adjustments if we are rendering inside of Altspace
-							if( !JumpStart.webMode )
-							{
-								g_globalBall.scale.copy(this.scale);
-								g_globalBall.position.copy(this.position);
-								g_globalBall.rotation.copy(this.rotation);
-
-								g_globalBall.translateX(pos.x);
-								g_globalBall.translateY(pos.y);
-								g_globalBall.translateZ(pos.z);
-							}
-
-							g_globalBall.JumpStart.makePhysics();
-							g_globalBall.JumpStart.onTick["ballin"] = ballin;
-							g_globalBall.JumpStart.onSpawn["globalBallSpawned"] = globalBallSpawned;
-							g_globalBall.JumpStart.owner = g_localUser.displayName;
-							g_globalBall.JumpStart.sync();
-
-							if( this.JumpStart.score > this.JumpStart.bestScore )
-								this.JumpStart.bestScore = this.JumpStart.score;
-
-							g_myDrum.JumpStart.pleaseWait = false;
-							g_myDrum.JumpStart.clickToJoin = false;
-							g_myDrum.JumpStart.score = 0;
-
-							needSync = true;
-							//this.JumpStart.sync();
-						}
-						else if( g_globalBall && g_globalBall.position.y - g_worldOffset.y < 20 + 0.5 && g_globalBall.position.y - g_worldOffset.y > 20 - 0.5 )
-						{
-							g_globalBall.position.copy(this.position);
-							g_globalBall.position.y = g_worldOffset.y + 150;
-
-							g_globalBall.JumpStart.makePhysics();
-							g_globalBall.JumpStart.score = 0;
-							g_globalBall.JumpStart.owner = g_localUser.displayName;
-							g_globalBall.JumpStart.sync();
-
-							if( this.JumpStart.score > this.JumpStart.bestScore )
-								this.JumpStart.bestScore = this.JumpStart.score;
-
-							g_myDrum.JumpStart.clickToJoin = false;
-							g_myDrum.JumpStart.pleaseWait = false;
-							g_myDrum.JumpStart.score = 0;
-
-							needSync = true;
-							//this.JumpStart.sync();
-						}
-						//else if( g_myDrum.JumpStart.clickToJoin )
-						else if( !g_clickToJoin.userData.hidden )
-						{
-							g_myDrum.JumpStart.clickToJoin = false;
-							g_myDrum.JumpStart.pleaseWait = false;
-							g_myDrum.JumpStart.score = 0;
-							needSync = true;
-						}
-
-						if( needSync )
-						{
-							// High scores
-							if( !g_highScores )
-							{
-								g_highScores = JumpStart.spawnInstance("models/TikiDrum/pixel2.obj");
-								g_highScores.JumpStart.blocksLOS = false;
-								g_highScores.scale.set(0.0001, 0.0001, 0.0001);
-								g_highScores.position.set(0, -100.0, 0);
-								g_highScores.JumpStart.onSpawn["highScores"] = highScores;
-								g_highScores.JumpStart.scores = {};
-
-								g_highScores.JumpStart.scores["player1"] = g_localUser.displayName;
-								g_highScores.JumpStart.scores["player2"] = "OPEN";
-								g_highScores.JumpStart.sync();
-							}
-							else if( g_highScores.JumpStart.scores["player1"] !== g_localUser.displayName && g_highScores.JumpStart.scores["player2"] !== g_localUser.displayName)
-							{
-								if( g_highScores.JumpStart.scores["player1"] === "OPEN" )
-									g_highScores.JumpStart.scores["player1"] = g_localUser.displayName;
-								else if( g_highScores.JumpStart.scores["player2"] === "OPEN" )
-									g_highScores.JumpStart.scores["player2"] = g_localUser.displayName;
-//								else
-//									return;
-
-								g_highScores.JumpStart.sync();
-							}
-
-							//this.JumpStart.sync();
-							DoAutoSync(g_myDrum, true);
-						}
 					};
+*/
 				}
 				else
 				{
@@ -788,9 +806,7 @@
 				}
 
 				// Scores
-				var isGear = navigator.userAgent.match(/mobile/i);
-
-				if( this.userData.lastScore !== this.JumpStart.score && !isGear )
+				if( this.userData.lastScore !== this.JumpStart.score && !g_isGear )
 				{
 					var elem = scoreBoard.querySelector("#p" + this.JumpStart.owner);
 					if( !elem )
@@ -1143,10 +1159,8 @@
 					}
 				}
 
-				var isGear = navigator.userAgent.match(/mobile/i);
-
 				// Scores
-				if( this.userData.lastScore !== this.JumpStart.score && !isGear )
+				if( this.userData.lastScore !== this.JumpStart.score && !g_isGear )
 				{
 					var elem = scoreBoard.querySelector("#ball");
 					elem.innerHTML = "<h2>TOTAL: " + this.JumpStart.score + "</h1>";
@@ -1307,8 +1321,7 @@
 				var i, particle;
 				var maxParticles = 16;
 
-				var isGear = navigator.userAgent.match(/mobile/i);
-				if( isGear )
+				if( g_isGear )
 					maxParticles = 0;
 				else
 					JumpStart.playSound("sounds/TikiDrum/cymb" + randIndex, 0.2, false);

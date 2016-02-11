@@ -1,5 +1,8 @@
 // Declare some globals
-var g_gamepadsEnabled, g_gamepads, g_activeGamepad, g_materialCreator, g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_crosshair, g_lookHit, g_numSyncedInstances, g_networkReady, g_floorPlane, g_roofPlane, g_westPlane, g_northPlane, g_eastPlane, g_southPlane, g_hoveredObject;
+var g_isGear, g_gamepadsEnabled, g_gamepads, g_activeGamepad, g_materialCreator, g_localUser, g_worldOffset, g_worldScale, g_objectLoader, g_camera, g_renderer, g_scene, g_clock, g_rayCaster, g_enclosure, g_deltaTime, g_crosshair, g_lookHit, g_numSyncedInstances, g_networkReady, g_floorPlane, g_roofPlane, g_westPlane, g_northPlane, g_eastPlane, g_southPlane, g_hoveredObject;
+
+g_isGear = navigator.userAgent.match(/mobile/i);
+//g_isGear = true;
 
 // Extend the window object.
 window.JumpStart = new jumpStart();
@@ -1870,7 +1873,7 @@ jumpStart.prototype.run = function()
 		this.onTick();
 
 		// Init some stuff for Altspace
-//		/*
+		/*
 		if( !this.webMode )
 		{
 			var x, clone;
@@ -1884,7 +1887,7 @@ jumpStart.prototype.run = function()
 //				this.scene.remove(clone);
 			}
 		}
-//		*/
+		*/
 	}
 };
 
