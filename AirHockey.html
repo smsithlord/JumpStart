@@ -70,7 +70,6 @@
 			var g_lastLookHitScaledPoint = new THREE.Vector3();
 			var g_maxPuckOffset = 2.5;
 			var g_puckRadius = 3.0;
-//			var g_tableHeight = 10.0;
 			var g_tableHeight = 30.0;
 			var g_tableWidth = 66.0;
 			var g_tableLength = 126.0;
@@ -171,8 +170,6 @@
 			{
 				console.log("down");
 				reset(false);
-				//this.JumpStart.numResets++;
-				//this.JumpStart.sync();
 			}
 
 			function reset(lite)
@@ -186,7 +183,7 @@
 
 				if( striker )
 				{
-					if( !lite )//|| striker.JumpStart.ownerId === g_localUser.userId )
+					if( !lite )
 					{
 						resetStriker(striker, "a", 0);
 					}
@@ -196,7 +193,7 @@
 
 				if( striker )
 				{
-					if( !lite )//|| striker.JumpStart.ownerId === g_localUser.userId )
+					if( !lite )
 					{
 						resetStriker(striker, "b", 1);
 					}
@@ -239,9 +236,6 @@
 			// Window-level callback for onPrecache event
 			function onPrecache()
 			{
-				//var allDataRef = JumpStart.firebaseSync.firebaseRoot;
-				//allDataRef.remove();
-				//return;
 
 				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
 				{
@@ -293,7 +287,6 @@
 				}
 
 				// Assign us as the 1st player
-//				g_players[0] = {""};
 
 				// Only the 1st user needs to create the networked object
 				if( g_localUser.firstUser ) {
@@ -337,7 +330,6 @@
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
 
-					//striker.JumpStart.sync();
 					DoAutoSync(striker, true);
 
 					striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
@@ -360,7 +352,6 @@
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
 
-					//striker.JumpStart.sync();
 					DoAutoSync(striker, true);
 				}
 
@@ -385,15 +376,11 @@
 
 			function resetSpawn(isLocal)
 			{
-				//console.log("spawned");
 				if( !g_resetButton )
 					g_resetButton = this;
 
-				//this.JumpStart.onCursorDown["resetDown"] = resetDown;
-
 				this.userData.lastNumResets = this.JumpStart.numResets;
 
-				//console.log("pushing to raycast");
 				g_rayCastObjects.push(this);
 			}
 
@@ -401,9 +388,6 @@
 			{
 				this.userData.oldScore = 0;
 				this.userData.oldOwnerId = "";
-//				this.userData.neverBeen = true;
-				//this.addEventListener("cursordown", function(e) { console.log(e.target); });
-//				this.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
 
 				function eventRelay(object, eventName)
 				{
@@ -417,18 +401,7 @@
 					}
 				}
 
-//				this.addEventListener("cursorup", eventRelay(this, "onCursorDown"));
-
 				g_rayCastObjects.push(this);
-/*
-				function(e) {
-					relay(e, )
-					var object = e.target;
-					console.log(e);
-					console.log(object.JumpStart.onCursorDown);
-					//e.target.
-				});
-*/
 
 				if( !isLocal && g_strikers[this.JumpStart.strikerNumber] )
 				{
@@ -453,7 +426,6 @@
 
 			function strikerDown()
 			{
-//				console.log("Striker Down!");
 				if( this.JumpStart.ownerId === "" && g_strikers[0].JumpStart.ownerId !== g_localUser.userId && g_strikers[1].JumpStart.ownerId !== g_localUser.userId )
 				{
 					var otherStriker = g_strikers[1];
@@ -512,7 +484,6 @@
 				var geometry;
 				geometry = new THREE.TextGeometry(text, params);
 
-//				var material = new THREE.MeshBasicMaterial({color:'white'});
 				var material = new THREE.MeshBasicMaterial({color:'#00cc00'});
 
 				var mesh = new THREE.Mesh(geometry, material);
@@ -618,7 +589,6 @@
 
 					scoreBoard.userData.scoreObject = scoreObject;
 
-//					*/
 					//[...]
 					// 1. create a 3d model of this display name
 					// 2. Spawn it above the player's goal.
@@ -651,7 +621,6 @@
 						LoadTextModel(this.JumpStart.score);
 
 					var scoreObject = JumpStart.spawnInstance(this.JumpStart.score, {parent: scoreBoard});
-//					scoreObject.JumpStart.setColor(new THREE.Color("#cc0000"))
 					scoreObject.JumpStart.blocksLOS = false;
 
 					var offset = new THREE.Vector3();
@@ -675,10 +644,7 @@
 					scoreBoard.userData.scoreObject = scoreObject;
 
 					this.userData.oldScore = this.JumpStart.score;
-//					scoreBoard.userData.scoreObject = scoreObject;
 				}
-//				if( !g_ready )
-//					return;
 
 				if( !this.JumpStart.offTable )
 					this.scale.set(1.0, 1.0, 1.0);
@@ -688,7 +654,6 @@
 				if( this.JumpStart.ownerId !== g_localUser.userId )
 				{
 					// LERP us if we are not our own drum!
-					//doScaleLerp.call(this);
 					doRotationLerp.call(this);
 					doPositionLerp.call(this);
 					return;
@@ -701,7 +666,6 @@
 						this.position.copy(g_localUser.lookHit.scaledPoint);
 
 						var bShouldForce = false;
-						//console.log("Went ONTO table!");
 						if( this.JumpStart.offTable )
 						{
 							this.JumpStart.offTable = false;
@@ -771,7 +735,6 @@
 				if( this.userData.hitResting < 0 )
 					this.userData.hitResting = 0;
 
-				//this.JumpStart.velocity.multiplyScalar(0.995);
 				this.JumpStart.velocity.multiplyScalar(1.0 - (g_deltaTime / 2.0));
 
 				var xMax = g_tableWidth / 2.0 - g_puckRadius;
@@ -832,10 +795,6 @@
 				}
 
 				var wasHit = false;
-				/*
-				if( g_ready && (this.JumpStart.ownerId === g_localUser.userId || 
-					(this.JumpStart.ownerId === "" && (g_strikers[0].JumpStart.ownerId === g_localUser.userId || g_strikers[1].JumpStart.ownerId === g_localUser.userId))) && !this.userData.hitResting && g_lookHit && g_lookHit.object === g_table )
-*/
 				if( g_ready && (g_strikers[0].JumpStart.ownerId === g_localUser.userId || g_strikers[1].JumpStart.ownerId === g_localUser.userId) && !this.userData.hitResting && g_lookHit && g_lookHit.object === g_table )
 				{
 					var hisPuck = g_strikers[0];
@@ -843,9 +802,6 @@
 						hisPuck = g_strikers[1];
 
 					var dist = g_lookHit.scaledPoint.distanceTo(this.position);
-
-					// BASED ON PUCK / LOOK HIT RELATION
-					//var puckOffset = new THREE.Vector3().copy(this.position).sub(g_lookHit.scaledPoint).multiplyScalar(3.0);
 
 					// BASED ON INSTANTANEOUS LOOKHIT VELOCITY
 					var puckOffset = new THREE.Vector3().copy(g_lookHit.scaledPoint).sub(g_lastLookHitScaledPoint).multiplyScalar(3.0);
@@ -1039,7 +995,6 @@
 
 					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
 					this.quaternion.copy(myQuaternionA);
-			//		this.rotation.lerpVectors(this.userData.targetRotOriginal, this.userData.targetRot, this.userData.targetRotLerp);
 
 					if( justFinished )
 					{
