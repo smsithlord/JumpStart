@@ -115,7 +115,7 @@
 				striker.position.set(
 					g_tableWidth / 2.0 + 10.0,
 					g_worldOffset.y + g_tableHeight,
-					(side === "a" ? -1 : 1) * g_tableLength / 3.0);
+					(options.side === "a" ? -1 : 1) * g_tableLength / 3.0);
 
 				if (options.sync) {
 					striker.JumpStart.sync();
