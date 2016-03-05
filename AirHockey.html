@@ -80,29 +80,46 @@
 
 			var g_rayCastObjects = new Array();
 
-			function resetStriker (striker, side, number)
+			/**
+			 * @function resetStriker
+			 * @param {Object} [options]
+			 * @param {String} [options.side] Side "a" or side "b"
+			 * @param {Number} [options.number] The striker's number
+			 * @param {Boolean} [options.resetHandlers] If the striker's existing handlers should be detached
+			 * @param {Boolean} [options.resetOldData] If the striker's old score and owner id should be reset
+			 * @param {Boolean} [options.sync] If the striker should be synced after resetting.
+			 **/
+			function resetStriker (striker, options)
 			{
-				striker.JumpStart.side = side;
+				striker.JumpStart.side = options.side;
 				striker.JumpStart.offTable = false;
-				striker.JumpStart.strikerNumber = number;
+				striker.JumpStart.strikerNumber = options.number;
 				striker.JumpStart.blocksLOS = true;
 				striker.JumpStart.ownerId = "";
-				striker.JumpStart.onSpawn = {strikerSpawn: strikerSpawn};
-				striker.JumpStart.onTick = {strikerTick: strikerTick};
-				striker.JumpStart.onCursorEnter = {strikerEnter: strikerEnter};
-				striker.JumpStart.onCursorLeave = {strikerLeave: strikerLeave};
-				striker.JumpStart.onCursorDown = {strikerDown: strikerDown};
+				var handlers = ['onSpawn', 'onTick', 'onCursorEnter', 'onCursorLeave', 'onCursorDown'];
+				if (options.resetHandlers) {
+					handlers.forEach(function (handler) {
+						striker.JumpStart[handler] = {};
+					});
+				}
+				handlers.forEach(function (handler) {
+					striker.JumpStart[handler] = window[handler];
+				});
 				striker.JumpStart.lerpSync = true;
 
-				striker.userData.oldScore = 0;
-				striker.userData.oldOwnerId = "";
+				if (options.resetOldData) {
+					striker.userData.oldScore = 0;
+					striker.userData.oldOwnerId = "";
+				}
 
 				striker.position.set(
 					g_tableWidth / 2.0 + 10.0,
 					g_worldOffset.y + g_tableHeight,
 					(side === "a" ? -1 : 1) * g_tableLength / 3.0);
 
-				striker.JumpStart.sync();
+				if (options.sync) {
+					striker.JumpStart.sync();
+				}
 			}
 
 			function onTick()
@@ -158,11 +175,11 @@
 
 				if( g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId && (g_strikers[0].JumpStart.score >= 7 || g_strikers[1].JumpStart.score >= 7) )
 				{
-					resetStriker(g_strikers[0], "a", 0);
+					resetStriker(g_strikers[0], {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
 				}
 				else if( g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId && (g_strikers[1].JumpStart.score >= 7 || g_strikers[0].JumpStart.score >= 7) )
 				{
-					resetStriker(g_strikers[1], "b", 1);
+					resetStriker(g_strikers[1], {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
 				}
 			}
 
@@ -185,7 +202,7 @@
 				{
 					if( !lite )
 					{
-						resetStriker(striker, "a", 0);
+						resetStriker(striker, {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -195,7 +212,7 @@
 				{
 					if( !lite )
 					{
-						resetStriker(striker, "b", 1);
+						resetStriker(striker, {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -311,47 +328,17 @@
 					g_puck.JumpStart.sync();
 
 					var striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					striker.JumpStart.side = "a";
-					striker.JumpStart.offTable = false;
-					striker.JumpStart.strikerNumber = 0;
-					striker.JumpStart.blocksLOS = true;
-					striker.JumpStart.ownerId = "";
-					striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-					striker.JumpStart.onTick["strikerTick"] = strikerTick;
-					striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-					striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-					striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-					striker.JumpStart.lerpSync = true;
-
-					striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, -g_tableLength / 3.0);
-
+					resetStriker(striker, {side: "a", number: 0});
 					g_strikers[0] = striker;
-
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
-
 					DoAutoSync(striker, true);
 
 					striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					striker.JumpStart.side = "b";
-					striker.JumpStart.offTable = false;
-					striker.JumpStart.strikerNumber = 1;
-					striker.JumpStart.blocksLOS = true;
-					striker.JumpStart.ownerId = "";
-					striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-					striker.JumpStart.onTick["strikerTick"] = strikerTick;
-					striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-					striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-					striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-					striker.JumpStart.lerpSync = true;
-
-					striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, g_tableLength / 3.0);
-
+					resetStriker(striker, {side: "b", number: 1});
 					g_strikers[1] = striker;
-
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
-
 					DoAutoSync(striker, true);
 				}
 
