@@ -489,7 +489,7 @@
 				JumpStart.models.push({textOffset: displacement, object: mesh, fileName: text, batch: "text"});
 			}
 
-			function spawnScore(scoreBoard, score)
+			function spawnScore(score, scoreBoard, jumpStart)
 			{
 				var scoreCached = false;
 				for( i = 0; i < JumpStart.models.length; i++ )
@@ -513,7 +513,7 @@
 				var i;
 				for( i = 0; i < JumpStart.models.length; i++ )
 				{
-					if( JumpStart.models[i].fileName === this.JumpStart.score )
+					if( JumpStart.models[i].fileName === jumpStart.score )
 					{
 						offset.copy(JumpStart.models[i].textOffset);
 						break;
@@ -523,7 +523,7 @@
 				offset.multiply(scoreObject.scale);
 				scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
 
-				if( this.JumpStart.ownerId !== g_localUser.userId )
+				if( jumpStart.ownerId !== g_localUser.userId )
 				{
 					scoreObject.translateY(3.0);
 				}
@@ -589,7 +589,7 @@
 						textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
 					}
 
-					spawnScore.bind(this)(scoreBoard, "0");
+					spawnScore("0", scoreBoard, this.JumpStart);
 
 					//[...]
 					// 1. create a 3d model of this display name
@@ -611,7 +611,7 @@
 
 
 					scoreBoard.remove(scoreBoard.userData.scoreObject);
-					spawnScore.bind(this)(scoreBoard, this.JumpStart.score);
+					spawnScore(this.JumpStart.score, scoreBoard, this.JumpStart);
 
 					this.userData.oldScore = this.JumpStart.score;
 				}
