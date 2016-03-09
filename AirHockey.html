@@ -96,14 +96,21 @@
 				striker.JumpStart.strikerNumber = options.number;
 				striker.JumpStart.blocksLOS = true;
 				striker.JumpStart.ownerId = "";
-				var handlers = ['onSpawn', 'onTick', 'onCursorEnter', 'onCursorLeave', 'onCursorDown'];
+				var handlers = {
+					onSpawn: 'strikerSpawn',
+					onTick: 'strikerTick',
+					onCursorEnter: 'strikerEnter',
+					onCursorLeave: 'strikerLeave',
+					onCursorDown: 'strikerDown'
+				};
 				if (options.resetHandlers) {
-					handlers.forEach(function (handler) {
-						striker.JumpStart[handler] = {};
+					Object.keys(handlers).forEach(function (event) {
+						striker.JumpStart[event] = {};
 					});
 				}
-				handlers.forEach(function (handler) {
-					striker.JumpStart[handler] = window[handler];
+				Object.keys(handlers).forEach(function (event) {
+					var strikerHandler = handlers[event];
+					striker.JumpStart[event][strikerHandler] = window[strikerHandler];
 				});
 				striker.JumpStart.lerpSync = true;
 
