@@ -162,13 +162,21 @@
 				poseScoreBoardToCamera(0);
 				poseScoreBoardToCamera(1);
 
-				if( g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId && (g_strikers[0].JumpStart.score >= 7 || g_strikers[1].JumpStart.score >= 7) )
+				if(
+					g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId &&
+					(g_strikers[0].JumpStart.score >= 7 || g_strikers[1].JumpStart.score >= 7)
+				)
 				{
-					resetStriker(g_strikers[0], {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
+					resetStriker(
+						g_strikers[0], {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
 				}
-				else if( g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId && (g_strikers[1].JumpStart.score >= 7 || g_strikers[0].JumpStart.score >= 7) )
+				else if(
+					g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId &&
+					(g_strikers[1].JumpStart.score >= 7 || g_strikers[0].JumpStart.score >= 7)
+				)
 				{
-					resetStriker(g_strikers[1], {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
+					resetStriker(
+						g_strikers[1], {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
 				}
 			}
 
@@ -191,7 +199,8 @@
 				{
 					if( !lite )
 					{
-						resetStriker(striker, {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
+						resetStriker(
+							striker, {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -201,7 +210,8 @@
 				{
 					if( !lite )
 					{
-						resetStriker(striker, {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
+						resetStriker(
+							striker, {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -257,8 +267,12 @@
 				JumpStart.precacheSound("sounds/AirHockey/gameover");
 
 				// Precache any models that your app needs (asynchronous)
-				JumpStart.loadModels(["models/AirHockey/puck.obj", "models/AirHockey/reset.obj", "models/AirHockey/striker.obj", "models/AirHockey/table.obj"]).then(function() {
-
+				JumpStart.loadModels([
+					"models/AirHockey/puck.obj",
+					"models/AirHockey/reset.obj",
+					"models/AirHockey/striker.obj",
+					"models/AirHockey/table.obj"
+				]).then(function() {
 					// All assets cached.
 					JumpStart.doneCaching();
 				});
@@ -288,7 +302,9 @@
 						loadingLogoElem.src = "misc/beamnow.png";
 					}
 
-					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					JumpStart.showLoadingMsg(
+						"Loading complete.<br /><br />" + 
+						"<span class='beamInstructions'>Beam this app to an enclosure to begin!</span>");
 					return;
 				}
 
@@ -372,7 +388,8 @@
 						var x;
 						for( x in object.JumpStart[eventName] )
 						{
-							object.JumpStart[eventName][x].call(object);	// Needs to allow for callback params to make this generalized.
+							// Needs to allow for callback params to make this generalized.
+							object.JumpStart[eventName][x].call(object);	
 						}
 					}
 				}
@@ -381,7 +398,8 @@
 
 				if( !isLocal && g_strikers[this.JumpStart.strikerNumber] )
 				{
-					console.log("APP ERROR: There is already a striker with number " + this.JumpStart.strikerNumber + ".");
+					console.log(
+						"APP ERROR: There is already a striker with number " + this.JumpStart.strikerNumber + ".");
 					return;
 				}
 
@@ -402,7 +420,10 @@
 
 			function strikerDown()
 			{
-				if( this.JumpStart.ownerId === "" && g_strikers[0].JumpStart.ownerId !== g_localUser.userId && g_strikers[1].JumpStart.ownerId !== g_localUser.userId )
+				if( 
+					this.JumpStart.ownerId === "" && g_strikers[0].JumpStart.ownerId !== g_localUser.userId &&
+					g_strikers[1].JumpStart.ownerId !== g_localUser.userId 
+				)
 				{
 					var otherStriker = g_strikers[1];
 					if( this === g_strikers[1] )
@@ -747,7 +768,13 @@
 				}
 
 				var wasHit = false;
-				if( g_ready && (g_strikers[0].JumpStart.ownerId === g_localUser.userId || g_strikers[1].JumpStart.ownerId === g_localUser.userId) && !this.userData.hitResting && g_lookHit && g_lookHit.object === g_table )
+				if(
+					g_ready && (
+						g_strikers[0].JumpStart.ownerId === g_localUser.userId ||
+						g_strikers[1].JumpStart.ownerId === g_localUser.userId
+					) &&
+					!this.userData.hitResting && g_lookHit && g_lookHit.object === g_table 
+				)
 				{
 					var hisPuck = g_strikers[0];
 					if( hisPuck.JumpStart.ownerId !== g_localUser.userId )
@@ -756,14 +783,16 @@
 					var dist = g_lookHit.scaledPoint.distanceTo(this.position);
 
 					// BASED ON INSTANTANEOUS LOOKHIT VELOCITY
-					var puckOffset = new THREE.Vector3().copy(g_lookHit.scaledPoint).sub(g_lastLookHitScaledPoint).multiplyScalar(3.0);
+					var puckOffset = new THREE.Vector3().
+						copy(g_lookHit.scaledPoint).sub(g_lastLookHitScaledPoint).multiplyScalar(3.0);
 
 					var puckOffsetLength = puckOffset.length();
 
 					if( puckOffsetLength > g_maxPuckOffset )
 						puckOffset.multiplyScalar(g_maxPuckOffset / puckOffsetLength);
 
-					if( dist < this.userData.radius && goodSide(hisPuck) )	// Should also ignore hits that go in the WRONG direction for this player.
+					// Should also ignore hits that go in the WRONG direction for this player.
+					if( dist < this.userData.radius && goodSide(hisPuck) )	
 					{
 						this.JumpStart.appliedForce.copy(puckOffset);
 
@@ -847,7 +876,13 @@
 
 			function DoAutoSync(sceneObject, forceSync)
 			{
-				if( (typeof forceSync !== "undefined" && forceSync) || (sceneObject.position.distanceTo(sceneObject.userData.lastSyncPos) > 5.0 && g_clock.elapsedTime - sceneObject.userData.lastSyncTime > 0.1) )
+				if( 
+					(typeof forceSync !== "undefined" && forceSync) ||
+					(
+						sceneObject.position.distanceTo(sceneObject.userData.lastSyncPos) > 5.0 &&
+						g_clock.elapsedTime - sceneObject.userData.lastSyncTime > 0.1
+					) 
+				)
 				{
 					sceneObject.userData.lastSyncPos.copy(sceneObject.position);
 					sceneObject.userData.lastSyncTime = g_clock.elapsedTime;
@@ -869,7 +904,8 @@
 						justFinished = true;
 					}
 
-					this.scale.lerpVectors(this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
+					this.scale.lerpVectors(
+						this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
 
 					if( justFinished )
 					{
@@ -902,7 +938,8 @@
 						justFinished = true;
 					}
 
-					this.position.lerpVectors(this.userData.targetPosOriginal, this.userData.targetPos, this.userData.targetPosLerp);
+					this.position.lerpVectors(
+						this.userData.targetPosOriginal, this.userData.targetPos, this.userData.targetPosLerp);
 
 					if( justFinished )
 					{
@@ -942,8 +979,10 @@
 						justFinished = true;
 					}
 
-					var myQuaternionA = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
-					var myQuaternionB = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
+					var myQuaternionA = new THREE.Quaternion().setFromEuler(
+						new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
+					var myQuaternionB = new THREE.Quaternion().setFromEuler(
+						new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
 
 					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
 					this.quaternion.copy(myQuaternionA);
