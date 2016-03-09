@@ -128,13 +128,13 @@
 					striker.JumpStart.sync();
 				}
 			}
-
-			function onTick()
+						
+			function poseScoreBoardToCamera(number)
 			{
 				var scoreBoard, striker;
-				if( g_strikers[0] && g_strikers[0].JumpStart.ownerId !== "" )
+				if( g_strikers[number] && g_strikers[number].JumpStart.ownerId !== "" )
 				{
-					striker = g_strikers[0];
+					striker = g_strikers[number];
 					if( striker.JumpStart.ownerId !== g_localUser.userId )
 					{
 						if( striker.JumpStart.side === "a" && g_scoreBoardA )
@@ -149,36 +149,18 @@
 						if( scoreBoard && g_camera )
 						{
 							if( scoreBoard.position.z < g_camera.position.z )
-								scoreBoard.rotation.y = 0;
+								scoreBoard.rotation.y = number === 0 ? 0 : Math.PI;
 							else
-								scoreBoard.rotation.y = Math.PI;
+								scoreBoard.rotation.y = number === 0 ? Math.PI : 0;
 						}
 					}
 				}
+			}
 
-				if( g_strikers[1] && g_strikers[1].JumpStart.ownerId !== "" )
-				{
-					striker = g_strikers[1];
-					if( striker.JumpStart.ownerId !== g_localUser.userId )
-					{
-						if( striker.JumpStart.side === "a" && g_scoreBoardA )
-						{
-							scoreBoard = g_scoreBoardA;
-						}
-						else if( striker.JumpStart.side === "b" && g_scoreBoardB )
-						{
-							scoreBoard = g_scoreBoardB;
-						}
-
-						if( scoreBoard && g_camera)
-						{
-							if( scoreBoard.position.z < g_camera.position.z )
-								scoreBoard.rotation.y = Math.PI;
-							else
-								scoreBoard.rotation.y = 0;
-						}
-					}
-				}
+			function onTick()
+			{
+				poseScoreBoardToCamera(0);
+				poseScoreBoardToCamera(1);
 
 				if( g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId && (g_strikers[0].JumpStart.score >= 7 || g_strikers[1].JumpStart.score >= 7) )
 				{
