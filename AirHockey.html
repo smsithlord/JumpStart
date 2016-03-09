@@ -489,6 +489,48 @@
 				JumpStart.models.push({textOffset: displacement, object: mesh, fileName: text, batch: "text"});
 			}
 
+			function spawnScore(scoreBoard, score)
+			{
+				var scoreCached = false;
+				for( i = 0; i < JumpStart.models.length; i++ )
+				{
+					if( JumpStart.models[i].fileName === score )
+					{
+						scoreCached = true;
+						break;
+					}
+				}
+
+				if( !scoreCached )
+				{
+					LoadTextModel(score);
+				}
+
+				var scoreObject = JumpStart.spawnInstance(score, {parent: scoreBoard});
+				scoreObject.JumpStart.blocksLOS = false;
+
+				var offset = new THREE.Vector3();
+				var i;
+				for( i = 0; i < JumpStart.models.length; i++ )
+				{
+					if( JumpStart.models[i].fileName === this.JumpStart.score )
+					{
+						offset.copy(JumpStart.models[i].textOffset);
+						break;
+					}
+				}
+
+				offset.multiply(scoreObject.scale);
+				scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				if( this.JumpStart.ownerId !== g_localUser.userId )
+				{
+					scoreObject.translateY(3.0);
+				}
+
+				scoreBoard.userData.scoreObject = scoreObject;
+			}
+
 			function strikerTick()
 			{
 				var scoreBoard;
@@ -547,41 +589,7 @@
 						textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
 					}
 
-
-					var scoreCached = false;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === "0" )
-						{
-							scoreCached = true;
-							break;
-						}
-					}
-
-					if( !scoreCached )
-						LoadTextModel("0");
-
-					var scoreObject = JumpStart.spawnInstance("0", {parent: scoreBoard});
-					scoreObject.JumpStart.blocksLOS = false;
-
-					var offset = new THREE.Vector3();
-					var i;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === this.JumpStart.score )
-						{
-							offset.copy(JumpStart.models[i].textOffset);
-							break;
-						}
-					}
-
-					offset.multiply(scoreObject.scale);
-					scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
-
-					if( this.JumpStart.ownerId !== g_localUser.userId )
-						scoreObject.translateY(3.0);
-
-					scoreBoard.userData.scoreObject = scoreObject;
+					spawnScore.bind(this)(scoreBoard, "0");
 
 					//[...]
 					// 1. create a 3d model of this display name
@@ -601,41 +609,9 @@
 						JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
 					}
 
-					var scoreCached = false;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === this.JumpStart.score )
-						{
-							scoreCached = true;
-							break;
-						}
-					}
-
-					if( !scoreCached )
-						LoadTextModel(this.JumpStart.score);
-
-					var scoreObject = JumpStart.spawnInstance(this.JumpStart.score, {parent: scoreBoard});
-					scoreObject.JumpStart.blocksLOS = false;
-
-					var offset = new THREE.Vector3();
-					var i;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === this.JumpStart.score )
-						{
-							offset.copy(JumpStart.models[i].textOffset);
-							break;
-						}
-					}
-
-					offset.multiply(scoreObject.scale);
-					scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
-
-					if( this.JumpStart.ownerId !== g_localUser.userId )
-						scoreObject.translateY(3.0);
 
 					scoreBoard.remove(scoreBoard.userData.scoreObject);
-					scoreBoard.userData.scoreObject = scoreObject;
+					spawnScore.bind(this)(scoreBoard, this.JumpStart.score);
 
 					this.userData.oldScore = this.JumpStart.score;
 				}
