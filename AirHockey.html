@@ -269,7 +269,7 @@
 				// Precache any models that your app needs (asynchronous)
 				JumpStart.loadModels([
 					"models/AirHockey/puck.obj",
-					"models/AirHockey/reset.obj",
+					"models/AirHockey/reset2.obj",
 					"models/AirHockey/striker.obj",
 					"models/AirHockey/table.obj"
 				]).then(function() {
@@ -312,13 +312,14 @@
 
 				// Only the 1st user needs to create the networked object
 				if( g_localUser.firstUser ) {
-					g_resetButton = JumpStart.spawnInstance("models/AirHockey/reset.obj");
+					g_resetButton = JumpStart.spawnInstance("models/AirHockey/reset2.obj");
 					g_resetButton.JumpStart.numResets = 0;
 					g_resetButton.JumpStart.blocksLOS = true;
 					g_resetButton.JumpStart.onCursorDown["resetDown"] = resetDown;
 					g_resetButton.JumpStart.onSpawn["resetSpawn"] = resetSpawn;
 					g_resetButton.JumpStart.onTick["resetTick"] = resetTick;
-					g_resetButton.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, 0);
+					g_resetButton.position.set(0, g_worldOffset.y + g_tableHeight * 3 + 5, 0);
+					g_resetButton.rotation.x = Math.PI / 2;
 					g_resetButton.scale.x = 0.5;
 					g_resetButton.scale.z = 0.5;
 					g_resetButton.JumpStart.sync();
