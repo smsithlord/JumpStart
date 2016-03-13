@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html lang="en">
 	<head>
-		<title>Gator Smasher</title>
+		<title>Mole Whack</title>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
@@ -31,7 +31,7 @@
 			var myOptions =
 			{
 				"showFPS": false,
-				"titleImageURL": "misc/gatorsmashertitle.png",
+				"titleImageURL": "misc/molewhacktitle.png",
 				"legacyLoader": false,
 				"worldScale": 2.0,
 				"scaleWithEnclosure": true,
@@ -71,10 +71,10 @@
 				// You can think of precaching sounds as synchronous (but it's not)
 				//JumpStart.precacheSound("sounds/JumpStart/trumpet");
 				//JumpStart.precacheSound("sounds/JumpStart/cashout");
-				JumpStart.precacheSound("sounds/TikiDrum/cymb0");
+				JumpStart.precacheSound("sounds/MoleWhack/ow");
 
 				// Precache any models that your app needs (asynchronous)
-				var myModels = ["models/GatorSmasher/table.obj", "models/JumpStart/jewel.obj", "models/JumpStart/grass.obj", "models/GatorSmasher/smasher.obj", "models/GatorSmasher/croc.obj"];
+				var myModels = ["models/MoleWhack/table.obj", "models/JumpStart/jewel.obj", "models/JumpStart/grass.obj", "models/GatorSmasher/smasher.obj", "models/MoleWhack/mole.obj"];
 				JumpStart.loadModels(myModels).then(function() {
 
 					// All assets cached.
@@ -82,6 +82,7 @@
 				});
 			}
 
+			var g_scoreBoard = null;
 			var g_mySmasher = null;
 
 			// Window-level callback for onReady event
@@ -112,27 +113,27 @@
 				// Only the 1st user needs to create the networked object
 				if( g_localUser.firstUser )
 				{
-					var gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					var gator = JumpStart.spawnInstance("models/MoleWhack/mole.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
 					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
 					gator.position.y += 45.0;
-					gator.position.z += 4.0;
+					gator.position.z += -2.5;
 					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
 					gator.JumpStart.ownerId = "";
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("models/MoleWhack/mole.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
 					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
 					gator.position.y += 45.0;
-					gator.position.z += 4.0;
-					gator.position.x += 15.0;
+					gator.position.z += -2.5;
+					gator.position.x += 19.0;
 					gator.rotateY(-0.25);
 
 					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
@@ -141,14 +142,14 @@
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("models/MoleWhack/mole.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
 					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
 					gator.position.y += 45.0;
-					gator.position.z += 4.0;
-					gator.position.x -= 15.0;
+					gator.position.z += -2.5;
+					gator.position.x -= 19.0;
 					gator.rotateY(0.25);
 					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
@@ -156,14 +157,14 @@
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("models/MoleWhack/mole.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
 					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
-					gator.position.y += 45.0;
-					gator.position.z += 6.0;
-					gator.position.x += 27.0;
+					gator.position.y += 42.0;
+					gator.position.z += 11.5;
+					gator.position.x = 9.5;
 					gator.rotateY(-0.3);
 					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
@@ -171,23 +172,32 @@
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("models/MoleWhack/mole.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
 					gator.JumpStart.onCursorDown["gatorDown"] = gatorDown;
-					gator.position.y += 45.0;
-					gator.position.z += 6.0;
-					gator.position.x -= 27.0;
+					gator.position.y += 42.0;
+					gator.position.z += 11.5;
+					gator.position.x -= 9.5;
 					gator.rotateY(0.3);
 					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
 					gator.JumpStart.ownerId = "";
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
+
+					g_scoreBoard = JumpStart.spawnInstance();
+					g_scoreBoard.position.set(14.8, g_worldOffset.y + 80.1, -13.7);
+					g_scoreBoard.JumpStart.score = 0;
+					//scoreBoard.JumpStart.linkURL = url;
+					g_scoreBoard.JumpStart.onSpawn["scoreSpawn"] = scoreSpawn;
+					//scoreBoard.JumpStart.onTick["fallTick"] = fallTick;
+					g_scoreBoard.JumpStart.sync();
 				}
 
-				g_table = JumpStart.spawnInstance("models/GatorSmasher/table.obj");
+				g_table = JumpStart.spawnInstance("models/MoleWhack/table.obj");
+				g_table.position.y = g_worldOffset.y + 45.0;
 				g_table.JumpStart.blocksLOS = false;
 
 				setTimeout(function()
@@ -249,6 +259,50 @@
 				JumpStart.run();
 			}
 
+			function getRandomColor()
+			{
+				var letters = '0123456789abcdef'.split('');
+				var color = '#';
+				for (var i = 0; i < 6; i++ )
+					color += letters[Math.floor(Math.random() * 16)];
+
+				return color;
+			}
+
+			var g_scoreTexture = null;
+			var g_scoreCanvas = null;
+			var g_scoreContext = null;
+			function scoreSpawn(isLocal)
+			{
+				g_scoreBoard = this;
+//				this.position.set(14.8, g_worldOffset.y + 80.1, -13.7);
+
+				var geometry = new THREE.BoxGeometry(15, 6.5, 0);
+				var material;
+
+				// create a canvas element
+				g_scoreCanvas = document.createElement('canvas');
+				g_scoreContext = g_scoreCanvas.getContext('2d');
+				g_scoreContext.textAlign = "center";
+				g_scoreContext.textBaseline = "middle";
+				g_scoreContext.font = "Bold 100px Arial";
+				g_scoreContext.fillStyle = "rgba(255,0,0,0.95)";
+			   	g_scoreContext.fillText('8888', g_scoreCanvas.width / 2.0, g_scoreCanvas.height / 2.0);
+    
+				// canvas contents will be used for a texture
+				g_scoreTexture = new THREE.Texture(g_scoreCanvas) 
+				g_scoreTexture.needsUpdate = true;
+
+//				if( JumpStart.webMode )
+//					material = new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: true });
+//				else
+					material = new THREE.MeshBasicMaterial({map: g_scoreTexture, visible: true});
+
+				var scoreSlate = new THREE.Mesh(geometry, material);
+				this.add(scoreSlate);
+//				parentInstance.JumpStart.makePhysics();
+			}
+
 			var g_table = null;
 
 			function gatorSpawn(isLocal)
@@ -285,10 +339,12 @@
 				dist.copy(g_mySmasher.position);
 				dist.sub(this.position);
 
-				if(dist.length() > 40.0)
+				if(dist.length() > 50.0)
 					return;
 
 				gatorSmashAction();
+				g_scoreBoard.JumpStart.score++;
+				g_scoreBoard.JumpStart.sync();
 
 				var _this = this;
 				setTimeout(function()
@@ -356,9 +412,9 @@
 				}
 
 				if( this.JumpStart.direction === 1 )
-					this.translateZ(offsetDelta * g_deltaTime);
+					this.translateY(offsetDelta * g_deltaTime);
 				else if( this.JumpStart.direction === -1 )
-					this.translateZ(-offsetDelta * g_deltaTime);
+					this.translateY(-offsetDelta * g_deltaTime);
 
 				if( needsSync )
 					this.JumpStart.sync();
@@ -392,7 +448,17 @@
 					var _this = this;
 					setTimeout(function()
 					{
-						JumpStart.playSound("sounds/GatorSmasher/ow", 0.5, false);
+						JumpStart.playSound("sounds/MoleWhack/ow", 0.5, false);
+						g_scoreContext.clearRect(0, 0, g_scoreCanvas.width, g_scoreCanvas.height);
+
+						// create a canvas element
+						g_scoreContext.textAlign = "center";
+						g_scoreContext.textBaseline = "middle";
+						g_scoreContext.font = "Bold 100px Arial";
+						g_scoreContext.fillStyle = "rgba(255,0,0,0.95)";
+						g_scoreContext.fillText(g_scoreBoard.JumpStart.score, g_scoreCanvas.width / 2.0, g_scoreCanvas.height / 2.0);
+
+						g_scoreTexture.needsUpdate = true;
 					}, 300);
 				}
 

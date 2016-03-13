@@ -3616,11 +3616,12 @@ __hash = function(value) {
 };
 
 
+// FIXME: Remove this if it's now part of standard THREE.js!!!
 
 // First attempt at adding hierarchy support to Object.lookAt()
 // WestLangley
 // EDIT: Second attempt -- added zz85's lookAtWorld() and worldToLocal()
-
+/*
 THREE.Object3D.prototype.worldToLocal = function ( vector ) {
     
     if ( !this.__inverseMatrixWorld ) this.__inverseMatrixWorld = new THREE.Matrix4();
@@ -3652,3 +3653,4 @@ THREE.Object3D.prototype.lookAt2 = function(vector) {
     }
 
 };
+*/
