@@ -84,7 +84,7 @@
 			 * @function resetStriker
 			 * @param {Object} [options]
 			 * @param {String} [options.side] Side "a" or side "b"
-			 * @param {Number} [options.number] The striker's number
+			 * @param {Number} [options.strikerNumber] 
 			 * @param {Boolean} [options.resetHandlers] If the striker's existing handlers should be detached
 			 * @param {Boolean} [options.resetOldData] If the striker's old score and owner id should be reset
 			 * @param {Boolean} [options.sync] If the striker should be synced after resetting.
@@ -93,7 +93,7 @@
 			{
 				striker.JumpStart.side = options.side;
 				striker.JumpStart.offTable = false;
-				striker.JumpStart.strikerNumber = options.number;
+				striker.JumpStart.strikerNumber = options.strikerNumber;
 				striker.JumpStart.blocksLOS = true;
 				striker.JumpStart.ownerId = "";
 				var handlers = {
@@ -129,12 +129,12 @@
 				}
 			}
 						
-			function poseScoreBoardToCamera(number)
+			function poseScoreBoardToCamera(strikerNumber)
 			{
 				var scoreBoard, striker;
-				if( g_strikers[number] && g_strikers[number].JumpStart.ownerId !== "" )
+				if( g_strikers[strikerNumber] && g_strikers[strikerNumber].JumpStart.ownerId !== "" )
 				{
-					striker = g_strikers[number];
+					striker = g_strikers[strikerNumber];
 					if( striker.JumpStart.ownerId !== g_localUser.userId )
 					{
 						if( striker.JumpStart.side === "a" && g_scoreBoardA )
@@ -149,9 +149,9 @@
 						if( scoreBoard && g_camera )
 						{
 							if( scoreBoard.position.z < g_camera.position.z )
-								scoreBoard.rotation.y = number === 0 ? 0 : Math.PI;
+								scoreBoard.rotation.y = strikerNumber === 0 ? 0 : Math.PI;
 							else
-								scoreBoard.rotation.y = number === 0 ? Math.PI : 0;
+								scoreBoard.rotation.y = strikerNumber === 0 ? Math.PI : 0;
 						}
 					}
 				}
@@ -168,7 +168,7 @@
 				)
 				{
 					resetStriker(
-						g_strikers[0], {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
+						g_strikers[0], {side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
 				}
 				else if(
 					g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId &&
@@ -176,7 +176,7 @@
 				)
 				{
 					resetStriker(
-						g_strikers[1], {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
+						g_strikers[1], {side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
 				}
 			}
 
@@ -200,7 +200,7 @@
 					if( !lite )
 					{
 						resetStriker(
-							striker, {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
+							striker, {side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -211,7 +211,7 @@
 					if( !lite )
 					{
 						resetStriker(
-							striker, {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
+							striker, {side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -334,14 +334,14 @@
 					g_puck.JumpStart.sync();
 
 					var striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					resetStriker(striker, {side: "a", number: 0});
+					resetStriker(striker, {side: "a", strikerNumber: 0});
 					g_strikers[0] = striker;
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
 					DoAutoSync(striker, true);
 
 					striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					resetStriker(striker, {side: "b", number: 1});
+					resetStriker(striker, {side: "b", strikerNumber: 1});
 					g_strikers[1] = striker;
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
