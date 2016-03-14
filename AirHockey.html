@@ -70,7 +70,6 @@
 			var g_lastLookHitScaledPoint = new THREE.Vector3();
 			var g_maxPuckOffset = 2.5;
 			var g_puckRadius = 3.0;
-//			var g_tableHeight = 10.0;
 			var g_tableHeight = 30.0;
 			var g_tableWidth = 66.0;
 			var g_tableLength = 126.0;
@@ -81,12 +80,61 @@
 
 			var g_rayCastObjects = new Array();
 
-			function onTick()
+			/**
+			 * @function resetStriker
+			 * @param {Object} [options]
+			 * @param {String} [options.side] Side "a" or side "b"
+			 * @param {Number} [options.number] The striker's number
+			 * @param {Boolean} [options.resetHandlers] If the striker's existing handlers should be detached
+			 * @param {Boolean} [options.resetOldData] If the striker's old score and owner id should be reset
+			 * @param {Boolean} [options.sync] If the striker should be synced after resetting.
+			 **/
+			function resetStriker (striker, options)
+			{
+				striker.JumpStart.side = options.side;
+				striker.JumpStart.offTable = false;
+				striker.JumpStart.strikerNumber = options.number;
+				striker.JumpStart.blocksLOS = true;
+				striker.JumpStart.ownerId = "";
+				var handlers = {
+					onSpawn: 'strikerSpawn',
+					onTick: 'strikerTick',
+					onCursorEnter: 'strikerEnter',
+					onCursorLeave: 'strikerLeave',
+					onCursorDown: 'strikerDown'
+				};
+				if (options.resetHandlers) {
+					Object.keys(handlers).forEach(function (event) {
+						striker.JumpStart[event] = {};
+					});
+				}
+				Object.keys(handlers).forEach(function (event) {
+					var strikerHandler = handlers[event];
+					striker.JumpStart[event][strikerHandler] = window[strikerHandler];
+				});
+				striker.JumpStart.lerpSync = true;
+
+				if (options.resetOldData) {
+					striker.userData.oldScore = 0;
+					striker.userData.oldOwnerId = "";
+				}
+
+				striker.position.set(
+					g_tableWidth / 2.0 + 10.0,
+					g_worldOffset.y + g_tableHeight,
+					(options.side === "a" ? -1 : 1) * g_tableLength / 3.0);
+
+				if (options.sync) {
+					striker.JumpStart.sync();
+				}
+			}
+						
+			function poseScoreBoardToCamera(number)
 			{
 				var scoreBoard, striker;
-				if( g_strikers[0] && g_strikers[0].JumpStart.ownerId !== "" )
+				if( g_strikers[number] && g_strikers[number].JumpStart.ownerId !== "" )
 				{
-					striker = g_strikers[0];
+					striker = g_strikers[number];
 					if( striker.JumpStart.ownerId !== g_localUser.userId )
 					{
 						if( striker.JumpStart.side === "a" && g_scoreBoardA )
@@ -101,90 +149,34 @@
 						if( scoreBoard && g_camera )
 						{
 							if( scoreBoard.position.z < g_camera.position.z )
-								scoreBoard.rotation.y = 0;
+								scoreBoard.rotation.y = number === 0 ? 0 : Math.PI;
 							else
-								scoreBoard.rotation.y = Math.PI;
+								scoreBoard.rotation.y = number === 0 ? Math.PI : 0;
 						}
 					}
 				}
+			}
 
-				if( g_strikers[1] && g_strikers[1].JumpStart.ownerId !== "" )
+			function onTick()
+			{
+				poseScoreBoardToCamera(0);
+				poseScoreBoardToCamera(1);
+
+				if(
+					g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId &&
+					(g_strikers[0].JumpStart.score >= 7 || g_strikers[1].JumpStart.score >= 7)
+				)
 				{
-					striker = g_strikers[1];
-					if( striker.JumpStart.ownerId !== g_localUser.userId )
-					{
-						if( striker.JumpStart.side === "a" && g_scoreBoardA )
-						{
-							scoreBoard = g_scoreBoardA;
-						}
-						else if( striker.JumpStart.side === "b" && g_scoreBoardB )
-						{
-							scoreBoard = g_scoreBoardB;
-						}
-
-						if( scoreBoard && g_camera)
-						{
-							if( scoreBoard.position.z < g_camera.position.z )
-								scoreBoard.rotation.y = Math.PI;
-							else
-								scoreBoard.rotation.y = 0;
-						}
-					}
+					resetStriker(
+						g_strikers[0], {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
 				}
-
-				if( g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId && (g_strikers[0].JumpStart.score >= 7 || g_strikers[1].JumpStart.score >= 7) )
+				else if(
+					g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId &&
+					(g_strikers[1].JumpStart.score >= 7 || g_strikers[0].JumpStart.score >= 7)
+				)
 				{
-					var striker = g_strikers[0];
-					striker.JumpStart.side = "a";
-					striker.JumpStart.offTable = false;
-					striker.JumpStart.strikerNumber = 0;
-					striker.JumpStart.blocksLOS = true;
-					striker.JumpStart.ownerId = "";
-					striker.JumpStart.onSpawn = {};
-					striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-					striker.JumpStart.onTick = {};
-					striker.JumpStart.onTick["strikerTick"] = strikerTick;
-					striker.JumpStart.onCursorEnter = {};
-					striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-					striker.JumpStart.onCursorLeave = {};
-					striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-					striker.JumpStart.onCursorDown = {};
-					striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-					striker.JumpStart.lerpSync = true;
-
-					striker.userData.oldScore = 0;
-					striker.userData.oldOwnerId = "";
-
-					striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, -g_tableLength / 3.0);
-
-					striker.JumpStart.sync();
-				}
-				else if( g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId && (g_strikers[1].JumpStart.score >= 7 || g_strikers[0].JumpStart.score >= 7) )
-				{
-					var striker = g_strikers[1];
-					striker.JumpStart.side = "b";
-					striker.JumpStart.offTable = false;
-					striker.JumpStart.strikerNumber = 1;
-					striker.JumpStart.blocksLOS = true;
-					striker.JumpStart.ownerId = "";
-					striker.JumpStart.onSpawn = {};
-					striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-					striker.JumpStart.onTick = {};
-					striker.JumpStart.onTick["strikerTick"] = strikerTick;
-					striker.JumpStart.onCursorEnter = {};
-					striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-					striker.JumpStart.onCursorLeave = {};
-					striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-					striker.JumpStart.onCursorDown = {};
-					striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-					striker.JumpStart.lerpSync = true;
-
-					striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, g_tableLength / 3.0);
-
-					striker.userData.oldScore = 0;
-					striker.userData.oldOwnerId = "";
-
-					striker.JumpStart.sync();
+					resetStriker(
+						g_strikers[1], {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
 				}
 			}
 
@@ -192,8 +184,6 @@
 			{
 				console.log("down");
 				reset(false);
-				//this.JumpStart.numResets++;
-				//this.JumpStart.sync();
 			}
 
 			function reset(lite)
@@ -207,31 +197,10 @@
 
 				if( striker )
 				{
-					if( !lite )//|| striker.JumpStart.ownerId === g_localUser.userId )
+					if( !lite )
 					{
-						striker.JumpStart.side = "a";
-						striker.JumpStart.offTable = false;
-						striker.JumpStart.strikerNumber = 0;
-						striker.JumpStart.blocksLOS = true;
-						striker.JumpStart.ownerId = "";
-						striker.JumpStart.onSpawn = {};
-						striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-						striker.JumpStart.onTick = {};
-						striker.JumpStart.onTick["strikerTick"] = strikerTick;
-						striker.JumpStart.onCursorEnter = {};
-						striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-						striker.JumpStart.onCursorLeave = {};
-						striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-						striker.JumpStart.onCursorDown = {};
-						striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-						striker.JumpStart.lerpSync = true;
-
-						striker.userData.oldScore = 0;
-						striker.userData.oldOwnerId = "";
-
-						striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, -g_tableLength / 3.0);
-
-						striker.JumpStart.sync();
+						resetStriker(
+							striker, {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -239,31 +208,10 @@
 
 				if( striker )
 				{
-					if( !lite )//|| striker.JumpStart.ownerId === g_localUser.userId )
+					if( !lite )
 					{
-						striker.JumpStart.side = "b";
-						striker.JumpStart.offTable = false;
-						striker.JumpStart.strikerNumber = 1;
-						striker.JumpStart.blocksLOS = true;
-						striker.JumpStart.ownerId = "";
-						striker.JumpStart.onSpawn = {};
-						striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-						striker.JumpStart.onTick = {};
-						striker.JumpStart.onTick["strikerTick"] = strikerTick;
-						striker.JumpStart.onCursorEnter = {};
-						striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-						striker.JumpStart.onCursorLeave = {};
-						striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-						striker.JumpStart.onCursorDown = {};
-						striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-						striker.JumpStart.lerpSync = true;
-
-						striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, g_tableLength / 3.0);
-
-						striker.userData.oldScore = 0;
-						striker.userData.oldOwnerId = "";
-
-						striker.JumpStart.sync();
+						resetStriker(
+							striker, {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -304,9 +252,6 @@
 			// Window-level callback for onPrecache event
 			function onPrecache()
 			{
-				//var allDataRef = JumpStart.firebaseSync.firebaseRoot;
-				//allDataRef.remove();
-				//return;
 
 				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
 				{
@@ -322,8 +267,12 @@
 				JumpStart.precacheSound("sounds/AirHockey/gameover");
 
 				// Precache any models that your app needs (asynchronous)
-				JumpStart.loadModels(["models/AirHockey/puck.obj", "models/AirHockey/reset.obj", "models/AirHockey/striker.obj", "models/AirHockey/table.obj"]).then(function() {
-
+				JumpStart.loadModels([
+					"models/AirHockey/puck.obj",
+					"models/AirHockey/reset.obj",
+					"models/AirHockey/striker.obj",
+					"models/AirHockey/table.obj"
+				]).then(function() {
 					// All assets cached.
 					JumpStart.doneCaching();
 				});
@@ -353,12 +302,13 @@
 						loadingLogoElem.src = "misc/beamnow.png";
 					}
 
-					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					JumpStart.showLoadingMsg(
+						"Loading complete.<br /><br />" + 
+						"<span class='beamInstructions'>Beam this app to an enclosure to begin!</span>");
 					return;
 				}
 
 				// Assign us as the 1st player
-//				g_players[0] = {""};
 
 				// Only the 1st user needs to create the networked object
 				if( g_localUser.firstUser ) {
@@ -383,49 +333,17 @@
 					g_puck.JumpStart.sync();
 
 					var striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					striker.JumpStart.side = "a";
-					striker.JumpStart.offTable = false;
-					striker.JumpStart.strikerNumber = 0;
-					striker.JumpStart.blocksLOS = true;
-					striker.JumpStart.ownerId = "";
-					striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-					striker.JumpStart.onTick["strikerTick"] = strikerTick;
-					striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-					striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-					striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-					striker.JumpStart.lerpSync = true;
-
-					striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, -g_tableLength / 3.0);
-
+					resetStriker(striker, {side: "a", number: 0});
 					g_strikers[0] = striker;
-
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
-
-					//striker.JumpStart.sync();
 					DoAutoSync(striker, true);
 
 					striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					striker.JumpStart.side = "b";
-					striker.JumpStart.offTable = false;
-					striker.JumpStart.strikerNumber = 1;
-					striker.JumpStart.blocksLOS = true;
-					striker.JumpStart.ownerId = "";
-					striker.JumpStart.onSpawn["strikerSpawn"] = strikerSpawn;
-					striker.JumpStart.onTick["strikerTick"] = strikerTick;
-					striker.JumpStart.onCursorEnter["strikerEnter"] = strikerEnter;
-					striker.JumpStart.onCursorLeave["strikerLeave"] = strikerLeave;
-					striker.JumpStart.onCursorDown ["strikerDown"] = strikerDown;
-					striker.JumpStart.lerpSync = true;
-
-					striker.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, g_tableLength / 3.0);
-
+					resetStriker(striker, {side: "b", number: 1});
 					g_strikers[1] = striker;
-
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
-
-					//striker.JumpStart.sync();
 					DoAutoSync(striker, true);
 				}
 
@@ -450,15 +368,11 @@
 
 			function resetSpawn(isLocal)
 			{
-				//console.log("spawned");
 				if( !g_resetButton )
 					g_resetButton = this;
 
-				//this.JumpStart.onCursorDown["resetDown"] = resetDown;
-
 				this.userData.lastNumResets = this.JumpStart.numResets;
 
-				//console.log("pushing to raycast");
 				g_rayCastObjects.push(this);
 			}
 
@@ -466,9 +380,6 @@
 			{
 				this.userData.oldScore = 0;
 				this.userData.oldOwnerId = "";
-//				this.userData.neverBeen = true;
-				//this.addEventListener("cursordown", function(e) { console.log(e.target); });
-//				this.addEventListener("cursorup", function(e) { JumpStart.pendingClickUp = true; });
 
 				function eventRelay(object, eventName)
 				{
@@ -477,27 +388,18 @@
 						var x;
 						for( x in object.JumpStart[eventName] )
 						{
-							object.JumpStart[eventName][x].call(object);	// Needs to allow for callback params to make this generalized.
+							// Needs to allow for callback params to make this generalized.
+							object.JumpStart[eventName][x].call(object);	
 						}
 					}
 				}
 
-//				this.addEventListener("cursorup", eventRelay(this, "onCursorDown"));
-
 				g_rayCastObjects.push(this);
-/*
-				function(e) {
-					relay(e, )
-					var object = e.target;
-					console.log(e);
-					console.log(object.JumpStart.onCursorDown);
-					//e.target.
-				});
-*/
 
 				if( !isLocal && g_strikers[this.JumpStart.strikerNumber] )
 				{
-					console.log("APP ERROR: There is already a striker with number " + this.JumpStart.strikerNumber + ".");
+					console.log(
+						"APP ERROR: There is already a striker with number " + this.JumpStart.strikerNumber + ".");
 					return;
 				}
 
@@ -518,8 +420,10 @@
 
 			function strikerDown()
 			{
-//				console.log("Striker Down!");
-				if( this.JumpStart.ownerId === "" && g_strikers[0].JumpStart.ownerId !== g_localUser.userId && g_strikers[1].JumpStart.ownerId !== g_localUser.userId )
+				if( 
+					this.JumpStart.ownerId === "" && g_strikers[0].JumpStart.ownerId !== g_localUser.userId &&
+					g_strikers[1].JumpStart.ownerId !== g_localUser.userId 
+				)
 				{
 					var otherStriker = g_strikers[1];
 					if( this === g_strikers[1] )
@@ -577,7 +481,6 @@
 				var geometry;
 				geometry = new THREE.TextGeometry(text, params);
 
-//				var material = new THREE.MeshBasicMaterial({color:'white'});
 				var material = new THREE.MeshBasicMaterial({color:'#00cc00'});
 
 				var mesh = new THREE.Mesh(geometry, material);
@@ -587,6 +490,48 @@
 				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
 
 				JumpStart.models.push({textOffset: displacement, object: mesh, fileName: text, batch: "text"});
+			}
+
+			function spawnScore(score, scoreBoard, jumpStart)
+			{
+				var scoreCached = false;
+				for( i = 0; i < JumpStart.models.length; i++ )
+				{
+					if( JumpStart.models[i].fileName === score )
+					{
+						scoreCached = true;
+						break;
+					}
+				}
+
+				if( !scoreCached )
+				{
+					LoadTextModel(score);
+				}
+
+				var scoreObject = JumpStart.spawnInstance(score, {parent: scoreBoard});
+				scoreObject.JumpStart.blocksLOS = false;
+
+				var offset = new THREE.Vector3();
+				var i;
+				for( i = 0; i < JumpStart.models.length; i++ )
+				{
+					if( JumpStart.models[i].fileName === jumpStart.score )
+					{
+						offset.copy(JumpStart.models[i].textOffset);
+						break;
+					}
+				}
+
+				offset.multiply(scoreObject.scale);
+				scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				if( jumpStart.ownerId !== g_localUser.userId )
+				{
+					scoreObject.translateY(3.0);
+				}
+
+				scoreBoard.userData.scoreObject = scoreObject;
 			}
 
 			function strikerTick()
@@ -647,43 +592,8 @@
 						textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
 					}
 
+					spawnScore("0", scoreBoard, this.JumpStart);
 
-					var scoreCached = false;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === "0" )
-						{
-							scoreCached = true;
-							break;
-						}
-					}
-
-					if( !scoreCached )
-						LoadTextModel("0");
-
-					var scoreObject = JumpStart.spawnInstance("0", {parent: scoreBoard});
-					scoreObject.JumpStart.blocksLOS = false;
-
-					var offset = new THREE.Vector3();
-					var i;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === this.JumpStart.score )
-						{
-							offset.copy(JumpStart.models[i].textOffset);
-							break;
-						}
-					}
-
-					offset.multiply(scoreObject.scale);
-					scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
-
-					if( this.JumpStart.ownerId !== g_localUser.userId )
-						scoreObject.translateY(3.0);
-
-					scoreBoard.userData.scoreObject = scoreObject;
-
-//					*/
 					//[...]
 					// 1. create a 3d model of this display name
 					// 2. Spawn it above the player's goal.
@@ -702,48 +612,12 @@
 						JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
 					}
 
-					var scoreCached = false;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === this.JumpStart.score )
-						{
-							scoreCached = true;
-							break;
-						}
-					}
-
-					if( !scoreCached )
-						LoadTextModel(this.JumpStart.score);
-
-					var scoreObject = JumpStart.spawnInstance(this.JumpStart.score, {parent: scoreBoard});
-//					scoreObject.JumpStart.setColor(new THREE.Color("#cc0000"))
-					scoreObject.JumpStart.blocksLOS = false;
-
-					var offset = new THREE.Vector3();
-					var i;
-					for( i = 0; i < JumpStart.models.length; i++ )
-					{
-						if( JumpStart.models[i].fileName === this.JumpStart.score )
-						{
-							offset.copy(JumpStart.models[i].textOffset);
-							break;
-						}
-					}
-
-					offset.multiply(scoreObject.scale);
-					scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
-
-					if( this.JumpStart.ownerId !== g_localUser.userId )
-						scoreObject.translateY(3.0);
 
 					scoreBoard.remove(scoreBoard.userData.scoreObject);
-					scoreBoard.userData.scoreObject = scoreObject;
+					spawnScore(this.JumpStart.score, scoreBoard, this.JumpStart);
 
 					this.userData.oldScore = this.JumpStart.score;
-//					scoreBoard.userData.scoreObject = scoreObject;
 				}
-//				if( !g_ready )
-//					return;
 
 				if( !this.JumpStart.offTable )
 					this.scale.set(1.0, 1.0, 1.0);
@@ -753,7 +627,6 @@
 				if( this.JumpStart.ownerId !== g_localUser.userId )
 				{
 					// LERP us if we are not our own drum!
-					//doScaleLerp.call(this);
 					doRotationLerp.call(this);
 					doPositionLerp.call(this);
 					return;
@@ -766,7 +639,6 @@
 						this.position.copy(g_localUser.lookHit.scaledPoint);
 
 						var bShouldForce = false;
-						//console.log("Went ONTO table!");
 						if( this.JumpStart.offTable )
 						{
 							this.JumpStart.offTable = false;
@@ -836,7 +708,6 @@
 				if( this.userData.hitResting < 0 )
 					this.userData.hitResting = 0;
 
-				//this.JumpStart.velocity.multiplyScalar(0.995);
 				this.JumpStart.velocity.multiplyScalar(1.0 - (g_deltaTime / 2.0));
 
 				var xMax = g_tableWidth / 2.0 - g_puckRadius;
@@ -897,11 +768,13 @@
 				}
 
 				var wasHit = false;
-				/*
-				if( g_ready && (this.JumpStart.ownerId === g_localUser.userId || 
-					(this.JumpStart.ownerId === "" && (g_strikers[0].JumpStart.ownerId === g_localUser.userId || g_strikers[1].JumpStart.ownerId === g_localUser.userId))) && !this.userData.hitResting && g_lookHit && g_lookHit.object === g_table )
-*/
-				if( g_ready && (g_strikers[0].JumpStart.ownerId === g_localUser.userId || g_strikers[1].JumpStart.ownerId === g_localUser.userId) && !this.userData.hitResting && g_lookHit && g_lookHit.object === g_table )
+				if(
+					g_ready && (
+						g_strikers[0].JumpStart.ownerId === g_localUser.userId ||
+						g_strikers[1].JumpStart.ownerId === g_localUser.userId
+					) &&
+					!this.userData.hitResting && g_lookHit && g_lookHit.object === g_table 
+				)
 				{
 					var hisPuck = g_strikers[0];
 					if( hisPuck.JumpStart.ownerId !== g_localUser.userId )
@@ -909,18 +782,17 @@
 
 					var dist = g_lookHit.scaledPoint.distanceTo(this.position);
 
-					// BASED ON PUCK / LOOK HIT RELATION
-					//var puckOffset = new THREE.Vector3().copy(this.position).sub(g_lookHit.scaledPoint).multiplyScalar(3.0);
-
 					// BASED ON INSTANTANEOUS LOOKHIT VELOCITY
-					var puckOffset = new THREE.Vector3().copy(g_lookHit.scaledPoint).sub(g_lastLookHitScaledPoint).multiplyScalar(3.0);
+					var puckOffset = new THREE.Vector3().
+						copy(g_lookHit.scaledPoint).sub(g_lastLookHitScaledPoint).multiplyScalar(3.0);
 
 					var puckOffsetLength = puckOffset.length();
 
 					if( puckOffsetLength > g_maxPuckOffset )
 						puckOffset.multiplyScalar(g_maxPuckOffset / puckOffsetLength);
 
-					if( dist < this.userData.radius && goodSide(hisPuck) )	// Should also ignore hits that go in the WRONG direction for this player.
+					// Should also ignore hits that go in the WRONG direction for this player.
+					if( dist < this.userData.radius && goodSide(hisPuck) )	
 					{
 						this.JumpStart.appliedForce.copy(puckOffset);
 
@@ -1004,7 +876,13 @@
 
 			function DoAutoSync(sceneObject, forceSync)
 			{
-				if( (typeof forceSync !== "undefined" && forceSync) || (sceneObject.position.distanceTo(sceneObject.userData.lastSyncPos) > 5.0 && g_clock.elapsedTime - sceneObject.userData.lastSyncTime > 0.1) )
+				if( 
+					(typeof forceSync !== "undefined" && forceSync) ||
+					(
+						sceneObject.position.distanceTo(sceneObject.userData.lastSyncPos) > 5.0 &&
+						g_clock.elapsedTime - sceneObject.userData.lastSyncTime > 0.1
+					) 
+				)
 				{
 					sceneObject.userData.lastSyncPos.copy(sceneObject.position);
 					sceneObject.userData.lastSyncTime = g_clock.elapsedTime;
@@ -1026,7 +904,8 @@
 						justFinished = true;
 					}
 
-					this.scale.lerpVectors(this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
+					this.scale.lerpVectors(
+						this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
 
 					if( justFinished )
 					{
@@ -1059,7 +938,8 @@
 						justFinished = true;
 					}
 
-					this.position.lerpVectors(this.userData.targetPosOriginal, this.userData.targetPos, this.userData.targetPosLerp);
+					this.position.lerpVectors(
+						this.userData.targetPosOriginal, this.userData.targetPos, this.userData.targetPosLerp);
 
 					if( justFinished )
 					{
@@ -1099,12 +979,13 @@
 						justFinished = true;
 					}
 
-					var myQuaternionA = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
-					var myQuaternionB = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
+					var myQuaternionA = new THREE.Quaternion().setFromEuler(
+						new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
+					var myQuaternionB = new THREE.Quaternion().setFromEuler(
+						new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
 
 					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
 					this.quaternion.copy(myQuaternionA);
-			//		this.rotation.lerpVectors(this.userData.targetRotOriginal, this.userData.targetRot, this.userData.targetRotLerp);
 
 					if( justFinished )
 					{

@@ -105,3 +105,11 @@ body
 	font-family: Arial;
 	letter-spacing: 0.1em;
 }
+
+.beamInstructions {
+    color: #00ff00;
+    font-size: 30px;
+    background-color: rgba(0, 0, 0, 0.5);
+    padding: 10px;
+    border-radius: 10px;
+}
