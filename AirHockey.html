@@ -482,7 +482,7 @@
 				var geometry;
 				geometry = new THREE.TextGeometry(text, params);
 
-				var material = new THREE.MeshBasicMaterial({color:'#00cc00'});
+				var material = new THREE.MeshBasicMaterial({color:'#333333'});
 
 				var mesh = new THREE.Mesh(geometry, material);
 
@@ -549,6 +549,13 @@
 						g_scene.remove(scoreBoard);
 
 					scoreBoard = JumpStart.spawnInstance(null);
+					var scoreBoardBase = new THREE.Mesh(
+						new THREE.BoxGeometry(2, 1, 0.05),
+						new THREE.MeshBasicMaterial({color: 'lightgrey'})
+					);
+					scoreBoardBase.position.z -= 0.3;
+					scoreBoardBase.scale.multiplyScalar(10);
+					scoreBoard.add(scoreBoardBase);
 
 					if( this.JumpStart.side === "a" )
 					{
@@ -566,11 +573,11 @@
 					scoreBoard.userData.scoreObject = null;
 
 					if( this.JumpStart.side === "b" )
-						scoreBoard.position.z = g_tableWidth - 2.0;
+						scoreBoard.position.x = g_tableWidth / 2;
 					else
-						scoreBoard.position.z = -g_tableWidth + 2.0;
+						scoreBoard.position.x = -g_tableWidth / 2;
 
-					scoreBoard.position.y = g_worldOffset.y + g_tableHeight + 5.0;
+					scoreBoard.position.y = g_worldOffset.y + g_tableHeight * 3 + 5.0;
 
 					if( this.JumpStart.ownerId !== g_localUser.userId )
 					{
