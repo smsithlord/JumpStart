@@ -64,7 +64,7 @@
 				}
 				
 				// Precache anything that your app needs.
-				var myModels = ["models/FourInRow/slot.obj", "models/FourInRow/frame.obj", "models/FourInRow/pointer.obj", "models/FourInRow/chip.obj", "models/FourInRow/chip2.obj"];
+				var myModels = ["models/FourInRow/slot.obj", "models/FourInRow/frame.obj", "models/FourInRow/pointer.obj", "models/FourInRow/chip.obj", "models/FourInRow/chip2.obj", "models/JumpStart/reset.obj"];
 				JumpStart.loadModels(myModels).then(function() {
 
 					// Finally call JumpStart.doneCaching() to signify you are done.
@@ -122,6 +122,8 @@
 					liveChip.JumpStart.sync();
 				}
 			}
+
+			var g_resetButton = null;
 
 			function onTick()
 			{
@@ -214,6 +216,17 @@
 					// Create the ONE & ONLY chip pointer
 					spawnPointer();
 				}
+
+						g_resetButton = JumpStart.spawnInstance("models/JumpStart/reset.obj");
+						g_resetButton.translateX(g_worldOffset.y - (g_worldOffset.y / 8.0));
+						g_resetButton.translateZ(-g_worldOffset.y + (g_worldOffset.y / 8.0));
+						g_resetButton.rotateY(-Math.PI / 2.0);
+
+//						g_rayCastObjects.push(g_resetButton);
+						g_resetButton.JumpStart.onCursorDown = function()
+						{
+							window.location = "ComboBreaker.html?random=" + Math.random();
+						};
 
 				// If no chip pointer is spawned with 5 seconds, make one ourselves
 				if( g_chipPointer === null )

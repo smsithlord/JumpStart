@@ -66,8 +66,8 @@
 			{
 				"showFPS": false,
 				"legacyLoader": false,
-				"worldScale": 2.0,
-				"scaleWithEnclosure": true,
+				"worldScale": 1.0,
+				"scaleWithEnclosure": false,
 				"showCrosshair": false,
 				"showCursorPlanes": false,
 				"titleImageURL": "misc/astrotitle.png",
@@ -308,16 +308,8 @@
 					//g_asteroid.scale.set(0.4, 0.4, 0.4);
 
 					g_resetButton = JumpStart.spawnInstance("models/JumpStart/reset.obj");
-					//g_resetButton.JumpStart.numResets = 0;
-					//g_resetButton.JumpStart.blocksLOS = true;
-					//g_resetButton.JumpStart.onCursorDown["resetDown"] = resetDown;
-//					g_resetButton.JumpStart.onSpawn["resetSpawn"] = resetSpawn;
-//					g_resetButton.JumpStart.onTick["resetTick"] = resetTick;
-					//g_resetButton.position.set(g_worldOffset.y - 20, g_worldOffset.y, g_worldOffset.y - 20);
-//					g_resetButton.scale.x = 0.5;
-//					g_resetButton.scale.z = 0.5;
-					g_resetButton.translateX(g_worldOffset.y + 20.0);
-					g_resetButton.translateZ(-g_worldOffset.y - 20.0);
+					g_resetButton.translateX(g_worldOffset.y - (g_worldOffset.y / 8.0));
+					g_resetButton.translateZ(-g_worldOffset.y + (g_worldOffset.y / 8.0));
 					g_resetButton.rotateY(-Math.PI / 2.0);
 
 					g_rayCastObjects.push(g_resetButton);
@@ -669,6 +661,9 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				this.userData.isDirty = false;
 
 				var capitolBuilding = JumpStart.spawnInstance("models/AstroCatastrophe/capitol.obj", {parent: this});
+				//console.log(JumpStart.worldScale);
+				//capitolBuilding.scale.multiplyScalar(1 / JumpStart.worldScale);
+				//capitolBuilding.scale.set(1, 1, 1);
 				g_rayCastObjects.push(capitolBuilding);
 
 				capitolBuilding.JumpStart.onCursorDown = function()
