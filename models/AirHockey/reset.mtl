@@ -10,7 +10,7 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd reset2.jpg
+map_Kd reset.jpg
 
 newmtl Symbol
 Ns 96.078431
@@ -21,4 +21,4 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.000000
 d 1.000000
 illum 1
-map_Kd reset2.jpg
+map_Kd reset.jpg
