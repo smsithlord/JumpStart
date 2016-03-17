@@ -271,7 +271,8 @@
 					"models/AirHockey/puck.obj",
 					"models/AirHockey/reset.obj",
 					"models/AirHockey/striker.obj",
-					"models/AirHockey/table.obj"
+					"models/AirHockey/table.obj",
+					"models/AirHockey/scoreframe.obj"
 				]).then(function() {
 					// All assets cached.
 					JumpStart.doneCaching();
@@ -555,6 +556,11 @@
 						g_scene.remove(scoreBoard);
 
 					scoreBoard = JumpStart.spawnInstance(null);
+					var scoreFrame = window.scoreFrame = JumpStart.spawnInstance(
+						"models/AirHockey/scoreframe.obj", {parent: scoreBoard});
+					scoreFrame.rotation.y = Math.PI / 2;
+					scoreFrame.scale.set(5, 5.3, 10.1);
+					scoreFrame.position.set(11.5, -2.8, 1);
 					var scoreBoardBase = new THREE.Mesh(
 						new THREE.BoxGeometry(2, 1, 0.05),
 						new THREE.MeshBasicMaterial({color: 'lightgrey'})
@@ -563,25 +569,26 @@
 					scoreBoardBase.scale.multiplyScalar(10);
 					scoreBoard.add(scoreBoardBase);
 
-					if( this.JumpStart.side === "a" )
-					{
-						g_scoreBoardA = scoreBoard;
-					}
-					else
-					{
-						scoreBoard.rotateY(Math.PI);
-						g_scoreBoardB = scoreBoard;
-					}
-
 					if( this.JumpStart.ownerId === g_localUser.userId )
 						scoreBoard.rotateY(Math.PI);
 
 					scoreBoard.userData.scoreObject = null;
 
-					if( this.JumpStart.side === "b" )
+					if( this.JumpStart.side === "b" ) 
+					{
 						scoreBoard.position.x = g_tableWidth / 2;
+						scoreBoard.rotateY(Math.PI);
+						scoreFrame.JumpStart.cloneMaterial();
+						scoreFrame.JumpStart.setColor(new THREE.Color('blue'));
+						g_scoreBoardB = scoreBoard;
+					}
 					else
+					{
 						scoreBoard.position.x = -g_tableWidth / 2;
+						scoreFrame.JumpStart.cloneMaterial();
+						scoreFrame.JumpStart.setColor(new THREE.Color('red'));
+						g_scoreBoardA = scoreBoard;
+					}
 
 					scoreBoard.position.y = g_worldOffset.y + g_tableHeight * 3 + 5.0;
 
