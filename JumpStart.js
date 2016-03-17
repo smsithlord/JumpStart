@@ -80,7 +80,7 @@ function jumpStart()
 
 	// Any properties of a scene object's JumpStart sub-object that are NOT whitelisted get auto-synced.
 	//this.noSyncProperties = ["addDataListener", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
-	this.noSyncProperties = ["addDataListener", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
+	this.noSyncProperties = ["addDataListener", "cloneMaterial", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
 
 	this.networkReady = false;	// Know if we are networked & ready to go.
 	this.localDataListeners = {};	// Need to simulate network activity locally
@@ -2689,6 +2689,14 @@ jumpStart.prototype.prepInstance = function(modelFile)
 					}.bind(this));
 				}
 			}
+		}.bind(this),
+		"cloneMaterial": function () 
+		{
+			this.traverse(function (child) 
+			{
+				if (!child.material) { return; }
+				child.material = child.material.clone();
+			}.bind(this));
 		}.bind(this),
 		"setVisible": function(visible)
 		{
