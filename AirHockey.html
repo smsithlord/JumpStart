@@ -412,6 +412,12 @@
 
 				g_strikers[this.JumpStart.strikerNumber] = this;
 
+				var strikerJS = this.JumpStart;
+				strikerJS.color = new THREE.Color(strikerJS.side === 'a' ? 'red' : 'blue');
+				strikerJS.cloneMaterial();
+				strikerJS.darkerColor = strikerJS.color.clone().offsetHSL(0, 0, -0.2);
+				strikerJS.setColor(strikerJS.ownerId ? strikerJS.color : strikerJS.darkerColor);
+
 				if( g_strikers[0] && g_strikers[1] )
 				{
 					g_ready = true;
@@ -459,7 +465,7 @@
 				if( this.JumpStart.ownerId !== "" )
 					return;
 
-				this.JumpStart.setColor(new THREE.Color(0.5, 1, 0.5));
+				this.JumpStart.setColor(this.JumpStart.color);
 			}
 
 			function strikerLeave()
@@ -467,7 +473,7 @@
 				if( this.JumpStart.ownerId !== "" )
 					return;
 
-				this.JumpStart.setColor(new THREE.Color(1, 1, 1));
+				this.JumpStart.setColor(this.JumpStart.darkerColor);
 			}
 
 			function LoadTextModel(text)
