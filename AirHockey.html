@@ -265,6 +265,9 @@
 
 				JumpStart.precacheSound("sounds/AirHockey/score");
 				JumpStart.precacheSound("sounds/AirHockey/gameover");
+				JumpStart.precacheSound("sounds/AirHockey/hit1");
+				JumpStart.precacheSound("sounds/AirHockey/hit2");
+				JumpStart.precacheSound("sounds/AirHockey/hit3");
 
 				// Precache any models that your app needs (asynchronous)
 				JumpStart.loadModels([
@@ -558,6 +561,7 @@
 					scoreBoard = JumpStart.spawnInstance(null);
 					var scoreFrame = window.scoreFrame = JumpStart.spawnInstance(
 						"models/AirHockey/scoreframe.obj", {parent: scoreBoard});
+					scoreFrame.name = 'scoreFrame';
 					scoreFrame.rotation.y = Math.PI / 2;
 					scoreFrame.scale.set(5, 5.3, 10.1);
 					scoreFrame.position.set(11.5, -2.8, 1);
@@ -579,14 +583,20 @@
 						scoreBoard.position.x = g_tableWidth / 2;
 						scoreBoard.rotateY(Math.PI);
 						scoreFrame.JumpStart.cloneMaterial();
-						scoreFrame.JumpStart.setColor(new THREE.Color('blue'));
+						var frameColor = new THREE.Color('blue');
+						scoreFrame.JumpStart.color = frameColor;
+						scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
+						scoreFrame.JumpStart.setColor(frameColor);
 						g_scoreBoardB = scoreBoard;
 					}
 					else
 					{
 						scoreBoard.position.x = -g_tableWidth / 2;
 						scoreFrame.JumpStart.cloneMaterial();
-						scoreFrame.JumpStart.setColor(new THREE.Color('red'));
+						var frameColor = new THREE.Color('red');
+						scoreFrame.JumpStart.color = frameColor;
+						scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
+						scoreFrame.JumpStart.setColor(frameColor);
 						g_scoreBoardA = scoreBoard;
 					}
 
@@ -712,11 +722,28 @@
 					striker = g_strikers[1];
 					scoreBoard = g_scoreBoardB;
 				}
+				var flashCounter = 0;
+				var scoreFrame = scoreBoard.getChildByName('scoreFrame');
+				var flashId = setInterval(function () {
+					scoreFrame.JumpStart.setColor(flashCounter % 2 ? scoreFrame.JumpStart.color : scoreFrame.JumpStart.lighterColor);
+					if (flashCounter++ === 5) { clearInterval(flashId); }
+				}, 200);
 
 				striker.JumpStart.score++;
 				DoAutoSync(striker, true);
 
 				console.log("GOOOOOOOOOOOOOOOOOOOOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALLLLLLLLLL");
+			}
+
+			function playRandomHitSound(speed)
+			{
+				var hitSounds = [
+					"sounds/AirHockey/hit1",
+					"sounds/AirHockey/hit2",
+					"sounds/AirHockey/hit3"
+				];
+				var volume = THREE.Math.clamp(speed, 0.8, 5) / 5;
+				JumpStart.playSoundInstance(hitSounds[Math.floor(Math.random() * 3)], volume);
 			}
 
 			function puckTick()
@@ -738,11 +765,13 @@
 				{
 					this.position.x = -xMax;
 					this.JumpStart.velocity.x = -this.JumpStart.velocity.x;
+					playRandomHitSound(this.JumpStart.velocity.lengthSq());
 				}
 				else if( this.position.x > xMax )
 				{
 					this.position.x = xMax;
 					this.JumpStart.velocity.x = -this.JumpStart.velocity.x;
+					playRandomHitSound(this.JumpStart.velocity.lengthSq());
 				}
 
 				if( this.position.z < -zMax )
@@ -766,6 +795,7 @@
 					{
 						this.position.z = -zMax;
 						this.JumpStart.velocity.z = -this.JumpStart.velocity.z;
+						playRandomHitSound(this.JumpStart.velocity.lengthSq());
 					}
 				}
 				else if( this.position.z > zMax )
@@ -785,6 +815,7 @@
 					{
 						this.position.z = zMax;
 						this.JumpStart.velocity.z = -this.JumpStart.velocity.z;
+						playRandomHitSound(this.JumpStart.velocity.lengthSq());
 					}
 				}
 
@@ -821,6 +852,7 @@
 						this.userData.hitResting = 0.5;
 						this.JumpStart.sync();
 						wasHit = true;
+						playRandomHitSound(this.JumpStart.velocity.lengthSq());
 					}
 
 					this.userData.lastPuckOffset.copy(puckOffset);
