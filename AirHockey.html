@@ -24,6 +24,15 @@
 	</head>
 
 	<body>
+		<script id="recentWinTemplate" type="x-template">
+			<span class="recentWinner"></span> won by
+			<span class="scoreDiff"></span> point<span class="scoreDiffPlural">s</span>
+		</script>
+		<div id="leaderboard">
+			<ol id="recentWins"></ol>
+			<ol id="topWinners"></ol>
+		</div>
+
 
 		<!-- JumpStart SDK Core Include -->
 		<script src="JumpStart.js"></script>
@@ -74,12 +83,15 @@
 			var g_tableHeight = 30.0;
 			var g_tableWidth = 66.0;
 			var g_tableLength = 126.0;
+			var g_winningScore = 3;
 
 			var g_table = null;
 			var g_puck = null;
 			var g_players = [null, null];
 
 			var g_rayCastObjects = new Array();
+
+			var g_leaderboardRef;
 
 			/**
 			 * @function resetStriker
@@ -166,7 +178,7 @@
 
 				if(
 					g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId &&
-					(g_strikers[0].JumpStart.score >= 7 || g_strikers[1].JumpStart.score >= 7)
+					(g_strikers[0].JumpStart.score >= g_winningScore || g_strikers[1].JumpStart.score >= g_winningScore)
 				)
 				{
 					resetStriker(
@@ -174,7 +186,7 @@
 				}
 				else if(
 					g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId &&
-					(g_strikers[1].JumpStart.score >= 7 || g_strikers[0].JumpStart.score >= 7)
+					(g_strikers[1].JumpStart.score >= g_winningScore || g_strikers[0].JumpStart.score >= g_winningScore)
 				)
 				{
 					resetStriker(
@@ -353,6 +365,12 @@
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
 					DoAutoSync(striker, true);
 				}
+
+				g_leaderboardRef = JumpStart.firebaseSync.firebaseRoot.child('AirHockeyLeaderboard');
+				g_leaderboardRef.on('value', function (snapshot) {
+					var leaderboard = snapshot.val();
+					displayLeaderboard(leaderboard);
+				});
 
 				// Start the simulation
 				JumpStart.run();
@@ -590,6 +608,54 @@
 				return scoreBoard;
 			}
 
+			function displayLeaderboard(leaderboard)
+			{
+				function $ (context, selector) { return context.querySelector(selector); }
+				var $recentWins = $(document, '#recentWins');
+				$recentWins.innerHTML ='';
+				if (!leaderboard) { return; }
+				leaderboard.recentWins.forEach(function (recentWin){
+					var recentWinHtml = $(document, '#recentWinTemplate').innerHTML;
+					var $recentWin = document.createElement('li');
+					$recentWin.innerHTML = recentWinHtml;
+					$($recentWin, '.recentWinner').textContent = recentWin.winnerName;
+					$($recentWin, '.scoreDiff').textContent = recentWin.scoreDiff;
+					if (recentWin.scoreDiff === 1)
+					{
+						$($recentWin, '.scoreDiffPlural').style.display = 'none';
+					}
+					$recentWins.appendChild($recentWin);
+				})
+			}
+
+			function recordWinOnLeaderboard ()
+			{
+				var strikerZeroLocal = g_strikers[0].JumpStart.ownerId === g_localUser.userId;
+				var otherStriker = strikerZeroLocal ? g_strikers[1] : g_strikers[0];
+				if (!otherStriker.JumpStart.ownerId) { return; }
+
+					g_leaderboardRef.once('value', function (snapshot) {
+					var leaderboard = snapshot.val();
+					if (!leaderboard)
+					{
+						leaderboard = {
+							recentWins: [],
+							topWinners: []
+						};
+					}
+					var localStriker = strikerZeroLocal ? g_strikers[0] : g_strikers[1];
+					leaderboard.recentWins.unshift({
+						winnerName: g_localUser.displayName,
+						scoreDiff: localStriker.JumpStart.score - otherStriker.JumpStart.score
+					});
+					if (leaderboard.length >= 10)
+					{
+						leaderboard.pop();
+					}
+					g_leaderboardRef.set(leaderboard);
+				})
+			}
+
 			function strikerTick()
 			{
 				var scoreBoard;
@@ -616,7 +682,7 @@
 					//[...]
 					// 1. create a 3d model of this display name
 					// 2. Spawn it above the player's goal.
-					// 3. create a 3d model of their score (0 - 7)
+					// 3. create a 3d model of their score (0 - g_winningScore)
 					// 4. Spawn the number next to their name.
 
 					this.userData.oldOwnerId = this.JumpStart.ownerId;
@@ -626,9 +692,13 @@
 				{
 					JumpStart.playSound("sounds/AirHockey/score", 0.7, false);
 
-					if( this.JumpStart.score >= 7 )
+					if( this.JumpStart.score >= g_winningScore )
 					{
 						JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
+						if (this.JumpStart.ownerId === g_localUser.userId)
+						{
+							recordWinOnLeaderboard();
+						}
 					}
 
 
