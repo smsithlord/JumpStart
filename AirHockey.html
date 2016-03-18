@@ -84,7 +84,7 @@
 			 * @function resetStriker
 			 * @param {Object} [options]
 			 * @param {String} [options.side] Side "a" or side "b"
-			 * @param {Number} [options.number] The striker's number
+			 * @param {Number} [options.strikerNumber] 
 			 * @param {Boolean} [options.resetHandlers] If the striker's existing handlers should be detached
 			 * @param {Boolean} [options.resetOldData] If the striker's old score and owner id should be reset
 			 * @param {Boolean} [options.sync] If the striker should be synced after resetting.
@@ -93,7 +93,7 @@
 			{
 				striker.JumpStart.side = options.side;
 				striker.JumpStart.offTable = false;
-				striker.JumpStart.strikerNumber = options.number;
+				striker.JumpStart.strikerNumber = options.strikerNumber;
 				striker.JumpStart.blocksLOS = true;
 				striker.JumpStart.ownerId = "";
 				var handlers = {
@@ -129,12 +129,12 @@
 				}
 			}
 						
-			function poseScoreBoardToCamera(number)
+			function poseScoreBoardToCamera(strikerNumber)
 			{
 				var scoreBoard, striker;
-				if( g_strikers[number] && g_strikers[number].JumpStart.ownerId !== "" )
+				if( g_strikers[strikerNumber] && g_strikers[strikerNumber].JumpStart.ownerId !== "" )
 				{
-					striker = g_strikers[number];
+					striker = g_strikers[strikerNumber];
 					if( striker.JumpStart.ownerId !== g_localUser.userId )
 					{
 						if( striker.JumpStart.side === "a" && g_scoreBoardA )
@@ -149,9 +149,9 @@
 						if( scoreBoard && g_camera )
 						{
 							if( scoreBoard.position.z < g_camera.position.z )
-								scoreBoard.rotation.y = number === 0 ? 0 : Math.PI;
+								scoreBoard.rotation.y = strikerNumber === 0 ? 0 : Math.PI;
 							else
-								scoreBoard.rotation.y = number === 0 ? Math.PI : 0;
+								scoreBoard.rotation.y = strikerNumber === 0 ? Math.PI : 0;
 						}
 					}
 				}
@@ -168,7 +168,7 @@
 				)
 				{
 					resetStriker(
-						g_strikers[0], {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
+						g_strikers[0], {side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
 				}
 				else if(
 					g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId &&
@@ -176,7 +176,7 @@
 				)
 				{
 					resetStriker(
-						g_strikers[1], {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
+						g_strikers[1], {side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
 				}
 			}
 
@@ -200,7 +200,7 @@
 					if( !lite )
 					{
 						resetStriker(
-							striker, {side: "a", number: 0, resetOldData: true, sync: true, resetHandlers: true});
+							striker, {side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -211,7 +211,7 @@
 					if( !lite )
 					{
 						resetStriker(
-							striker, {side: "b", number: 1, resetOldData: true, sync: true, resetHandlers: true});
+							striker, {side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -265,13 +265,17 @@
 
 				JumpStart.precacheSound("sounds/AirHockey/score");
 				JumpStart.precacheSound("sounds/AirHockey/gameover");
+				JumpStart.precacheSound("sounds/AirHockey/hit1");
+				JumpStart.precacheSound("sounds/AirHockey/hit2");
+				JumpStart.precacheSound("sounds/AirHockey/hit3");
 
 				// Precache any models that your app needs (asynchronous)
 				JumpStart.loadModels([
 					"models/AirHockey/puck.obj",
 					"models/AirHockey/reset.obj",
 					"models/AirHockey/striker.obj",
-					"models/AirHockey/table.obj"
+					"models/AirHockey/table.obj",
+					"models/AirHockey/scoreframe.obj"
 				]).then(function() {
 					// All assets cached.
 					JumpStart.doneCaching();
@@ -318,7 +322,8 @@
 					g_resetButton.JumpStart.onCursorDown["resetDown"] = resetDown;
 					g_resetButton.JumpStart.onSpawn["resetSpawn"] = resetSpawn;
 					g_resetButton.JumpStart.onTick["resetTick"] = resetTick;
-					g_resetButton.position.set(g_tableWidth / 2.0 + 10.0, g_worldOffset.y + g_tableHeight, 0);
+					g_resetButton.position.set(0, g_worldOffset.y + g_tableHeight * 3 + 5, 0);
+					g_resetButton.rotation.x = Math.PI / 2;
 					g_resetButton.scale.x = 0.5;
 					g_resetButton.scale.z = 0.5;
 					g_resetButton.JumpStart.sync();
@@ -333,14 +338,14 @@
 					g_puck.JumpStart.sync();
 
 					var striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					resetStriker(striker, {side: "a", number: 0});
+					resetStriker(striker, {side: "a", strikerNumber: 0});
 					g_strikers[0] = striker;
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
 					DoAutoSync(striker, true);
 
 					striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
-					resetStriker(striker, {side: "b", number: 1});
+					resetStriker(striker, {side: "b", strikerNumber: 1});
 					g_strikers[1] = striker;
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
@@ -411,6 +416,12 @@
 
 				g_strikers[this.JumpStart.strikerNumber] = this;
 
+				var strikerJS = this.JumpStart;
+				strikerJS.color = new THREE.Color(strikerJS.side === 'a' ? 'red' : 'blue');
+				strikerJS.cloneMaterial();
+				strikerJS.darkerColor = strikerJS.color.clone().offsetHSL(0, 0, -0.2);
+				strikerJS.setColor(strikerJS.ownerId ? strikerJS.color : strikerJS.darkerColor);
+
 				if( g_strikers[0] && g_strikers[1] )
 				{
 					g_ready = true;
@@ -458,7 +469,7 @@
 				if( this.JumpStart.ownerId !== "" )
 					return;
 
-				this.JumpStart.setColor(new THREE.Color(0.5, 1, 0.5));
+				this.JumpStart.setColor(this.JumpStart.color);
 			}
 
 			function strikerLeave()
@@ -466,7 +477,7 @@
 				if( this.JumpStart.ownerId !== "" )
 					return;
 
-				this.JumpStart.setColor(new THREE.Color(1, 1, 1));
+				this.JumpStart.setColor(this.JumpStart.darkerColor);
 			}
 
 			function LoadTextModel(text)
@@ -481,7 +492,7 @@
 				var geometry;
 				geometry = new THREE.TextGeometry(text, params);
 
-				var material = new THREE.MeshBasicMaterial({color:'#00cc00'});
+				var material = new THREE.MeshBasicMaterial({color:'#333333'});
 
 				var mesh = new THREE.Mesh(geometry, material);
 
@@ -548,28 +559,48 @@
 						g_scene.remove(scoreBoard);
 
 					scoreBoard = JumpStart.spawnInstance(null);
-
-					if( this.JumpStart.side === "a" )
-					{
-						g_scoreBoardA = scoreBoard;
-					}
-					else
-					{
-						scoreBoard.rotateY(Math.PI);
-						g_scoreBoardB = scoreBoard;
-					}
+					var scoreFrame = window.scoreFrame = JumpStart.spawnInstance(
+						"models/AirHockey/scoreframe.obj", {parent: scoreBoard});
+					scoreFrame.name = 'scoreFrame';
+					scoreFrame.rotation.y = Math.PI / 2;
+					scoreFrame.scale.set(5, 5.3, 10.1);
+					scoreFrame.position.set(11.5, -2.8, 1);
+					var scoreBoardBase = new THREE.Mesh(
+						new THREE.BoxGeometry(2, 1, 0.05),
+						new THREE.MeshBasicMaterial({color: 'lightgrey'})
+					);
+					scoreBoardBase.position.z -= 0.3;
+					scoreBoardBase.scale.multiplyScalar(10);
+					scoreBoard.add(scoreBoardBase);
 
 					if( this.JumpStart.ownerId === g_localUser.userId )
 						scoreBoard.rotateY(Math.PI);
 
 					scoreBoard.userData.scoreObject = null;
 
-					if( this.JumpStart.side === "b" )
-						scoreBoard.position.z = g_tableWidth - 2.0;
+					if( this.JumpStart.side === "b" ) 
+					{
+						scoreBoard.position.x = g_tableWidth / 2;
+						scoreBoard.rotateY(Math.PI);
+						scoreFrame.JumpStart.cloneMaterial();
+						var frameColor = new THREE.Color('blue');
+						scoreFrame.JumpStart.color = frameColor;
+						scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
+						scoreFrame.JumpStart.setColor(frameColor);
+						g_scoreBoardB = scoreBoard;
+					}
 					else
-						scoreBoard.position.z = -g_tableWidth + 2.0;
+					{
+						scoreBoard.position.x = -g_tableWidth / 2;
+						scoreFrame.JumpStart.cloneMaterial();
+						var frameColor = new THREE.Color('red');
+						scoreFrame.JumpStart.color = frameColor;
+						scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
+						scoreFrame.JumpStart.setColor(frameColor);
+						g_scoreBoardA = scoreBoard;
+					}
 
-					scoreBoard.position.y = g_worldOffset.y + g_tableHeight + 5.0;
+					scoreBoard.position.y = g_worldOffset.y + g_tableHeight * 3 + 5.0;
 
 					if( this.JumpStart.ownerId !== g_localUser.userId )
 					{
@@ -706,11 +737,28 @@
 					striker = g_strikers[1];
 					scoreBoard = g_scoreBoardB;
 				}
+				var flashCounter = 0;
+				var scoreFrame = scoreBoard.getChildByName('scoreFrame');
+				var flashId = setInterval(function () {
+					scoreFrame.JumpStart.setColor(flashCounter % 2 ? scoreFrame.JumpStart.color : scoreFrame.JumpStart.lighterColor);
+					if (flashCounter++ === 5) { clearInterval(flashId); }
+				}, 200);
 
 				striker.JumpStart.score++;
 				DoAutoSync(striker, true);
 
 				console.log("GOOOOOOOOOOOOOOOOOOOOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALLLLLLLLLL");
+			}
+
+			function playRandomHitSound(speed)
+			{
+				var hitSounds = [
+					"sounds/AirHockey/hit1",
+					"sounds/AirHockey/hit2",
+					"sounds/AirHockey/hit3"
+				];
+				var volume = THREE.Math.clamp(speed, 0.8, 5) / 5;
+				JumpStart.playSound(hitSounds[Math.floor(Math.random() * 3)], volume);
 			}
 
 			function puckTick()
@@ -732,11 +780,13 @@
 				{
 					this.position.x = -xMax;
 					this.JumpStart.velocity.x = -this.JumpStart.velocity.x;
+					playRandomHitSound(this.JumpStart.velocity.lengthSq());
 				}
 				else if( this.position.x > xMax )
 				{
 					this.position.x = xMax;
 					this.JumpStart.velocity.x = -this.JumpStart.velocity.x;
+					playRandomHitSound(this.JumpStart.velocity.lengthSq());
 				}
 
 				if( this.position.z < -zMax )
@@ -760,6 +810,7 @@
 					{
 						this.position.z = -zMax;
 						this.JumpStart.velocity.z = -this.JumpStart.velocity.z;
+						playRandomHitSound(this.JumpStart.velocity.lengthSq());
 					}
 				}
 				else if( this.position.z > zMax )
@@ -779,6 +830,7 @@
 					{
 						this.position.z = zMax;
 						this.JumpStart.velocity.z = -this.JumpStart.velocity.z;
+						playRandomHitSound(this.JumpStart.velocity.lengthSq());
 					}
 				}
 
@@ -815,6 +867,7 @@
 						this.userData.hitResting = 0.5;
 						this.JumpStart.sync();
 						wasHit = true;
+						playRandomHitSound(this.JumpStart.velocity.lengthSq());
 					}
 
 					this.userData.lastPuckOffset.copy(puckOffset);

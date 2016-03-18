@@ -80,7 +80,7 @@ function jumpStart()
 
 	// Any properties of a scene object's JumpStart sub-object that are NOT whitelisted get auto-synced.
 	//this.noSyncProperties = ["addDataListener", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "blocksLOS", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
-	this.noSyncProperties = ["addDataListener", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
+	this.noSyncProperties = ["addDataListener", "cloneMaterial", "setTint", "setColor", "setVisible", "makePhysics", "makeStatic", "applyForce", "sync", "hasCursorEffects", "onCursorLeave", "onCursorUp", "onCursorDown", "onTick", "onSpawn", "onNetworkRemoved", "tintColor", "velocity", "key"];
 
 	this.networkReady = false;	// Know if we are networked & ready to go.
 	this.localDataListeners = {};	// Need to simulate network activity locally
@@ -97,6 +97,7 @@ function jumpStart()
 	this.eastPlane = null;
 	this.southPlane = null;
 
+	this.audioContext = new (window.webkitAudioContext || window.AudioContext)();
 	this.cachedSounds = {};
 
 	// FIXME: placeholders for real input event handlers.  will be something basic, like unity itself uses.
@@ -2690,6 +2691,14 @@ jumpStart.prototype.prepInstance = function(modelFile)
 				}
 			}
 		}.bind(this),
+		"cloneMaterial": function () 
+		{
+			this.traverse(function (child) 
+			{
+				if (!child.material) { return; }
+				child.material = child.material.clone();
+			}.bind(this));
+		}.bind(this),
 		"setVisible": function(visible)
 		{
 			this.traverse(function(child)
@@ -3148,60 +3157,28 @@ jumpStart.prototype.stopSyncing = function(sceneObject)
 
 jumpStart.prototype.precacheSound = function(sound_file_name)
 {
-	if( typeof this.cachedSounds[sound_file_name] != 'undefined' )
+	if( typeof this.cachedSounds[sound_file_name] !== 'undefined' )
 		return;
 
-	var soundName = sound_file_name + ".ogg";
-
-//	var thisGameBoard = this;
-	var soundFileName = sound_file_name;
-	var sound = new Audio(soundName);
-	//canplay, canplaythrough
-
-	// Just mark the sound as pre-cached already, because sometimes they are not being detected as being cached...
-	this.onSoundCached(sound, soundFileName);
-
-/*
-	sound.addEventListener("canplaythrough", function() {
-		thisGameBoard.onSoundCached(sound, soundFileName);
-		sound.removeEventListener("canplaythrough", arguments.callee);
-	});
-*/
-};
-
-jumpStart.prototype.onSoundCached = function(loadedSound, soundFileName)
-{
-	if( typeof this.cachedSounds[soundFileName] != 'undefined' )
-		return;
-
-	this.cachedSounds[soundFileName] = loadedSound;
-//	this.state.caching--;
-
-//	this.showAlert({text: "LOADING (" + (gNumAssets - this.state.caching) + "/" + gNumAssets + ")", duration: 800});
-//	console.log("Precached sound: " + soundFileName);
-
-//	if( this.state.caching < 1 )
-//	{
-//		var nextStateName = this.state.id.substring(5);
-//		this.setState(nextStateName);
-//	}
+	var req = new XMLHttpRequest();
+	req.open('GET', sound_file_name + '.ogg');
+	req.responseType = 'arraybuffer';
+	req.onload = function () {
+		this.audioContext.decodeAudioData(req.response, function (buffer) {
+			this.cachedSounds[sound_file_name] = buffer;
+		}.bind(this));
+	}.bind(this);
+	req.send();
 };
 
 jumpStart.prototype.killSound = function(sound)
 {
-	sound.pause();
-	sound.currentTime = 0;
-};
-
-jumpStart.prototype.killSoundInstance = function(sound)
-{
-	sound.src = "";
-	sound.load();
+	sound.source.stop(0);
 };
 
 jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loop)
 {
-	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
+	if( typeof this.cachedSounds[sound_file_name] === 'undefined' )
 	{
 		console.log("The sound " + sound_file_name + " is not cached!");
 		this.precacheSound(sound_file_name);
@@ -3210,52 +3187,21 @@ jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loo
 		return;
 	}
 
-	var loop;
-	if( typeof user_loop !== "undefined" )
-		loop = user_loop;
-	else
-		loop = false;
-
 	var volumeScale = (typeof volume_scale == 'undefined') ? 1.0 : volume_scale;
 
-//	var cachedSound = this.cachedSounds[sound_file_name].cloneNode();
 	var cachedSound = this.cachedSounds[sound_file_name];
-	cachedSound.loop = loop;
-	cachedSound.volume = 1.0 * volumeScale;
-	cachedSound.play();
+	var source = this.audioContext.createBufferSource();
+	source.buffer = cachedSound;
+	source.loop = !!user_loop;
 
-	return cachedSound;
-};
+	var gainNode = this.audioContext.createGain();
+	gainNode.gain.value = 1.0 * volumeScale;
+	source.connect(gainNode);
+	gainNode.connect(this.audioContext.destination);
 
-jumpStart.prototype.playSoundInstance = function(sound_file_name, volume_scale, user_loop)
-{
-	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
-	{
-		this.precacheSound(sound_file_name);
+	source.start(0);
 
-		// Playing un-cached sounds is disabled!! (by default)
-		return;
-	}
-
-	var loop;
-	if( typeof user_loop !== "undefined" )
-		loop = user_loop;
-	else
-		loop = false;
-
-	var volumeScale = (typeof volume_scale == 'undefined') ? 1.0 : volume_scale;
-
-	var cachedSound = this.cachedSounds[sound_file_name].cloneNode();
-	cachedSound.loop = loop;
-	cachedSound.volume = 1.0 * volumeScale;
-	cachedSound.play();
-
-	return cachedSound;
-};
-
-jumpStart.prototype.playSoundFast = function(sound_file_name, volume_scale)
-{
-	this.cachedSounds[sound_file_name].play();
+	return {source: source, gainNode: gainNode};
 };
 
 function jumpStartModelLoader()

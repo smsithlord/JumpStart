@@ -295,8 +295,8 @@
 					if( flexVolume > 1.0 )
 						flexVolume = 1.0;
 
-					engineLoop.volume = 1.0 - flexVolume;
-					engineLoop.volume *= 0.1;
+					engineLoop.gainNode.gain.value = 1.0 - flexVolume;
+					engineLoop.gainNode.gain.value *= 0.1;
 				}
 			}
 		</script>
@@ -745,7 +745,6 @@
 				setTimeout(function()
 				{
 					engineLoop = JumpStart.playSound("sounds/LineRacers/idle", 0.1, true);
-					engineLoop.flexVolume = 1.0;
 				}, 1000)
 
 				// create a car

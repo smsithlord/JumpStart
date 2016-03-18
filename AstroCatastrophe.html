@@ -1231,7 +1231,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				var volume = (typeof in_volume === "undefined" ) ? 0.2 : in_volume;
 				var period = (typeof in_period === "undefined" ) ? 1.0 : in_period;
 				//console.log(arguments);
-				//JumpStart.playSoundInstance(soundFile, 0.5);
+				//JumpStart.playSound(soundFile, 0.5);
 				PlayDynamicSound(soundFile, volume, period);
 
 				var explosion = JumpStart.spawnInstance("models/SpacePilot/explosion.obj");
@@ -1434,7 +1434,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				var realVolume = volumeScale * volume;
 				if( realVolume > 0.01 )
 				{
-					JumpStart.playSoundInstance(sound, volume * volumeScale);
+					JumpStart.playSound(sound, volume * volumeScale);
 					g_soundStamps[sound + ""] = g_clock.elapsedTime;
 				}
 			}
@@ -1442,8 +1442,8 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 			function autogunFireLaser(offset, parent)
 			{
 				PlayDynamicSound("sounds/SpacePilot/laser2", 0.1, 3.0);
-//				JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.2);//volume * volumeScale);
-				//JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.4);
+//				JumpStart.playSound("sounds/SpacePilot/laser1", 0.2);//volume * volumeScale);
+				//JumpStart.playSound("sounds/SpacePilot/laser1", 0.4);
 
 				var laser;
 				//if( !JumpStart.webMode )
@@ -1540,7 +1540,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 
 			function createSlowDust(laser)
 			{
-				//JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.4);
+				//JumpStart.playSound("sounds/SpacePilot/laser1", 0.4);
 				//console.log("laser dust");
 				// Make fairy dust
 				var pos = new THREE.Vector3();
