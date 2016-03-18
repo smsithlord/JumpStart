@@ -469,7 +469,7 @@
 
 								if( this.userData.lastSoundPlayed > 4.0 )
 								{
-									JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.2);
+									JumpStart.playSound("sounds/SpacePilot/laser1", 0.2);
 									this.userData.lastSoundPlayed = 0.0;
 								}
 
@@ -547,7 +547,7 @@
 
 				if( this.userData.health > 0 )
 				{
-					JumpStart.playSoundInstance("sounds/SpacePilot/hit0", 0.15);
+					JumpStart.playSound("sounds/SpacePilot/hit0", 0.15);
 				}
 				else
 				{
@@ -589,7 +589,7 @@
 					{
 						this.userData.damageSoundCooldown = 0.1;
 
-						JumpStart.playSoundInstance("sounds/SpacePilot/damage0", 0.1);
+						JumpStart.playSound("sounds/SpacePilot/damage0", 0.1);
 					}
 				}
 			};
@@ -922,7 +922,7 @@
 				// Start the simulation
 				JumpStart.run();
 
-				JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.1);
+				JumpStart.playSound("sounds/SpacePilot/laser1", 0.1);
 
 //				g_rayCastObjects.push(JumpStart.floorPlane);
 //				rayCastObjects.push(JumpStart.roofPlane);
@@ -938,7 +938,7 @@
 			var soundFile = ( typeof sound === "undefined" ) ? "sounds/SpacePilot/explosion0" : sound;
 
 			//console.log(arguments);
-			JumpStart.playSoundInstance(soundFile, 0.5);
+			JumpStart.playSound(soundFile, 0.5);
 
 			var explosion = JumpStart.spawnInstance("models/SpacePilot/explosion.obj", {"parent": g_galaxy});
 			explosion.position.copy(position);
@@ -1015,7 +1015,7 @@
 			if( !g_myShip )
 				return;
 
-			JumpStart.playSoundInstance("sounds/SpacePilot/laser0", 0.15);
+			JumpStart.playSound("sounds/SpacePilot/laser0", 0.15);
 
 			FireProjectile(ship, new THREE.Vector3(5.0, 0.0, 50.0));
 			FireProjectile(ship, new THREE.Vector3(-5.0, 0.0, 50.0));
