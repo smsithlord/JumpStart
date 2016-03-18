@@ -3171,33 +3171,9 @@ jumpStart.prototype.precacheSound = function(sound_file_name)
 	req.send();
 };
 
-jumpStart.prototype.onSoundCached = function(loadedSound, soundFileName)
-{
-	if( typeof this.cachedSounds[soundFileName] != 'undefined' )
-		return;
-
-	this.cachedSounds[soundFileName] = loadedSound;
-//	this.state.caching--;
-
-//	this.showAlert({text: "LOADING (" + (gNumAssets - this.state.caching) + "/" + gNumAssets + ")", duration: 800});
-//	console.log("Precached sound: " + soundFileName);
-
-//	if( this.state.caching < 1 )
-//	{
-//		var nextStateName = this.state.id.substring(5);
-//		this.setState(nextStateName);
-//	}
-};
-
 jumpStart.prototype.killSound = function(sound)
 {
 	sound.source.stop(0);
-};
-
-jumpStart.prototype.killSoundInstance = function(sound)
-{
-	sound.src = "";
-	sound.load();
 };
 
 jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loop)
@@ -3226,37 +3202,6 @@ jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loo
 	source.start(0);
 
 	return {source: source, gainNode: gainNode};
-};
-
-jumpStart.prototype.playSoundInstance = function(sound_file_name, volume_scale, user_loop)
-{
-	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
-	{
-		this.precacheSound(sound_file_name);
-
-		// Playing un-cached sounds is disabled!! (by default)
-		return;
-	}
-
-	var loop;
-	if( typeof user_loop !== "undefined" )
-		loop = user_loop;
-	else
-		loop = false;
-
-	var volumeScale = (typeof volume_scale == 'undefined') ? 1.0 : volume_scale;
-
-	var cachedSound = this.cachedSounds[sound_file_name].cloneNode();
-	cachedSound.loop = loop;
-	cachedSound.volume = 1.0 * volumeScale;
-	cachedSound.play();
-
-	return cachedSound;
-};
-
-jumpStart.prototype.playSoundFast = function(sound_file_name, volume_scale)
-{
-	this.cachedSounds[sound_file_name].play();
 };
 
 function jumpStartModelLoader()
