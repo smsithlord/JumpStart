@@ -665,9 +665,24 @@
 
 				if( this.JumpStart.ownerId === g_localUser.userId )
 				{
-					if( g_localUser.lookHit && g_localUser.lookHit.object === g_table && goodSide(this) )
+					if( g_localUser.lookHit && g_localUser.lookHit.object === g_table )//&& goodSide(this) )
 					{
-						this.position.copy(g_localUser.lookHit.scaledPoint);
+						var updatedPos = new THREE.Vector3().copy(g_localUser.lookHit.scaledPoint);
+
+						var xMax = g_tableWidth / 2.0 - g_puckRadius;
+						var zMax = g_tableLength / 2.0 - g_puckRadius;
+
+						if( updatedPos.x < -xMax )
+							updatedPos.x = -xMax;
+						else if( updatedPos.x > xMax )
+							updatedPos.x = xMax;
+
+						if( updatedPos.z < -zMax )
+							updatedPos.z = -zMax;
+						else if( updatedPos.z > zMax )
+							updatedPos.z = zMax;
+
+						this.position.copy(updatedPos);
 
 						var bShouldForce = false;
 						if( this.JumpStart.offTable )
@@ -913,8 +928,8 @@
 				g_table = JumpStart.spawnCursorPlane({
 					"position": new THREE.Vector3(0, g_tableHeight, 0),
 					"rotate": new THREE.Vector3(Math.PI / 2.0, 0, 0),
-					"width": g_tableWidth,
-					"height": g_tableLength
+					"width": g_tableWidth + 100,
+					"height": g_tableLength + 100
 				});
 
 				g_table.position.y = g_worldOffset.y + g_tableHeight;

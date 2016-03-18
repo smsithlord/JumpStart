@@ -1,0 +1,1249 @@
+<!-- Powered by the JumpStart Game Engine -->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Minimal Project</title>
+
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css" />
+	</head>
+
+	<body>
+
+		<img src="misc/spacepilotcontrols.png" id="controls" style="display: none; position: fixed; top: 150px; left: 10px; width: 200px;" />
+
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
+
+		<!-- Window-Level Event Callbacks -->
+		<script>
+		var myOptions =
+		{
+			"raycastEnabled": false,
+			"showCrosshair": false,
+			"titleImageURL": "misc/spacepilottitle.png",
+			"scaleWithEnclosure": true,
+			"showCursorPlanes": false,
+			"worldScale": 1.0,
+			"camera":
+			{
+//				"lookAtOrigin": true,
+				"position": new THREE.Vector3(0.0, 0.0, 600.0),
+				"translation": new THREE.Vector3(0.0, 150.0, 0.0)
+			}
+		};
+
+		JumpStart.setOptions(myOptions);
+
+		var g_enemies = new Array();
+		var g_targetStardustsCount = 0;
+		var g_lastGalaxyPos = new THREE.Vector3();
+		var g_stardusts = new Array();
+		var g_galaxy = null;
+		var g_myShip = null;
+		var g_enemyPointer = null;
+		var myMarker;
+
+		var shipSoundCooldown = 10.0 + 10.0 * Math.random();
+
+		function onTick()
+		{
+			if( !JumpStart.webMode )
+			{
+				if( g_localUser && g_localUser.lookOrigin && g_localUser.lookOrigin.z < 0 && (!document.body.hasOwnProperty("mirrored") || !document.body.mirrored) )
+				{
+					document.body.style.webkitTransform = "scaleX(-1)";
+					document.body.style.filter = "FlipH";
+					document.body.mirrored = true;
+				}
+				else if( g_localUser.lookOrigin.z >= 0 && document.body.hasOwnProperty("mirrored") && document.body.mirrored )
+				{
+					document.body.style.webkitTransform = "none";
+					document.body.style.filter = "none";
+					document.body.mirrored = false;
+				}
+			}
+
+			shipSoundCooldown -= g_deltaTime;
+
+			if( shipSoundCooldown <= 0 )
+			{
+				shipSoundCooldown = 10.0 + 10.0 * Math.random();
+
+				var index = Math.floor(Math.random() * (3+1));
+//				JumpStart.playSound("sounds/SpacePilot/ship" + index, 0.4);
+			}
+		}
+
+		function CreateStardusts()
+		{
+			// Conservation of Stardust:
+			// 0. Staaaaaaaaaaaaaaaaaaaarrrrrr dust.
+			// 1. Star dust gets randomly generated at app load to populate enclosure volume.
+			// 2. Star dust never gets destroyed; only relocated.
+
+			g_targetStardustsCount = 100;
+			var i, stardust;
+			for( i = 0; i < g_targetStardustsCount; i++ )
+			{
+				stardust = JumpStart.spawnInstance("models/SpacePilot/pixel.obj", {"parent": g_galaxy});
+				stardust.JumpStart.blocksLOS = false;
+
+				PositionStardust(stardust);
+
+				//stardust.scale.multiplyScalar(3.0);
+
+				stardust.JumpStart.onTick = function()
+				{
+//					this.scale.z = this.scale.x;
+
+					//var originalScale = new THREE.Vector3().copy(this.scale);
+//					var originalScale = this.scale.x;
+//					this.scale.set(1, 1, 1).multiplyScalar(0.0001);
+
+					this.rotation.copy(g_galaxy.rotation);
+
+					var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+					pos.multiplyScalar(1/g_worldScale);
+
+					var bound = -g_worldOffset.y;
+					var axis = null;
+					var direction = 0;
+
+					// 1. Figure out which axis it's overlapping, and which direction.
+					// 2. Teleport it to the opposite side of the enclosure on this axis.
+
+					if( pos.x > bound )
+					{
+						axis = "x";
+						direction = 1.0;
+					}
+					else if( pos.x < -bound )
+					{
+						axis = "x";
+						direction = -1.0;
+					}
+					else if( pos.y > bound )
+					{
+						axis = "y";
+						direction = 1.0;
+					}
+					else if( pos.y < -bound )
+					{
+						axis = "y";
+						direction = -1.0;
+					}
+					else if( pos.z > bound )
+					{
+						axis = "z";
+						direction = 1.0;
+					}
+					else if( pos.z < -bound )
+					{
+						axis = "z";
+						direction = -1.0;
+					}
+
+					if( direction !== 0 )
+					{
+						var dist, oldValue;
+						if( axis === "x" )
+						{
+							//this.translateX(bound * -direction * 2.0);
+							dist = bound * -direction * 2.0;
+							dist *= 1/g_galaxy.scale.x;
+							this.translateX(dist);
+						}
+						else if( axis === "y" )
+						{
+							//this.translateY(bound * -direction * 2.0);
+							dist = bound * -direction * 2.0;
+							dist *= 1/g_galaxy.scale.y;
+							this.translateY(dist);
+						}
+						else if( axis === "z" )
+						{
+							//this.translateZ(bound * -direction * 2.0);
+							dist = bound * -direction * 2.0;
+							dist *= 1/g_galaxy.scale.z;
+							this.translateZ(dist);
+						}
+						//g_galaxy.remove(this);
+					}
+
+					if( !g_lastGalaxyPos.equals(g_galaxy.position) )
+					{
+						var lookPos = new THREE.Vector3().copy(g_lastGalaxyPos).sub(g_galaxy.position);
+						this.rotation.copy(g_galaxy.rotation);
+						this.lookAt(new THREE.Vector3().copy(this.position).add(lookPos));
+						//this.scale.z = this.scale.x + (10.0 * lookPos.length());
+						this.scale.z = this.scale.x + (lookPos.length() * (1/g_galaxy.scale.x) * 10.0);
+
+						if( g_stardusts[g_stardusts.length-1] === this )
+						{
+							g_lastGalaxyPos.copy(g_galaxy.position);
+						}
+
+					}
+					else
+					{
+						this.scale.z = this.scale.x;
+					}
+
+//					var goodScale = new THREE.Vector3(1, 1, 1).multiplyScalar(originalScale);
+//					this.scale.copy(goodScale);
+
+
+//					var pos = 
+//					if( !this.position.y )
+//						g_galaxy.remove(this);
+					/*
+					var max = (-g_worldOffset.y * 2.0) * 0.8;
+					if( this.position.distanceTo(g_myShip.position) > max ||
+						this.position.distanceTo(g_myShip.position) < -max )
+					{
+						g_galaxy.remove(this);
+					}
+					*/
+				}
+
+				g_stardusts.push(stardust);
+			}
+		}
+
+		function RelocateStardusts()
+		{
+			var i, stardust;
+			for( i = 0; i < g_stardusts.length; i++ )
+			{
+				stardust = g_stardusts[i];
+
+				PositionStardust(stardust);
+
+				if( g_galaxy.scale.x > 1 )
+					stardust.scale.multiplyScalar(1/g_galaxy.scale.x);
+			}
+		}
+
+		function PositionStardust(stardust)
+		{
+			var randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+			stardust.position.x = Math.random() * g_worldOffset.y * (1/g_galaxy.scale.x) * randoSign;
+			//stardust.position.x = Math.random() * g_worldOffset.y * randoSign;
+
+			randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+			stardust.position.y = Math.random() * g_worldOffset.y * (1/g_galaxy.scale.x) * randoSign;
+			//stardust.position.y = Math.random() * g_worldOffset.y * randoSign;
+
+			randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+			stardust.position.z = Math.random() * g_worldOffset.y * (1/g_galaxy.scale.x) * randoSign;
+			//stardust.position.z = Math.random() * g_worldOffset.y * randoSign;
+
+			stardust.scale.set(1, 1, 1);
+			stardust.scale.multiplyScalar(3.0);
+			stardust.scale.multiplyScalar(1/g_galaxy.scale.x);
+		}
+
+		//var g_rayCastObjects = new Array();
+
+		function onPrecache()
+		{
+			var myModels = [
+				"models/SpacePilot/sun.obj",
+				"models/SpacePilot/pluto.obj",
+				"models/SpacePilot/mars.obj",
+				"models/SpacePilot/pixel.obj",
+				"models/SpacePilot/hawk.obj",
+				"models/SpacePilot/player_laser.obj",
+				"models/SpacePilot/enemy_laser.obj",
+				"models/SpacePilot/thai.obj",
+				"models/SpacePilot/explosion.obj",
+				"models/SpacePilot/roundArrow.obj",
+				"models/SpacePilot/hawktraila.obj",
+				"models/SpacePilot/hawktrailb.obj"
+			];
+
+			JumpStart.precacheSound("sounds/SpacePilot/laser0");
+			JumpStart.precacheSound("sounds/SpacePilot/laser1");
+			JumpStart.precacheSound("sounds/SpacePilot/explosion0");
+			JumpStart.precacheSound("sounds/SpacePilot/hit0");
+			JumpStart.precacheSound("sounds/SpacePilot/damage0");
+//			JumpStart.precacheSound("sounds/SpacePilot/ship0");
+//			JumpStart.precacheSound("sounds/SpacePilot/ship1");
+//			JumpStart.precacheSound("sounds/SpacePilot/ship2");
+//			JumpStart.precacheSound("sounds/SpacePilot/ship3");
+//			JumpStart.precacheSound("sounds/SpacePilot/damage1");
+//			JumpStart.precacheSound("sounds/SpacePilot/damage2");
+//			JumpStart.precacheSound("sounds/SpacePilot/damage3");
+
+			JumpStart.loadModels(myModels).then(function() {
+				JumpStart.doneCaching();
+			});
+		}
+
+		function SpawnTie()
+		{
+			var tie = JumpStart.spawnInstance("models/SpacePilot/thai.obj", {"parent": g_galaxy});
+			g_enemies.push(tie);
+
+			tie.userData.boundFade = true;
+
+			tie.JumpStart.blocksLOS = false;
+
+			//tie.position.set(50.0, -50.0, 50.0);
+			RandoPosition(tie);
+
+			//tie.position.copy(g_myShip.position);
+			//tie.rotation.copy(g_myShip.rotation);
+			//tie.translateZ(100.0);
+
+			function RandoPosition(ship)
+			{
+				var randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				ship.position.x = Math.random() * g_worldOffset.y * 2.0 * (1/g_galaxy.scale.x) * randoSign;
+
+				randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				ship.position.y = Math.random() * g_worldOffset.y * 2.0  * (1/g_galaxy.scale.x) * randoSign;
+
+				randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				ship.position.z = Math.random() * g_worldOffset.y * 2.0  * (1/g_galaxy.scale.x) * randoSign;
+
+//				ship.scale.set(1, 1, 1);
+//				ship.scale.multiplyScalar(3.0);
+//				ship.scale.multiplyScalar(1/g_galaxy.scale.x);
+			}
+
+			RandoPitch(tie);
+			RandoRoll(tie);
+
+			function RandoPitch(ship)
+			{
+				var sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.pitch = 300 * Math.random() * sign;
+
+				if( ship.userData.pitch < 50 )
+					ship.userData.pitch = 50;
+
+				sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.deltaPitch = 2.0 * Math.random() * sign;
+			}
+
+			function RandoRoll(ship)
+			{
+				var sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.roll = 300 * Math.random() * sign;
+
+				if( ship.userData.roll < 50 )
+					ship.userData.roll = 50;
+
+				sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.deltaRoll = 2.0 * Math.random() * sign;
+			}
+
+			tie.userData.target = null;
+			tie.userData.maxDedication = 4.0;
+			tie.userData.maxWonder = 6.0;
+			tie.userData.wonder = 0.0;
+			tie.userData.dedication = tie.userData.maxDedication;
+			tie.userData.maxTargetingDistance = 600.0;
+			tie.userData.maxBarrage = 1.5;
+			tie.userData.barrage = tie.userData.maxBarrage;
+			tie.userData.maxPeaceful = 4.0;
+			tie.userData.peaceful = 0.0;
+			tie.userData.shotRate = 0.3;
+			tie.userData.lastShot = tie.userData.shotRate;
+			tie.userData.lastSoundPlayed = 0;
+
+			function FireEnemyLaser(offset)
+			{
+				var laser = JumpStart.spawnInstance("models/SpacePilot/enemy_laser.obj", {"parent": g_galaxy});
+				laser.position.copy(this.position);
+				laser.rotation.copy(this.rotation);
+
+				laser.translateX(offset.x);
+				laser.translateY(offset.y);
+				laser.translateZ(offset.z);
+
+				laser.scale.set(0.2, 0.2, 1.0);
+
+				laser.userData.power = 10.0;
+
+				laser.JumpStart.onTick = function()
+				{
+					if( !g_myShip )
+					{
+						g_galaxy.remove(this);
+						return;
+					}
+
+					this.translateZ(150 * g_deltaTime);
+
+					var dist = this.position.distanceTo(g_myShip.position);
+
+					if( dist > 600.0 )
+					{
+						g_galaxy.remove(this);
+					}
+					else if( dist < 40.0 )
+					{
+						g_myShip.userData.onDamage.call(g_myShip, this.userData.power);
+
+						g_galaxy.remove(this);
+					}
+				};
+			}
+
+			tie.JumpStart.onTick = function()
+			{
+				if( !g_myShip )
+					return;
+
+				this.userData.lastSoundPlayed += g_deltaTime;
+
+				var dist = this.position.distanceTo(g_myShip.position);
+
+				if( dist > 1000 )
+					this.lookAt(g_myShip.position);
+				else if( dist < 40 )
+				{
+					SpawnExplosion(this.position, 1.0);
+
+					g_galaxy.remove(this);
+					g_enemies.splice(g_enemies.indexOf(this), 1);
+
+					g_myShip.userData.onDamage.call(g_myShip, 50.0);
+					return;
+				}
+
+				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+				pos.multiplyScalar(1.0 / JumpStart.worldScale);
+
+				var boundScaleDif = -JumpStart.worldOffset.y - Math.abs(pos.x);
+
+				testDif = -JumpStart.worldOffset.y - Math.abs(pos.y);
+				if( testDif < boundScaleDif )
+					boundScaleDif = testDif;
+
+				testDif = -JumpStart.worldOffset.y - Math.abs(pos.z);
+				if( testDif < boundScaleDif )
+					boundScaleDif = testDif;
+
+				if( this.userData.target && boundScaleDif > 50.0 )
+				{
+					this.userData.dedication -= g_deltaTime;
+
+					if( this.userData.dedication <= 0 || dist >= this.userData.maxTargetingDistance )
+					{
+						this.userData.dedication = this.userData.maxDedication;
+						this.userData.target = null;
+						this.userData.wonder = this.userData.maxWonder;
+						this.userData.barrage = this.userData.maxBarrage;
+						this.userData.dedication = this.userData.maxDedication;
+						this.userData.lastShot = this.userData.shotRate;
+					}
+					else
+					{
+						// Should we attack?
+						if( this.userData.barrage > 0 )
+						{
+							this.userData.barrage -= g_deltaTime;
+
+							if( this.userData.barrage <= 0 )
+								this.userData.peaceful = this.userData.maxPeaceful;
+
+							this.userData.lastShot += g_deltaTime;
+
+							if( this.userData.lastShot >= this.userData.shotRate )
+							{
+								this.userData.lastShot = 0.0;
+
+								if( this.userData.lastSoundPlayed > 4.0 )
+								{
+									JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.2);
+									this.userData.lastSoundPlayed = 0.0;
+								}
+
+								this.lookAt(this.userData.target.position);
+								FireEnemyLaser.call(this, new THREE.Vector3(1.0, -1.0, 6.0));
+								FireEnemyLaser.call(this, new THREE.Vector3(-1.0, -1.0, 6.0));
+							}
+						}
+						else
+						{
+							this.userData.peaceful -= g_deltaTime;
+							if( this.userData.peaceful <= 0 )
+							{
+								this.userData.peaceful = 0.0;
+								this.userData.barrage = this.userData.maxBarrage;
+								this.userData.dedication = this.userData.maxDedication;
+								this.userData.lastShot = this.userData.shotRate;
+							}
+						}
+					}
+				}
+
+				if( this.userData.target )
+				{
+					this.lookAt(this.userData.target.position);
+					this.translateZ(50 * g_deltaTime);
+				}
+				else
+				{
+					this.userData.pitch--;
+					if( this.userData.pitch <= 0 )
+						RandoPitch(this);
+					else
+						this.rotateX(this.userData.deltaPitch * g_deltaTime);
+
+					this.userData.roll--;
+					if( this.userData.roll <= 0 )
+						RandoRoll(this);
+					else
+						this.rotateZ(this.userData.deltaRoll * g_deltaTime);
+
+					this.translateZ(50 * g_deltaTime);
+
+					if( this.userData.wonder > 0 )
+					{
+						this.userData.wonder -= g_deltaTime;
+					}
+
+					if( this.userData.wonder <= 0 || this.position.distanceTo(g_myShip) < this.userData.maxTargetingDistance )
+					{
+						// Check if we have a target in FOV
+						this.updateMatrix();
+
+						var matrix = new THREE.Matrix4().extractRotation(this.matrix);
+						var direction = new THREE.Vector3(0, 0, 1).applyMatrix4(matrix);
+						var ray = new THREE.Ray(this.position, direction);
+						var lookPos = new THREE.Vector3().copy(ray.at(10.0));
+						var lookVec = new THREE.Vector3().copy(lookPos).sub(this.position).normalize();
+
+						var potentialVec = new THREE.Vector3().copy(g_myShip.position).sub(this.position);
+						potentialVec.normalize();
+
+						var dot = potentialVec.dot(lookVec);
+						if( dot > 0.8 )
+							this.userData.target = g_myShip;
+					}
+				}
+			};
+
+			tie.userData.health = 50.0;
+
+			tie.userData.onDamage = function(amount, attacker)
+			{
+				this.userData.health -= amount;
+
+				if( this.userData.health > 0 )
+				{
+					JumpStart.playSoundInstance("sounds/SpacePilot/hit0", 0.15);
+				}
+				else
+				{
+					SpawnExplosion(this.position, 1.0);
+
+					g_galaxy.remove(this);
+					g_enemies.splice(g_enemies.indexOf(this), 1);
+				}
+			};
+		}
+
+		function SpawnPlayerShip()
+		{
+			g_myShip = JumpStart.spawnInstance("models/SpacePilot/hawk.obj", {"parent": g_galaxy});
+			g_myShip.JumpStart.blocksLOS = false;
+			g_myShip.userData.trailRate = 0.01;
+			g_myShip.userData.lastTrail = g_myShip.userData.trailRate;
+			g_myShip.userData.health = 100.0;
+			g_myShip.userData.damageSoundCooldown = 0.0;
+
+			resetShip();
+
+			g_myShip.userData.onDamage = function(amount)
+			{
+				this.userData.health -= amount;
+
+				if( this.userData.health <= 0 )
+				{
+					SpawnExplosion(g_myShip.position, 2.0, "sounds/SpacePilot/explosion3");
+
+					g_galaxy.remove(this);
+					g_myShip = null;
+
+					g_enemyPointer.scale.set(0.0001, 0.0001, 0.0001);
+				}
+				else
+				{
+					if( !this.userData.damageSoundCooldown )
+					{
+						this.userData.damageSoundCooldown = 0.1;
+
+						JumpStart.playSoundInstance("sounds/SpacePilot/damage0", 0.1);
+					}
+				}
+			};
+
+			g_myShip.JumpStart.onTick = function() {
+				if( !g_activeGamepad )
+					return;
+
+				this.userData.damageSoundCooldown -= g_deltaTime;
+				if( this.userData.damageSoundCooldown < 0 )
+					this.userData.damageSoundCooldown = 0;
+/*
+				var elem = document.getElementById("info");
+				if( !elem )
+				{
+					elem = document.createElement("div");
+					elem.id = "info";
+					elem.style.cssText = "position: absolute; top: 0px; right: 0px;";
+					document.body.appendChild(elem);
+				}
+
+				elem.innerHTML = "<h1>";// + g_activeGamepad.axes.length + "</h1>";
+
+				for( var y = 0; y < g_activeGamepad.axes.length; y++)
+				{
+					elem.innerHTML += "Axis " + y + ": " + g_activeGamepad.axes[y] + "<br />";
+				}
+				elem.innerHTML += "</h1>";
+*/
+
+				var deadZone = 0.2;
+
+				var disabledJoystick = false;
+				if( g_activeGamepad.buttons[7].value > 0 && !JumpStart.webMode )
+					disabledJoystick = true;
+
+				var airBreak = g_activeGamepad.buttons[6].value;
+
+				if( disabledJoystick )
+					airBreak = 1.0;
+
+				// ROLL
+				var amount = -g_activeGamepad.buttons[14].value + g_activeGamepad.buttons[15].value;
+				amount -= amount * airBreak * 0.5;	// account for speed
+
+				var spinAmp =  3.0;
+				if( !JumpStart.webMode )
+					spinAmp = 1.5;
+
+				if( amount > deadZone || amount < -deadZone )
+					this.rotateZ(1.0 * amount * g_deltaTime * spinAmp);
+
+				if( !disabledJoystick )
+				{
+					// YAW
+					amount = g_activeGamepad.axes[2];
+					amount -= amount * airBreak * 0.5;	// account for speed
+
+					if( amount > deadZone || amount < -deadZone )
+						this.rotateY(1.5 * amount * -g_deltaTime);
+
+					// PITCH
+					amount = g_activeGamepad.axes[3];
+					amount -= amount * airBreak * 0.5;	// account for speed
+					if( amount > deadZone || amount < -deadZone )
+						this.rotateX(2.0 * -amount * g_deltaTime);
+				}
+
+				// GO FORWARD
+				var speed = 100.0;
+				speed -= speed * airBreak * 0.8;
+
+				if( boosting )
+					speed *= 1.5;
+
+				this.translateZ(speed * g_deltaTime);
+
+				// Add the trail
+				this.userData.lastTrail -= g_deltaTime;
+
+				if( this.userData.lastTrail <= 0 )
+				{
+					this.userData.lastTrail = this.userData.trailRate;
+
+					var trail = JumpStart.spawnInstance("models/SpacePilot/hawktraila.obj", {"parent": g_galaxy});
+					trail.position.copy(this.position);
+					trail.rotation.copy(this.rotation);
+					trail.translateZ(-30.0);
+					trail.translateY(1.0);
+					trail.translateX(-14.5);
+					trail.userData.life = 0.2;
+
+					trail.JumpStart.onTick = function()
+					{
+						this.userData.life -= g_deltaTime;
+
+						if( this.userData.life <= 0 )
+						{
+							this.scale.sub(new THREE.Vector3(1, 1, 1).multiplyScalar(0.1));
+
+							if( this.scale.z <= 0.5 )
+							{
+								g_galaxy.remove(this);
+							}
+						}
+					};
+
+					trail = JumpStart.spawnInstance("models/SpacePilot/hawktrailb.obj", {"parent": g_galaxy});
+					trail.position.copy(this.position);
+					trail.rotation.copy(this.rotation);
+					trail.translateZ(-30.0);
+					trail.translateY(1.0);
+					trail.translateX(14.5);
+					trail.userData.life = 0.2;
+
+					trail.JumpStart.onTick = function()
+					{
+						this.userData.life -= g_deltaTime;
+
+						if( this.userData.life <= 0 )
+						{
+							this.scale.sub(new THREE.Vector3(1, 1, 1).multiplyScalar(0.1));
+
+							if( this.scale.z <= 0.5 )
+							{
+								g_galaxy.remove(this);
+							}
+						}
+					};
+				}
+
+
+				// Scroll the galaxy if we are near the edge
+				var pos = new THREE.Vector3();
+				var bound = -g_worldOffset.y * 0.5;
+				var axes = ["x", "y", "z"];
+				var index, bound, curAxis, direction, dif;
+				for( index = 0; index < axes.length; index++ )
+				{
+					pos.setFromMatrixPosition( this.matrixWorld )
+					pos.multiplyScalar(1/g_worldScale);
+
+					curAxis = axes[index];
+					direction = 0;
+					if( pos[curAxis] > bound )
+						direction = -1.0;
+					else if( pos[curAxis] < -bound )
+						direction = 1.0;
+
+					if( direction !== 0 )
+					{
+						dif = pos[curAxis] + (bound * direction);
+
+						if( curAxis === "x" )
+							g_galaxy.translateX(-dif);
+						else if( curAxis === "y" )
+							g_galaxy.translateY(-dif);
+						else if( curAxis === "z" )
+							g_galaxy.translateZ(-dif);
+
+						g_galaxy.updateMatrixWorld();
+					}
+				}
+
+//					g_galaxy.userData.previousPosition.copy(g_galaxy.position);
+
+				// Point the arrow towards the closest enemy.
+				var bestTarget = null;
+				var bestDist = 999999;
+
+				var i, potential, dist;
+				for( i = 0; i < g_enemies.length; i++ )
+				{
+					potential = g_enemies[i];
+					dist = potential.position.distanceTo(this.position);
+
+					if( dist < bestDist )
+					{
+						bestTarget = potential;
+						bestDist = dist;
+					}
+				}
+
+				if( bestTarget )
+				{
+					if( bestDist > 50.0 )
+					{
+						g_enemyPointer.position.copy(this.position);
+						g_enemyPointer.scale.set(3.0, 3.0, 10.0);
+
+						var maxDist = 100;
+						var scaleMultiplyer = bestDist / maxDist;
+						if( scaleMultiplyer > 1.0 )
+						{
+							if( scaleMultiplyer > 6.0 )
+								scaleMultiplyer = 6.0;
+						}
+						else
+							scaleMultiplyer = 1.0;
+
+						g_enemyPointer.scale.multiplyScalar(scaleMultiplyer);
+
+						var targetPos = new THREE.Vector3().copy(bestTarget.position);
+						g_enemyPointer.lookAt(targetPos);
+
+						g_enemyPointer.translateZ(50.0);
+
+						// Get some DOT shit
+						this.updateMatrix();
+
+						var matrix = new THREE.Matrix4().extractRotation(this.matrix);
+						var direction = new THREE.Vector3(0, 0, 1).applyMatrix4(matrix);
+						var ray = new THREE.Ray(this.position, direction);
+						var lookPos = new THREE.Vector3().copy(ray.at(10.0));
+						var lookVec = new THREE.Vector3().copy(lookPos).sub(this.position).normalize();
+
+						var potentialVec = new THREE.Vector3().copy(bestTarget.position).sub(this.position);
+						potentialVec.normalize();
+
+						var dot = potentialVec.dot(lookVec);
+
+						var colors = 1.0 - dot;
+						if( colors > 1.0 )
+							colors = 1.0;
+
+						var myColor = new THREE.Color(1.0, colors, colors);
+						g_enemyPointer.JumpStart.setColor(myColor);
+					}
+					else
+						g_enemyPointer.scale.set(0.0001, 0.0001, 0.0001);
+
+//						this.translateY(-10.0);
+//						this.lookAt(g_localUser.lookHit.scaledPoint);
+				}
+				else
+					g_enemyPointer.scale.set(0.0001, 0.0001, 0.0001);
+
+				if( JumpStart.webMode && false )
+				{
+					if( g_myShip )
+					{
+						g_myShip.updateMatrixWorld();
+						var pos = new THREE.Vector3().setFromMatrixPosition(g_myShip.matrixWorld);
+
+						g_camera.position.copy(pos);
+						g_camera.rotation.copy(g_myShip.rotation);
+
+/*
+						g_camera.translateZ(-50.0);
+						g_camera.lookAt(pos);
+						g_camera.translateY(30.0);
+*/
+
+						g_camera.translateY(30.0);
+						g_camera.translateZ(-200.0);
+						g_camera.lookAt(pos);
+
+//						g_camera.rotateY(Math.PI);
+					}
+				}
+			};
+		}
+
+		function onReady() {
+
+			// Load your model
+//			JumpStart.loadModels(["models/SpacePilot/sun.obj","models/SpacePilot/pixel.obj", "models/SpacePilot/Falcon.obj"]).then(function() {
+
+				g_galaxy = JumpStart.spawnInstance();
+				g_galaxy.position.set(0, 0, 0);
+				g_galaxy.userData.originalScale = new THREE.Vector3().copy(g_galaxy.scale);
+				g_lastGalaxyPos.copy(g_galaxy.position);
+
+				CreateStardusts();
+
+				var theSun = JumpStart.spawnInstance("models/SpacePilot/sun.obj", {"parent": g_galaxy});
+				theSun.userData.boundFade = true;
+				theSun.JumpStart.blocksLOS = false;
+				theSun.position.set(1000, -500, 500);
+				theSun.scale.multiplyScalar(6.0);
+				theSun.JumpStart.onTick = function()
+				{
+					this.rotateY(0.3 * g_deltaTime);
+
+					if( g_myShip && this.position.distanceTo(g_myShip.position) < 120.0 )
+					{
+						g_myShip.userData.onDamage.call(g_myShip, 50.0);
+					}
+				};
+
+				var pluto = JumpStart.spawnInstance("models/SpacePilot/pluto.obj", {"parent": g_galaxy});
+				pluto.userData.boundFade = true;
+				pluto.JumpStart.blocksLOS = false;
+				pluto.position.set(0, 0, 0);
+				pluto.scale.multiplyScalar(3.0);
+				pluto.JumpStart.onTick = function()
+				{
+					this.rotateY(0.3 * g_deltaTime);
+
+					if( g_myShip && this.position.distanceTo(g_myShip.position) < 60.0 )
+					{
+						g_myShip.userData.onDamage.call(g_myShip, 50.0);
+					}
+				};
+
+				var mars = JumpStart.spawnInstance("models/SpacePilot/mars.obj", {"parent": g_galaxy});
+				mars.userData.boundFade = true;
+				mars.JumpStart.blocksLOS = false;
+				mars.position.set(-500, 500, -500);
+				mars.scale.multiplyScalar(3.0);
+				mars.JumpStart.onTick = function()
+				{
+					this.rotateY(0.3 * g_deltaTime);
+
+					if( g_myShip && this.position.distanceTo(g_myShip.position) < 60.0 )
+					{
+						g_myShip.userData.onDamage.call(g_myShip, 50.0);
+					}
+				};
+
+				// Spawn an instance of your model
+//				SpawnPlayerShip();
+
+				g_enemyPointer = JumpStart.spawnInstance("models/SpacePilot/roundArrow.obj", {"parent": g_galaxy});
+				g_enemyPointer.JumpStart.blocksLOS = false;
+				g_enemyPointer.scale.set(0.0001, 0.0001, 0.0001);
+
+				document.getElementById("controls").style.display = "block";
+
+				// Start the simulation
+				JumpStart.run();
+
+				JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.1);
+
+//				g_rayCastObjects.push(JumpStart.floorPlane);
+//				rayCastObjects.push(JumpStart.roofPlane);
+//				g_rayCastObjects.push(JumpStart.westPlane);
+//				g_rayCastObjects.push(JumpStart.northPlane);
+//				g_rayCastObjects.push(JumpStart.eastPlane);
+//				g_rayCastObjects.push(JumpStart.southPlane);
+			//});
+		}
+
+		function SpawnExplosion(position, scale, sound)
+		{
+			var soundFile = ( typeof sound === "undefined" ) ? "sounds/SpacePilot/explosion0" : sound;
+
+			//console.log(arguments);
+			JumpStart.playSoundInstance(soundFile, 0.5);
+
+			var explosion = JumpStart.spawnInstance("models/SpacePilot/explosion.obj", {"parent": g_galaxy});
+			explosion.position.copy(position);
+			//explosion.scale.set(0.001, 0.001, 0.001);
+
+			explosion.userData.scaleSize = 0.001;
+			explosion.userData.scaleDirection = 1;
+			explosion.userData.maxScale = scale;
+
+			explosion.JumpStart.blocksLOS = false;
+
+			explosion.JumpStart.onTick = function()
+			{
+				if( this.userData.scaleDirection === 1 )
+				{
+					this.userData.scaleSize += 5.0 * g_deltaTime;
+
+					if( this.userData.scaleSize >= this.userData.maxScale )
+						this.userData.scaleDirection = -1;
+				}
+				else
+				{
+					this.userData.scaleSize -= 4.0 * g_deltaTime;
+
+					if( this.userData.scaleSize <= 0.001 )
+					{
+						g_galaxy.remove(this);
+						return;
+					}
+				}
+
+				this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+				this.rotateY(15.0 * g_deltaTime);
+				this.rotateX(20.0 * g_deltaTime);
+			};
+		}
+/*
+		document.addEventListener('keydown', function(event)
+		{
+			if(event.keyCode == 82)
+			{
+				resetShip();
+			}
+		});
+*/
+		function resetShip()
+		{
+			console.log("Reset!");
+
+			var i;
+			for( i = 0; i < g_enemies.length; i++ )
+				g_galaxy.remove(g_enemies[i]);
+
+			g_enemies = new Array();
+
+			for( var i = 0; i < 20; i++ )
+				SpawnTie();
+
+			if( !g_myShip )
+				SpawnPlayerShip();
+
+			g_galaxy.position.set(0, 0, 0);
+			g_myShip.position.copy(g_worldOffset);
+			g_myShip.position.add(new THREE.Vector3(0, -g_worldOffset.y / 2.0, -g_worldOffset.y * 0.5));
+
+			g_myShip.rotation.set(0, Math.PI, 0);
+
+			g_galaxy.scale.copy(g_galaxy.userData.originalScale);
+			RelocateStardusts();
+		}
+
+		function FireLaser(ship)
+		{
+			if( !g_myShip )
+				return;
+
+			JumpStart.playSoundInstance("sounds/SpacePilot/laser0", 0.15);
+
+			FireProjectile(ship, new THREE.Vector3(5.0, 0.0, 50.0));
+			FireProjectile(ship, new THREE.Vector3(-5.0, 0.0, 50.0));
+
+			function FireProjectile(ship, offset)
+			{
+				var laser = JumpStart.spawnInstance("models/SpacePilot/player_laser.obj", {"parent": g_galaxy});
+				laser.JumpStart.blocksLOS = false;
+				laser.userData.ownerShip = ship;
+				laser.userData.power = 50.0;
+
+				laser.scale.set(0.2, 0.2, 1.0);
+
+				laser.position.copy(ship.position);
+				laser.rotation.copy(ship.rotation);
+
+				laser.translateX(offset.x);
+				laser.translateY(offset.y);
+				laser.translateZ(offset.z);
+
+				laser.scale.set(0.2, 0.2, 1.0);
+
+				laser.updateMatrix();
+
+				var matrix = new THREE.Matrix4().extractRotation(laser.matrix);
+				//var direction = matrix.multiplyVector3(new THREE.Vector3(0, 0, 1));
+				var direction = new THREE.Vector3(0, 0, 1).applyMatrix4(matrix);
+				var ray = new THREE.Ray(laser.position, direction);
+				var lookPos = new THREE.Vector3().copy(ray.at(10.0));
+				var lookVec = new THREE.Vector3().copy(lookPos).sub(laser.position).normalize();
+				//console.log(lookVec);
+
+				// LOCK ONTO CLOSEST TARGET WITHIN AUTO-AIM FOV
+				// 1. Find the closest enemy within lockon range.
+				// 2. Keep looking for a better target until exhausted.
+
+				var maxDist = 600.0;
+				//var maxDist = 999999.9;
+				var lockDot = 0.8;
+				var bestTarget = null;
+				var bestDist = maxDist;
+				//var bestVec = new THREE.Vector3();
+				var potentialVec = new THREE.Vector3();
+				//var lookVec = new THREE.Vector3();
+
+				var pos = new THREE.Vector3();
+				var i, potential, dist, dot, boundScaleDif;
+				for( i = 0; i < g_enemies.length; i++ )
+				{
+					potential = g_enemies[i];
+					dist = potential.position.distanceTo(ship.position);
+					if( dist > maxDist )
+						continue;
+
+					// Don't lock on to things outside of the enclosure
+					pos.setFromMatrixPosition(potential.matrixWorld);
+					pos.multiplyScalar(1.0 / JumpStart.worldScale);
+
+					boundScaleDif = -JumpStart.worldOffset.y - Math.abs(pos.x);
+
+					testDif = -JumpStart.worldOffset.y - Math.abs(pos.y);
+					if( testDif < boundScaleDif )
+						boundScaleDif = testDif;
+
+					testDif = -JumpStart.worldOffset.y - Math.abs(pos.z);
+					if( testDif < boundScaleDif )
+						boundScaleDif = testDif;
+
+					if( boundScaleDif < 50.0 )
+						continue;
+
+					potentialVec.copy(potential.position).sub(laser.position);
+					potentialVec.normalize();
+
+					dot = potentialVec.dot(lookVec);
+
+					if( dot > lockDot &&
+						dist < bestDist )
+					{
+						bestTarget = potential;
+						bestDist = dist;
+					}
+				}
+
+				if( bestTarget )
+				{
+					laser.lookAt(bestTarget.position);
+				}
+/*
+				if( tempBestDot )
+				{
+					tempBestDot *= 100000;
+					tempBestDot = Math.round(tempBestDot);
+					tempBestDot /= 100000;
+
+					var elem = document.getElementById("info");
+					if( !elem )
+					{
+						elem = document.createElement("div");
+						elem.id = "info";
+						elem.style.cssText = "position: absolute; top: 0px; right: 0px;";
+						document.body.appendChild(elem);
+					}
+
+					elem.innerHTML = "<h1>";
+					elem.innerHTML += "value: " + tempBestDot + "<br />";
+					elem.innerHTML += "</h1>";
+				}
+				*/
+
+				laser.JumpStart.onTick = function()
+				{
+					if( !g_myShip || this.position.distanceTo(this.userData.ownerShip.position) > 400.0 )
+					{
+						g_galaxy.remove(this);
+						return;
+					}
+
+					var disabledJoystick = false;
+					if( g_activeGamepad.buttons[7].value > 0 && !JumpStart.webMode )
+						disabledJoystick = true;
+
+					var airBreak = g_activeGamepad.buttons[6].value;
+
+					if( disabledJoystick )
+						airBreak = 1.0;
+
+					var speed = 100.0;
+					speed -= speed * airBreak * 0.8;
+
+					this.translateZ((speed + 200.0) * g_deltaTime);
+
+					var i, enemy;
+					for( i = 0; i < g_enemies.length; i++ )
+					{
+						enemy = g_enemies[i];
+
+						if( enemy.position.distanceTo(this.position) < 30.0 )
+						{
+							//enemy.userData.onDamage(this.userData.power, this.userData.ownerShip);
+							enemy.userData.onDamage.call(enemy, this.userData.power, this.userData.ownerShip);
+//							g_galaxy.remove(enemy);
+//							g_enemies.splice(i, 1);
+
+							g_galaxy.remove(this);
+							return;
+						}
+					}
+				};
+			}
+		}
+
+		var boosting = false;
+		function onGamepadButtonUp(button, index)
+		{
+			if( index === 0 )
+			{
+				boosting = false;
+			}
+		}
+
+		function onGamepadButtonDown(button, index)
+		{
+		//	console.log(index);
+			if( index === 0 )
+			{
+				if( !g_myShip )
+				{
+					if( button.previousValue !== button.value && button.value === 1 )
+					{
+						resetShip();
+					}
+				}
+				else
+				{
+					boosting = true;
+				}
+			}
+			else if( index === 2 )
+			{
+				ZoomGalaxy(true);
+			}
+			else if( index === 3 )
+			{
+				ZoomGalaxy(false);
+			}
+			else if( index === 12 )
+			{
+				FireLaser(g_myShip);
+			}
+		}
+
+		function ZoomGalaxy(direction)
+		{
+			var testScale = new THREE.Vector3().copy(g_galaxy.scale);
+
+			if( direction )
+				testScale.add(new THREE.Vector3(1.0, 1.0, 1.0).multiplyScalar(0.2));
+			else
+				testScale.sub(new THREE.Vector3(1.0, 1.0, 1.0).multiplyScalar(0.2));
+
+			if( testScale.x <= 0 )
+				return;
+
+			if( direction )
+				g_galaxy.scale.add(new THREE.Vector3(1.0, 1.0, 1.0).multiplyScalar(0.1));
+			else
+				g_galaxy.scale.sub(new THREE.Vector3(1.0, 1.0, 1.0).multiplyScalar(0.1));
+
+			g_galaxy.updateMatrixWorld();
+
+			RelocateStardusts();
+
+			if( g_myShip )
+			{
+				var oldPos = new THREE.Vector3().setFromMatrixPosition(g_myShip.matrixWorld);
+
+				// Reposition the galaxy so the ship is in the same spot.
+				var pos = new THREE.Vector3().setFromMatrixPosition(g_myShip.matrixWorld);
+				oldPos.sub(pos);
+
+				oldPos.multiplyScalar(1/g_worldScale);
+
+				g_galaxy.position.add(oldPos);
+
+				g_lastGalaxyPos.copy(g_galaxy.position);
+			}
+		}
+		</script>
+	</body>
+</html>

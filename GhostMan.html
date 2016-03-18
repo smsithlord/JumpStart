@@ -1,0 +1,1058 @@
+<!-- Powered by the JumpStart Game Engine -->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Ghost Man</title>
+
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r71/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+	</head>
+
+	<body>
+
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
+
+		<!-- Window-Level Event Callbacks -->
+		<script>
+
+			// Configure JumpStart.  You really only need to list
+			// properties you want non-default values for.
+			var myOptions =
+			{
+				"legacyLoader": false,
+				"worldScale": 0.3,
+				"scaleWithEnclosure": false,
+				"showCrosshair": true,
+				"showCursorPlanes": false,
+				"camera":
+				{
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(-5.0, 200.0, 30.0),
+					"translation": new THREE.Vector3(40.0, 0.0, 880.0)
+				},
+				"firebase":
+				{
+					"rootUrl": "https://jump-start.firebaseio.com/",
+					"appId": "JumpStart",
+					"suppressPersonalBrowser": true
+				}
+			};
+
+			JumpStart.setOptions(myOptions);
+
+			var g_rayCastObjects = new Array();
+
+			// Window-level callback for onPrecache event
+			function onPrecache()
+			{
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+
+				// Precaching is important with networked apps!!
+				// Networked objects might get spawned before the
+				// local client gets the onReady window-level callback!!
+
+				// You can think of precaching sounds as synchronous (but it's not)
+				JumpStart.precacheSound("sounds/JumpStart/trumpet");
+				JumpStart.precacheSound("sounds/JumpStart/cashout");
+
+				// Precache any models that your app needs (asynchronous)
+				var myModels = [
+					"models/GhostMan/arrow.obj",
+					"models/GhostMan/ghost0.obj",
+					"models/GhostMan/player0.obj",
+					"models/GhostMan/player0top.obj",
+					"models/GhostMan/player0bottom.obj",
+					"models/GhostMan/map0.obj",
+					"models/GhostMan/bit.obj",
+					"models/GhostMan/nodes.obj",
+					"models/GhostMan/bitnodes.obj"
+					];
+				JumpStart.loadModels(myModels).then(function() {
+
+					// All assets cached.
+					JumpStart.doneCaching();
+				});
+			}
+
+			var g_myPlayer = null;
+			var g_players = new Array();
+			// Window-level callback for onReady event
+			function onReady()
+			{
+				if( !JumpStart.requestedRoomId )
+					return;
+
+				// Do nothing if we are not in an enclosure yet.
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
+					{
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
+
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+
+				// Only the 1st user needs to create the networked object
+				if( g_localUser.firstUser )
+				{
+					/*
+					// Spawn a jewel block
+					var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
+
+					// Do something each render tick
+					myInstance.JumpStart.onTick["spinObject"] = spinObject;
+
+					// Do something on spawn
+					myInstance.JumpStart.onSpawn["prepJewel"] = prepJewel;
+
+					// Do something when it's clicked
+					myInstance.JumpStart.onCursorDown["growObject"] = growObject;
+					myInstance.JumpStart.onCursorUp["shrinkObject"] = shrinkObject;
+
+					// Do something when it's hovered over
+					myInstance.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+					myInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+
+					// Sync this object's state to the network
+					myInstance.JumpStart.sync();
+
+
+
+					// Spawn a grass block
+					var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
+
+					// Adjust the Object3D's position and scale
+					var offset = new THREE.Vector3(100.0, 0.0, 0.0);
+					myOtherInstance.position.add(offset);
+					myOtherInstance.scale.multiplyScalar(2.0);
+
+					// Must block line-of-sight to be hoverable!!
+					myOtherInstance.JumpStart.blocksLOS = true;	// TRUE by default anyways
+
+					// Do something when it's hovered over
+					myOtherInstance.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+					myOtherInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+
+					// Make the grass spin only when hovered
+					myOtherInstance.JumpStart.onTick["hoverSpin"] = hoverSpin;
+
+					// Sync this object's state to the network
+					myOtherInstance.JumpStart.sync();
+					*/
+
+					var table = JumpStart.spawnInstance();
+					table.JumpStart.onSpawn["mapSpawn"] = mapSpawn;
+					table.JumpStart.playerId = -1;
+					table.position.copy(g_worldOffset);//.multiplyScalar(JumpStart.options.scale);
+					table.translateY(30);
+					//table.JumpStart.numLivingGhosts = 0;
+					table.JumpStart.playerId
+					table.JumpStart.sync();
+
+					// SPAWN THE BITS NOW
+					// Load the node vertex data
+					var verts, x;
+					for( x in JumpStart.models )
+					{
+						if( JumpStart.models[x].fileName === "models/GhostMan/bitnodes.obj" )
+						{
+							verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
+							break;
+						}
+					}
+
+					// Cycle through the verts
+					var i, point, bit;
+					for( i = 0; i < verts.length; i++ )
+					{
+						point = verts[i];
+						point.y = table.position.y;
+
+						var bit = JumpStart.spawnInstance("models/GhostMan/bit.obj");
+						bit.position.copy(point);
+						bit.JumpStart.onSpawn["bitSpawn"] = bitSpawn;
+						bit.JumpStart.onNetworkRemoved["bitRemoved"] = bitRemoved;
+						bit.JumpStart.sync();
+						//nodes.push({"point": verts[i]});
+	//					nodes[nodes.length-1].point.y = 0;
+					}
+				}
+
+/*
+				setTimeout(function()
+					{
+						if( g_myPlayer )
+							return;
+
+						var player = JumpStart.spawnInstance();
+						player.rotation.y = Math.PI;
+						player.JumpStart.ownerId = g_localUser.userId;
+						player.JumpStart.onSpawn["playerSpawn"] = playerSpawn;
+						player.JumpStart.onTick["playerTick"] = playerTick;
+						player.JumpStart.sync();
+
+						spawnAGhost();
+						setInterval(function(){spawnAGhost();}, 6000);
+					}, 2000);
+*/
+
+/*
+				// Spawn a virtual mouse pad.
+				// This is an invisible plane that the user's 3D cursor will collide with.
+				// More details on how to use these in future examples! (sry)
+				var instance = JumpStart.spawnCursorPlane({
+					"position": new THREE.Vector3(-40, 10.0, 0).add(g_worldOffset),
+					"rotation": new THREE.Vector3(0, 0, 0),
+					"width": "33.3",
+					"height": "33.3"
+				});
+*/
+
+				g_rayCastObjects.push(JumpStart.floorPlane);
+
+				// Start the simulation
+				JumpStart.run();
+			}
+
+			// Window-level callback for onTick event
+			function onTick()
+			{
+				// do work
+			}
+
+			// Window-level callback for onCursorDown event
+			function onCursorDown()
+			{
+				//console.log("yoooo");
+				// do work
+				if( !g_map || g_map.JumpStart.playerId != -1 )
+					return;
+
+				g_map.JumpStart.playerId = g_localUser.userId;
+				g_map.JumpStart.sync();
+
+				var player = JumpStart.spawnInstance();
+				player.position.copy(g_map.userData.nodes[64].point).add(g_worldOffset);
+				player.position.y = g_map.position.y;
+
+				player.rotation.y = Math.PI;
+				player.JumpStart.ownerId = g_localUser.userId;
+				player.JumpStart.onSpawn["playerSpawn"] = playerSpawn;
+				player.JumpStart.onTick["playerTick"] = playerTick;
+				player.JumpStart.lastNode = 64;
+				player.JumpStart.targetNode = -1;
+				player.JumpStart.sync();
+
+				spawnAGhost();
+				setInterval(function(){spawnAGhost();}, 6000);
+			}
+
+			// Window-level callback for onCursorUp event
+			function onCursorUp()
+			{
+				// do work
+			}
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+			var g_map = null;
+			var g_bits = new Array();
+
+			function bitSpawn(isLocal)
+			{
+				g_bits.push(this);
+			}
+
+			function bitRemoved(isLocal)
+			{
+				if( typeof isLocal === 'undefined' )
+					return;
+
+				g_scene.remove(this);
+			}
+
+			function mapSpawn(isLocal)
+			{
+				g_map = this;
+
+				this.userData.map = JumpStart.spawnInstance("models/GhostMan/map0.obj", {"parent": this});
+
+				var nodes = new Array();
+
+				// Load the node vertex data
+				var verts, x;
+				for( x in JumpStart.models )
+				{
+					if( JumpStart.models[x].fileName === "models/GhostMan/nodes.obj" )
+					{
+						verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
+						break;
+					}
+				}
+
+				// Cycle through the verts and add them as nodes
+				var i;
+				for( i = 0; i < verts.length; i++ )
+				{
+					nodes.push({"point": verts[i]});
+//					nodes[nodes.length-1].point.y = 0;
+				}
+
+				console.log("Total length: " + verts.length);
+
+				var node;
+				for( i = 0; i < nodes.length; i++ )
+				{
+					node = nodes[i];
+
+					switch(i)
+					{
+						case 0:
+							node["down"] = nodes[1];
+							node["right"] = nodes[2];
+							break;
+
+						case 1:
+							node["up"] = nodes[0];
+							node["left"] = nodes[62];
+							node["right"] = nodes[17];
+							break;
+
+						case 2:
+							node["up"] = nodes[3];
+							node["left"] = nodes[0];
+							break;
+
+						case 3:
+							node["down"] = nodes[2];
+							node["left"] = nodes[68];
+							node["right"] = nodes[14];
+							break;
+
+						case 4:
+							node["up"] = nodes[5];
+							node["left"] = nodes[67];
+							node["right"] = nodes[13];
+							break;
+
+						case 5:
+							node["up"] = nodes[6];
+							node["down"] = nodes[4];
+							node["left"] = nodes[58];
+							break;
+
+						case 6:
+							node["up"] = nodes[11];
+							node["down"] = nodes[5];
+							node["right"] = nodes[12];
+							break;
+
+						// middle center
+						case 7:
+							node["up"] = nodes[8];
+							break;
+
+						case 8:
+							node["left"] = nodes[38];
+							node["right"] = nodes[9];
+							break;
+
+						case 9:
+							node["left"] = nodes[8];
+							node["right"] = nodes[11];
+							node["up"] = nodes[10];
+							break;
+
+						case 10:
+							node["right"] = nodes[27];
+							node["down"] = nodes[9];
+							break;
+
+						case 11:
+							node["left"] = nodes[9];
+							node["down"] = nodes[6];
+							break;
+
+						case 12:
+							node["left"] = nodes[6];
+							node["up"] = nodes[23];
+							node["down"] = nodes[13];
+							node["right"] = nodes[22];
+							break;
+
+						case 13:
+							node["left"] = nodes[4];
+							node["up"] = nodes[12];
+							node["down"] = nodes[14];
+							node["right"] = nodes[21];
+							break;
+
+						case 14:
+							node["left"] = nodes[3];
+							node["up"] = nodes[13];
+							node["down"] = nodes[15];
+							break;
+
+						case 15:
+							node["right"] = nodes[16];
+							node["up"] = nodes[14];
+							break;
+
+						case 16:
+							node["left"] = nodes[15];
+							node["right"] = nodes[18];
+							node["up"] = nodes[19];
+							break;
+
+						case 17:
+							node["up"] = nodes[18];
+							node["left"] = nodes[1];
+							break;
+
+						case 18:
+							node["left"] = nodes[16];
+							node["down"] = nodes[17];
+							break;
+
+						case 19:
+							node["down"] = nodes[16];
+							node["right"] = nodes[20];
+							break;
+
+						case 20:
+							node["left"] = nodes[19];
+							node["up"] = nodes[21];
+							break;
+
+						case 21:
+							node["left"] = nodes[13];
+							node["down"] = nodes[20];
+							break;
+
+						// warp zone right
+						case 22:
+							node["left"] = nodes[12];
+							break;
+
+						case 23:
+							node["up"] = nodes[26];
+							node["down"] = nodes[12];
+							node["right"] = nodes[24];
+							break;
+
+						case 24:
+							node["up"] = nodes[25];
+							node["left"] = nodes[23];
+							break;
+
+						case 25:
+							node["down"] = nodes[24];
+							node["up"] = nodes[29];
+							node["left"] = nodes[26];
+							break;
+
+						case 26:
+							node["down"] = nodes[23];
+							node["up"] = nodes[30];
+							node["left"] = nodes[28];
+							node["right"] = nodes[25];
+							break;
+
+						case 27:
+							node["up"] = nodes[28];
+							node["left"] = nodes[10];
+							break;
+
+						case 28:
+							node["down"] = nodes[27];
+							node["left"] = nodes[32];
+							node["right"] = nodes[26];
+							break;
+
+						case 29:
+							node["down"] = nodes[25];
+							node["left"] = nodes[30];
+							break;
+
+						case 30:
+							node["down"] = nodes[26];
+							node["left"] = nodes[31];
+							node["right"] = nodes[29];
+							break;
+
+						case 31:
+							node["down"] = nodes[32];
+							node["right"] = nodes[30];
+							break;
+
+						case 32:
+							node["up"] = nodes[31];
+							node["left"] = nodes[33];
+							node["right"] = nodes[28];
+							break;
+
+						case 33:
+							node["up"] = nodes[34];
+							node["left"] = nodes[36];
+							node["right"] = nodes[32];
+							break;
+
+						case 34:
+							node["down"] = nodes[33];
+							node["left"] = nodes[35];
+							break;
+
+						case 35:
+							node["down"] = nodes[41];
+							node["left"] = nodes[42];
+							node["right"] = nodes[34];
+							break;
+
+						case 36:
+							node["down"] = nodes[40];
+							node["left"] = nodes[41];
+							node["right"] = nodes[33];
+							break;
+
+						case 37:
+							node["down"] = nodes[38];
+							node["left"] = nodes[40];
+							break;
+
+						case 38:
+							node["up"] = nodes[37];
+							node["left"] = nodes[39];
+							node["right"] = nodes[8];
+							break;
+
+						case 39:
+							node["down"] = nodes[57];
+							node["right"] = nodes[38];
+							break;
+
+						case 40:
+							node["up"] = nodes[36];
+							node["right"] = nodes[37];
+							break;
+
+						case 41:
+							node["down"] = nodes[45];
+							node["up"] = nodes[35];
+							node["left"] = nodes[43];
+							node["right"] = nodes[36];
+							break;
+
+						case 42:
+							node["down"] = nodes[43];
+							node["right"] = nodes[35];
+							break;
+
+						case 43:
+							node["down"] = nodes[44];
+							node["up"] = nodes[42];
+							node["right"] = nodes[41];
+							break;
+
+						case 44:
+							node["up"] = nodes[43];
+							node["right"] = nodes[45];
+							break;
+
+						case 45:
+							node["down"] = nodes[56];
+							node["up"] = nodes[41];
+							node["left"] = nodes[44];
+							break;
+
+						// warp zone left
+						case 46:
+							node["right"] = nodes[56];
+							break;
+
+
+						case 47:
+							node["down"] = nodes[48];
+							node["right"] = nodes[55];
+							break;
+
+						case 48:
+							node["up"] = nodes[47];
+							node["right"] = nodes[49];
+							break;
+
+						case 49:
+							node["down"] = nodes[52];
+							node["left"] = nodes[48];
+							break;
+
+						case 50:
+							node["down"] = nodes[51];
+							node["right"] = nodes[52];
+							break;
+
+						case 51:
+							node["up"] = nodes[50];
+							node["right"] = nodes[62];
+							break;
+
+						case 52:
+							node["up"] = nodes[49];
+							node["left"] = nodes[50];
+							node["right"] = nodes[53];
+							break;
+
+						case 53:
+							node["up"] = nodes[54];
+							node["left"] = nodes[52];
+							break;
+
+						case 54:
+							node["down"] = nodes[53];
+							node["up"] = nodes[55];
+							node["right"] = nodes[60];
+							break;
+
+						case 55:
+							node["down"] = nodes[54];
+							node["up"] = nodes[56];
+							node["left"] = nodes[47];
+							node["right"] = nodes[59];
+							break;
+
+						case 56:
+							node["down"] = nodes[55];
+							node["up"] = nodes[45];
+							node["left"] = nodes[46];
+							node["right"] = nodes[57];
+							break;
+
+						case 57:
+							node["down"] = nodes[58];
+							node["up"] = nodes[39];
+							node["left"] = nodes[56];
+							break;
+
+						case 58:
+							node["down"] = nodes[59];
+							node["up"] = nodes[57];
+							node["right"] = nodes[5];
+							break;
+
+						case 59:
+							node["up"] = nodes[58];
+							node["left"] = nodes[55];
+							node["right"] = nodes[66];
+							break;
+
+						case 60:
+							node["down"] = nodes[61];
+							node["left"] = nodes[54];
+							node["right"] = nodes[65];
+							break;
+
+						case 61:
+							node["up"] = nodes[60];
+							node["right"] = nodes[63];
+							break;
+
+						case 62:
+							node["up"] = nodes[63];
+							node["left"] = nodes[51];
+							node["right"] = nodes[1];
+							break;
+
+						case 63:
+							node["down"] = nodes[62];
+							node["left"] = nodes[61];
+							break;
+
+							// PLAYER START POINT
+						case 64:
+							node["left"] = nodes[65];
+							node["right"] = nodes[68];
+							break;
+
+						case 65:
+							node["up"] = nodes[66];
+							node["left"] = nodes[60];
+							node["right"] = nodes[64];
+							break;
+
+						case 66:
+							node["down"] = nodes[65];
+							node["left"] = nodes[59];
+							break;
+
+						case 67:
+							node["down"] = nodes[68];
+							node["right"] = nodes[4];
+							break;
+
+						case 68:
+							node["up"] = nodes[67];
+							node["left"] = nodes[64];
+							node["right"] = nodes[3];
+							break;
+
+						default:
+							console.log("miss: " + i);
+					}
+
+/*
+					// START DEBUG SHIT
+					var dummy = JumpStart.spawnInstance("models/GhostMan/player0.obj", {"parent": this});
+					dummy.position.copy(nodes[i].point);
+					dummy.userData.myId = i;
+					dummy.JumpStart.onCursorDown = function()
+					{
+						console.log("My ID: " + this.userData.myId);
+					};
+					// END DEBUG SHIT
+*/
+				}			
+
+//				nodes["center"].push();
+				this.userData.nodes = nodes;
+			}
+
+			var g_targetMarker = null;
+
+			function spawnAGhost()
+			{
+				if( g_numLivingGhosts >= 6 )
+					return;
+
+				var ghost = JumpStart.spawnInstance();
+				ghost.position.copy(g_map.position);
+				ghost.JumpStart.ownerId = g_localUser.userId;
+				ghost.JumpStart.lastNode = 7;
+				ghost.JumpStart.targetNode = 8;
+				ghost.JumpStart.modelToUse = "models/GhostMan/ghost0.obj";
+				ghost.scale.multiplyScalar(1.5);
+				ghost.JumpStart.onSpawn["ghostSpawn"] = ghostSpawn;
+				ghost.JumpStart.onTick["ghostWonder"] = ghostWonder;
+
+				var point = new THREE.Vector3().copy(g_map.userData.nodes[ghost.JumpStart.targetNode].point).add(g_worldOffset);
+//				point.multiplyScalar(JumpStart.options.worldScale);
+				point.y = ghost.position.y;
+
+				ghost.up.set(0, 1, 0);
+				ghost.lookAt(point);
+
+//				ghost.up.set(0, 0, 1);
+				//ghost.lookAt(g_map.userData.nodes[ghost.JumpStart.targetNode].point);
+
+//				g_targetMarker = JumpStart.spawnInstance("models/GhostMan/player0.obj");
+//				g_targetMarker.position.copy(point);
+				//g_targetMarker.position.copy(g_map.userData.nodes[ghost.JumpStart.targetNode].point).add(g_worldOffset);
+
+				//console.log("Info: " + JSON.stringify(ghost.position) + " vs " + JSON.stringify(g_map.userData.nodes[ghost.JumpStart.targetNode].point));
+
+//				ghost.rotation.x = 0;
+//				ghost.rotation.y += Math.PI;
+//				ghost.rotation.z = 0;
+				ghost.JumpStart.sync();
+			}
+
+			function ghostWonder()
+			{
+				var targetPoint = null;
+
+				if( this.JumpStart.targetNode != -1 )
+				{
+					targetPoint = g_map.userData.nodes[this.JumpStart.targetNode].point;
+					targetPoint.y = g_map.position.y;
+//					targetPoint.add(g_map.position);
+				}
+
+				if( targetPoint && this.JumpStart.ownerId === g_localUser.userId && this.position.distanceTo(targetPoint) < 4.0 )
+				{
+					this.position.copy(targetPoint);
+//					this.JumpStart.lastNode = this.JumpStart.targetNode;
+
+					var node = g_map.userData.nodes[this.JumpStart.targetNode];
+
+					var targetNodes = new Array();
+					if( node.hasOwnProperty("up") )
+						targetNodes.push(node.up);
+
+					if( node.hasOwnProperty("down") )
+						targetNodes.push(node.down);
+
+					if( node.hasOwnProperty("left") )
+						targetNodes.push(node.left);
+
+					if( node.hasOwnProperty("right") )
+						targetNodes.push(node.right);
+
+					if( targetNodes.length > 0 )
+					{
+						var randomTargetNodeIndex = g_map.userData.nodes.indexOf(targetNodes[Math.floor(Math.random()*targetNodes.length)]);
+
+						var gobackCount = (randomTargetNodeIndex === this.JumpStart.lastNode) + 0;
+						while( gobackCount > 0)
+						{
+							randomTargetNodeIndex = g_map.userData.nodes.indexOf(targetNodes[Math.floor(Math.random()*targetNodes.length)]);
+
+							if( randomTargetNodeIndex === this.JumpStart.lastNode )
+							{
+								gobackCount++;
+
+								if( gobackCount > 3 )
+									gobackCount = 0;
+							}
+							else
+								gobackCount = 0;
+						}
+
+						this.JumpStart.lastNode = this.JumpStart.targetNode;
+						this.JumpStart.targetNode = randomTargetNodeIndex;
+
+						var point = new THREE.Vector3().copy(g_map.userData.nodes[this.JumpStart.targetNode].point);
+						point.y = this.position.y;
+
+						this.up.set(0, 1, 0);
+						this.lookAt(point);
+					}
+					else
+						this.JumpStart.targetNode = -1;
+
+					this.JumpStart.sync();
+				}
+				else
+				{
+					if( targetPoint )
+					{
+						//if( this.JumpStart.ownerId === g_localUser.userId )
+						this.translateZ(50 * g_deltaTime);
+						//console.log( ourPosition.y + " vs " + targetPoint.y );
+					//	console.log(JSON.stringify(g_map.position) + " vs " + JSON.stringify(this.position));
+						//console.log(JSON.stringify(ourPosition) + " vs " + JSON.stringify(this.position));
+						//console.log(JSON.stringify(targetPoint) + " vs " + JSON.stringify(this.position));
+					}
+				}
+			}
+
+			var g_numLivingGhosts = 0;
+			function ghostSpawn(isLocal)
+			{
+				var visualModel = JumpStart.spawnInstance(this.JumpStart.modelToUse, {"parent": this});
+
+				if( this.JumpStart.ownerId === g_localUser.userId )
+				{
+
+				}
+
+				g_numLivingGhosts++;
+			}
+
+			function playerSpawn(isLocal)
+			{
+			//	console.log(this.JumpStart.ownerId);
+				if( this.JumpStart.ownerId === g_localUser.userId )
+				{
+					g_myPlayer = this;
+
+					var arrow = JumpStart.spawnInstance("models/GhostMan/arrow.obj");
+					arrow.scale.multiplyScalar(50.0);
+					arrow.position.copy(this.position);
+					arrow.translateZ(40);
+
+					arrow.JumpStart.onTick = function()
+					{
+						this.position.copy(g_myPlayer.position);
+
+						if( !g_lookHit )
+							return;
+
+						var point = new THREE.Vector3().copy(g_lookHit.scaledPoint);
+						point.y = this.position.y;
+
+						this.lookAt(point);
+						this.translateZ(30);
+
+						var vec = new THREE.Vector3().copy(this.position).sub(g_myPlayer.position);
+						vec.y = 0;
+
+						//console.log(vec);
+						// QI	= +x, +z
+						// QII	= -x, +z
+						// QIII	= -x, -z
+						// QIV	= x, -z
+
+						// RULE 0:
+						//	if dist from lookhit to player < 10.0 then no movement
+						if( g_lookHit.point.distanceTo(g_myPlayer.position) < 20.0 )
+						{
+						//	console.log("RULE 0");
+							g_myPlayer.userData["direction"] = "";
+						}
+						else if( Math.abs(vec.x) <= Math.abs(vec.z) )
+						{
+							// RULE 1:
+							//	if abs(x) <= abs(z) then it is VERTICAL MOVEMENT
+							if( vec.z >= 0 )
+								g_myPlayer.userData["direction"] = "down";
+							else
+								g_myPlayer.userData["direction"] = "up";
+						}
+						else if( Math.abs(vec.x) > Math.abs(vec.z) )
+						{
+							// RULE 2:
+							//	if abs(y) > abs(z) then it is HORIZONTAL MOVEMENT
+							if( vec.x >= 0 )
+								g_myPlayer.userData["direction"] = "right";
+							else
+								g_myPlayer.userData["direction"] = "left";
+						}
+					}
+
+					this.userData.arrow = arrow;
+				}
+
+				this.userData.top = JumpStart.spawnInstance("models/GhostMan/player0top.obj", {"parent": this});
+				this.userData.bottom = JumpStart.spawnInstance("models/GhostMan/player0bottom.obj", {"parent": this});
+			}
+
+			function playerTick()
+			{
+				var bNeedsSync = false;
+				// If we do NOT have a target node, but we DO have a direction, then lets go there.
+				if( g_myPlayer === this && this.JumpStart.targetNode === -1 && this.userData.hasOwnProperty("direction") && this.userData.direction !== "" )
+				{
+					var node = g_map.userData.nodes[this.JumpStart.lastNode];
+					if( node.hasOwnProperty(this.userData.direction) )
+					{
+						this.JumpStart.targetNode = g_map.userData.nodes.indexOf(node[this.userData.direction]);
+						//console.log("Target node: " + this.JumpStart.targetNode);
+
+						var point = new THREE.Vector3().copy(node[this.userData.direction].point);
+						point.y = this.position.y;
+
+						this.up.set(0, 1, 0);
+						this.lookAt(point);
+
+						bNeedsSync = true;
+
+//						g_targetMarker = JumpStart.spawnInstance("models/GhostMan/player0.obj");
+//						g_targetMarker.position.copy(node[this.userData.direction].point).add(g_worldOffset);
+
+//						this.JumpStart.sync();
+					}
+				}
+
+				if( g_myPlayer === this && this.JumpStart.targetNode !== -1 )
+				{
+					var targetPoint = g_map.userData.nodes[this.JumpStart.targetNode].point;
+					targetPoint.y = g_map.position.y;
+					//console.log("targetPiont: " + JSON.stringify(targetPoint) + " vs " + JSON.stringify(this.position));
+					//this.position.distanceTo(targetPoint));
+					if( this.position.distanceTo(targetPoint) < 4.0 )
+					{
+						this.JumpStart.lastNode = this.JumpStart.targetNode;
+						this.JumpStart.targetNode = -1;
+						this.position.copy(targetPoint);
+
+						bNeedsSync = true;
+					}
+				}
+
+				if( g_myPlayer === this )
+				{
+					// Look for pills to eat
+					var i;
+					for( i = 0; i < g_bits.length; i++ )
+					{
+						if( this.position.distanceTo(g_bits[i].position) < 4 )
+						{
+							JumpStart.removeSyncedObject(g_bits[i]);
+
+							g_bits.splice(i, 1);
+							break;
+						}
+					}
+				}
+
+				if( bNeedsSync )
+					this.JumpStart.sync();
+
+				if( this.JumpStart.targetNode != -1 )
+				{
+					this.translateZ(100 * g_deltaTime);
+				}
+
+			}
+
+			function spinObject()
+			{
+				this.rotateY(1.0 * g_deltaTime);
+			}
+
+			function growObject()
+			{
+				this.scale.multiplyScalar(2.0);
+			}
+
+			function shrinkObject()
+			{
+				this.scale.multiplyScalar(0.5);
+			}
+
+			function highlightOnObject()
+			{
+				var myColor = new THREE.Color(1.5, 1.5, 1.5);
+				this.JumpStart.setTint(myColor);
+			}
+
+			function highlightOffObject()
+			{
+				var myColor = new THREE.Color(1.0, 1.0, 1.0);
+				this.JumpStart.setTint(myColor);
+			}
+
+			function hoverSpin()
+			{
+				if( g_hoveredObject === this )
+					this.rotateY(1.0 * g_deltaTime);
+			}
+
+			function prepJewel(isLocal)
+			{
+				console.log("spawned");
+				// Play a sound when this object is spawned.
+				// Use a different sound depending on if we created
+				// this object or somebody else did over the network.
+
+				if( isLocal )
+					JumpStart.playSound("sounds/JumpStart/trumpet", 0.5, false);
+				else
+					JumpStart.playSound("sounds/JumpStart/cashout", 0.5, false);
+			}
+		</script>
+	</body>
+</html>

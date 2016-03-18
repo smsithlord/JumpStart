@@ -30,6 +30,8 @@
 			// properties you want non-default values for.
 			var myOptions =
 			{
+				"showFPS": false,
+				"titleImageURL": "misc/gatorsmashertitle.png",
 				"legacyLoader": false,
 				"worldScale": 2.0,
 				"scaleWithEnclosure": true,
@@ -39,7 +41,7 @@
 				{
 					"lookAtOrigin": true,
 					"position": new THREE.Vector3(-5.0, 10.0, 30.0),
-					"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+					"translation": new THREE.Vector3(0.0, 55.0, 70.0)
 				},
 				"firebase":
 				{
@@ -67,8 +69,9 @@
 				// local client gets the onReady window-level callback!!
 
 				// You can think of precaching sounds as synchronous (but it's not)
-				JumpStart.precacheSound("sounds/JumpStart/trumpet");
-				JumpStart.precacheSound("sounds/JumpStart/cashout");
+				//JumpStart.precacheSound("sounds/JumpStart/trumpet");
+				//JumpStart.precacheSound("sounds/JumpStart/cashout");
+				JumpStart.precacheSound("sounds/TikiDrum/cymb0");
 
 				// Precache any models that your app needs (asynchronous)
 				var myModels = ["models/GatorSmasher/table.obj", "models/JumpStart/jewel.obj", "models/JumpStart/grass.obj", "models/GatorSmasher/smasher.obj", "models/GatorSmasher/croc.obj"];
@@ -131,6 +134,8 @@
 					gator.position.z += 4.0;
 					gator.position.x += 15.0;
 					gator.rotateY(-0.25);
+
+					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
 					gator.JumpStart.ownerId = "";
 					gator.JumpStart.active = false;
@@ -145,6 +150,7 @@
 					gator.position.z += 4.0;
 					gator.position.x -= 15.0;
 					gator.rotateY(0.25);
+					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
 					gator.JumpStart.ownerId = "";
 					gator.JumpStart.active = false;
@@ -159,6 +165,7 @@
 					gator.position.z += 6.0;
 					gator.position.x += 27.0;
 					gator.rotateY(-0.3);
+					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
 					gator.JumpStart.ownerId = "";
 					gator.JumpStart.active = false;
@@ -173,21 +180,49 @@
 					gator.position.z += 6.0;
 					gator.position.x -= 27.0;
 					gator.rotateY(0.3);
+					gator.JumpStart.originalPos = new THREE.Vector3().copy(gator.position);
 					gator.JumpStart.direction = 0;
 					gator.JumpStart.ownerId = "";
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 				}
 
-				var g_table = JumpStart.spawnInstance("models/GatorSmasher/table.obj");
+				g_table = JumpStart.spawnInstance("models/GatorSmasher/table.obj");
 				g_table.JumpStart.blocksLOS = false;
 
 				setTimeout(function()
 				{
+					var bHasActiveGator = false;
+					var i, gator;
+					for( i = 0; i < g_gators.length; i++ )
+					{
+						gator = g_gators[i];
+						if( gator.JumpStart.active )
+						{
+							console.log(gator.JumpStart.active);
+							bHasActiveGator = true;
+							break;
+						}
+					}
+
+					if( !bHasActiveGator )
+					{
+						var nextGator = getNextGator();
+
+						if( nextGator )
+						{
+							nextGator.JumpStart.direction = 1;
+							nextGator.JumpStart.ownerId = g_localUser.userId;
+							nextGator.JumpStart.active = true;
+							nextGator.JumpStart.sync();
+						}
+					}
+					/*
 					g_gators[1].JumpStart.direction = 1;
 					g_gators[1].JumpStart.ownerId = g_localUser.userId;
 					g_gators[1].JumpStart.active = true;
 					g_gators[1].JumpStart.sync();
+					*/
 
 					if( g_mySmasher )
 						return;
@@ -200,12 +235,21 @@
 					g_mySmasher.JumpStart.ownerId = g_localUser.userId;
 
 					g_mySmasher.position.z += 100.0;
+
+					g_mySmasher.JumpStart.lerpSync = true;
+					g_mySmasher.userData.lastSyncPos = new THREE.Vector3().copy(g_mySmasher.position);
+					g_mySmasher.userData.lastSyncTime = g_clock.elapsedTime;
+
+					g_mySmasher.JumpStart.numSwings = 0;
+
 					g_mySmasher.JumpStart.sync();
 				}, 2000);
 
 				// Start the simulation
 				JumpStart.run();
 			}
+
+			var g_table = null;
 
 			function gatorSpawn(isLocal)
 			{
@@ -237,10 +281,26 @@
 				if( !this.JumpStart.active )
 					return;
 
-				this.JumpStart.direction = -1;
-				this.JumpStart.ownerId = g_localUser.userId;
-				this.JumpStart.active = false;
-				this.JumpStart.sync();
+				var dist = new THREE.Vector3();
+				dist.copy(g_mySmasher.position);
+				dist.sub(this.position);
+
+				if(dist.length() > 40.0)
+					return;
+
+				gatorSmashAction();
+
+				var _this = this;
+				setTimeout(function()
+				{
+					if( !_this.JumpStart.active )
+						return;
+
+					_this.JumpStart.direction = -1;
+					_this.JumpStart.ownerId = g_localUser.userId;
+					_this.JumpStart.active = false;
+					_this.JumpStart.sync();
+				}, 300);
 			}
 
 			var offsetDelta = 16.0;
@@ -277,6 +337,7 @@
 
 					if( this.JumpStart.ownerId === g_localUser.userId )
 					{
+						this.position.copy(this.JumpStart.originalPos);
 						this.JumpStart.active = false;
 						this.JumpStart.direction = 0;
 						this.JumpStart.ownerId = "";
@@ -306,7 +367,16 @@
 			function smasherSpawn(isLocal)
 			{
 				if( this.JumpStart.ownerId === g_localUser.userId && !g_mySmasher )
+				{
 					g_mySmasher = this;
+//					g_mySmasher.JumpStart.setTint(new THREE.Color(0.0, 1.0, 0.0));
+//					var myColor = new THREE.Color(1.5, 1.5, 1.5);
+//					g_mySmasher.JumpStart.setTint(myColor);
+				}
+
+				this.userData.prevSwings = this.JumpStart.numSwings;
+				this.userData.oldPosition = new THREE.Vector3().copy(this.position);
+				this.userData.stale = 0;
 
 				this.userData.swingRot = 0;
 				this.userData.maxSwingRot = Math.PI / 3.0;
@@ -315,71 +385,240 @@
 			var smashSpeed = 4.0;
 			function smasherTick()
 			{
-				var cameraPos = new THREE.Vector3();
-				if( JumpStart.webMode )
-					cameraPos.copy(g_camera.position);
-				else
+				if( this.userData.prevSwings !== this.JumpStart.numSwings )
 				{
-					var joint = g_localUser.trackingSkeleton.getJoint("Eye");
+					this.userData.prevSwings = this.JumpStart.numSwings;
 
-					// Scale it
-					cameraPos.copy(joint.position).multiplyScalar(1/g_worldScale);
+					var _this = this;
+					setTimeout(function()
+					{
+						JumpStart.playSound("sounds/GatorSmasher/ow", 0.5, false);
+					}, 300);
 				}
 
-				if( g_localUser.lookHit )
+				if( this === g_mySmasher )
 				{
-					this.position.copy(cameraPos);
-					this.lookAt(g_localUser.lookHit.scaledPoint);
-
+					var cameraPos = new THREE.Vector3();
 					if( JumpStart.webMode )
-					{
-						this.translateZ(50.0);
-						this.translateY(-10.0);
-					}
+						cameraPos.copy(g_camera.position);
 					else
 					{
-						this.translateZ(20.0);
-						this.translateY(-5.0);
+						var joint = g_localUser.trackingSkeleton.getJoint("Eye");
+
+						// Scale it
+						cameraPos.copy(joint.position).multiplyScalar(1/g_worldScale);
 					}
 
-					this.lookAt(g_localUser.lookHit.scaledPoint);
-					this.rotateX(Math.PI / 2.0);
-				}
-
-				if( this.JumpStart.swinging === 1 )
-					this.userData.swingRot += smashSpeed * g_deltaTime;
-				else if( this.JumpStart.swinging === -1 )
-					this.userData.swingRot -= smashSpeed * g_deltaTime;
-
-				var needsSync = false;
-				if( this.userData.swingRot > this.userData.maxSwingRot )
-				{
-					this.userData.swingRot = this.userData.maxSwingRot;
-
-					if( this.JumpStart.ownerId === g_localUser.userId )
+					if( g_localUser.lookHit )
 					{
-						this.JumpStart.swinging = -1;
-						needsSync = true;
-					}
-				}
-				else if( this.userData.swingRot < 0 )
-				{
-					this.userData.swingRot = 0;
+						this.position.copy(cameraPos);
+						this.lookAt(g_localUser.lookHit.scaledPoint);
 
-					if( this.JumpStart.ownerId === g_localUser.userId )
+						if( JumpStart.webMode )
+						{
+							this.translateZ(50.0);
+							this.translateY(-10.0);
+						}
+						else
+						{
+							this.translateZ(20.0);
+							this.translateY(-5.0);
+						}
+
+						this.lookAt(g_localUser.lookHit.scaledPoint);
+						this.rotateX(Math.PI / 2.0);
+					}
+
+					var needsSync = false;
+
+					if( this.JumpStart.swinging === 1 )
+						this.userData.swingRot += smashSpeed * g_deltaTime;
+					else if( this.JumpStart.swinging === -1 )
+						this.userData.swingRot -= smashSpeed * g_deltaTime;
+					else if( g_table )
 					{
-						this.JumpStart.swinging = 0;
-						needsSync = true;
+						var testVec = new THREE.Vector3().copy(g_table.position).sub(cameraPos);
+
+	//					console.log(testVec.length());
+						if( (!this.userData.hasOwnProperty("invisible") || !this.userData.invisible ) && testVec.length() > 150.0 )
+						{
+							this.userData.invisible = true;
+							this.JumpStart.setVisible(false);
+							this.scale.set(0.0001, 0.0001, 0.0001);
+							this.JumpStart.sync();
+							return;
+						}
+						else if( this.userData.hasOwnProperty("invisible") && this.userData.invisible && testVec.length() <= 150.0)
+						{
+							this.scale.set(1, 1, 1);
+							this.JumpStart.setVisible(true);
+							this.userData.invisible = false;
+							needsSync = true;
+						}
+					}
+
+					if( this.userData.swingRot > this.userData.maxSwingRot )
+					{
+						this.userData.swingRot = this.userData.maxSwingRot;
+
+						if( this.JumpStart.ownerId === g_localUser.userId )
+						{
+							this.JumpStart.swinging = -1;
+							needsSync = true;
+						}
+					}
+					else if( this.userData.swingRot < 0 )
+					{
+						this.userData.swingRot = 0;
+
+						if( this.JumpStart.ownerId === g_localUser.userId )
+						{
+							this.JumpStart.swinging = 0;
+							needsSync = true;
+						}
+					}
+
+					if( this.JumpStart.swinging !== 0 )
+					{
+						this.rotateX(this.userData.swingRot);
+					}
+
+					if( needsSync )
+						this.JumpStart.sync();
+				}
+				else
+				{
+					// LERP us if we are not our own drum!
+					doScaleLerp.call(this);
+					doRotationLerp.call(this);
+					doPositionLerp.call(this);
+
+					if( this.userData.stale !== -1 && this.userData.oldPosition.equals(this.position) )
+						this.userData.stale += g_deltaTime;
+					else
+					{
+						this.userData.oldPosition.copy(this.position);
+						this.userData.stale = 0;
+					}
+
+					if(this.userData.stale > 10.0 )
+					{
+						this.userData.stale = -1;
+						this.scale.set(0.0001, 0.0001, 0.0001);
+						this.position.z = -9999999;
 					}
 				}
+			}
 
-				if( this.JumpStart.swinging !== 0 )
+			function doScaleLerp()
+			{
+				if( this.userData.hasOwnProperty("targetScaleLerp") && this.userData.targetScaleLerp < 1.0 )
 				{
-					this.rotateX(this.userData.swingRot);
-				}
+					this.userData.targetScaleLerp += (1.0/this.userData.targetScaleLerpTime) * g_deltaTime;
 
-				if( needsSync )
-					this.JumpStart.sync();
+					var justFinished = false;
+					if( this.userData.targetScaleLerp >= 1.0 )
+					{
+						this.userData.targetScaleLerp = 1.0;
+						justFinished = true;
+					}
+
+					this.scale.lerpVectors(this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
+
+					if( justFinished )
+					{
+						if( this.userData.hasOwnProperty("targetScaleAnim") && this.userData.targetScaleAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetScaleAnim.shift();
+							if( !nextTarget.targetScaleOriginal )
+								nextTarget.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
+
+							// Set our new targets.
+							this.userData.targetScale.copy(nextTarget.targetScale);
+							this.userData.targetScaleOriginal.copy(nextTarget.targetScaleOriginal);
+							this.userData.targetScaleLerp = nextTarget.targetScaleLerp;
+							this.userData.targetScaleLerpTime = nextTarget.targetScaleLerpTime;
+						}
+					}
+				}
+			}
+
+			function doPositionLerp()
+			{
+				if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.targetPosLerp < 1.0 )
+				{
+					this.userData.targetPosLerp += (1.0/this.userData.targetPosLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetPosLerp >= 1.0 )
+					{
+						this.userData.targetPosLerp = 1.0;
+						justFinished = true;
+					}
+
+					this.position.lerpVectors(this.userData.targetPosOriginal, this.userData.targetPos, this.userData.targetPosLerp);
+
+					if( justFinished )
+					{
+						if( typeof this.userData.targetPosCallback === "function" )
+							this.userData.targetPosCallback.call(this);
+
+						this.userData.targetPosCallback = null;
+
+						if( this.userData.hasOwnProperty("targetPosAnim") && this.userData.targetPosAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetPosAnim.shift();
+							if( !nextTarget.targetPosOriginal )
+								nextTarget.targetPosOriginal = new THREE.Vector3().copy(this.position);
+
+							// Set our new targets.
+							this.userData.targetPos.copy(nextTarget.targetPos);
+							this.userData.targetPosOriginal.copy(nextTarget.targetPosOriginal);
+							this.userData.targetPosLerp = nextTarget.targetPosLerp;
+							this.userData.targetPosLerpTime = nextTarget.targetPosLerpTime;
+							if( typeof nextTarget.targetPosCallback === "function" )
+								this.userData.targetPosCallback = nextTarget.targetPosCallback;
+						}
+					}
+				}
+			}
+
+			function doRotationLerp()
+			{
+				if( this.userData.hasOwnProperty("targetRotLerp") && this.userData.targetRotLerp < 1.0 )
+				{
+					this.userData.targetRotLerp += (1.0/this.userData.targetRotLerpTime) * g_deltaTime;
+
+					var justFinished = false;
+					if( this.userData.targetRotLerp >= 1.0 )
+					{
+						this.userData.targetRotLerp = 1.0;
+						justFinished = true;
+					}
+
+					var myQuaternionA = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
+					var myQuaternionB = new THREE.Quaternion().setFromEuler(new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
+
+					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
+					this.quaternion.copy(myQuaternionA);
+			//		this.rotation.lerpVectors(this.userData.targetRotOriginal, this.userData.targetRot, this.userData.targetRotLerp);
+
+					if( justFinished )
+					{
+						if( this.userData.hasOwnProperty("targetRotAnim") && this.userData.targetRotAnim.length > 0 )
+						{
+							var nextTarget = this.userData.targetRotAnim.shift();
+							if( !nextTarget.targetRotOriginal )
+								nextTarget.targetRotOriginal = new THREE.Vector3().copy(this.rotation);
+
+							// Set our new targets.
+							this.userData.targetRot.copy(nextTarget.targetRot);
+							this.userData.targetRotOriginal.copy(nextTarget.targetRotOriginal);
+							this.userData.targetRotLerp = nextTarget.targetRotLerp;
+							this.userData.targetRotLerpTime = nextTarget.targetRotLerpTime;
+						}
+					}
+				}
 			}
 
 			// Window-level callback for onTick event
@@ -389,11 +628,12 @@
 			}
 
 			// Window-level callback for onCursorDown event
-			function onCursorDown()
+			function gatorSmashAction()
 			{
 				// do work
 				if( g_mySmasher && g_mySmasher.JumpStart.swinging === 0 )
 				{
+					g_mySmasher.JumpStart.numSwings++;
 					g_mySmasher.JumpStart.swinging = 1;
 					g_mySmasher.JumpStart.sync();
 				}

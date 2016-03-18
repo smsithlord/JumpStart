@@ -1,0 +1,2073 @@
+<!-- Powered by the JumpStart Game Engine -->
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>AstroCatastrophe</title>
+
+		<!-- AltspaceVR SDK Core Includes -->
+		<script src="http://sdk.altvr.com/libs/three.js/r73/build/three.min.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/OBJMTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/MTLLoader.js"></script>
+		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
+
+		<!-- JumpStart SDK Additional Includes -->
+		<script src="FirebaseSync.js"></script>
+		<script src="AltOBJMTLLoader.js"></script>
+
+		<!-- JumpStart Styles -->
+		<link rel="stylesheet" type="text/css" href="myStyle.css">
+
+		<style>
+			#waveDisplay
+			{
+				position: absolute;
+				top: 120px;
+				font-size: 30px;
+				font-weight: bold;
+				font-family: Arial;
+				width: 100%;
+				text-align: center;
+			}
+		</style>
+	</head>
+
+	<body>
+
+		<img src="misc/astrocontrols.png" id="controls" style="display: none; position: fixed; top: 150px; left: 10px; width: 200px;" />
+
+		<div id="waveDisplay"></div>
+
+		<div style="position: absolute; top: 0; left: 0; width: 640px; height: 240px; display: none;" id="buildmenu">
+			<img src="misc/AstroCatastrophe/buildslate.jpg" style="position: absolute; top: 0; left: 0;" />
+			<img id="manualgun" src="misc/AstroCatastrophe/manualgun.jpg" style="position: absolute; top: 86px; left: 68px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/manualgun_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/manualgun.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawn('manualgun'); }" />
+			<img id="autogun" src="misc/AstroCatastrophe/autogun.jpg" style="position: absolute; top: 86px; left: 193px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/autogun_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/autogun.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawn('autogun'); }" />
+			<img id="missile" src="misc/AstroCatastrophe/missile_disabled.jpg" style="position: absolute; top: 86px; left: 320px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/missile_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/missile.jpg'; }" />
+			<img id="miner" src="misc/AstroCatastrophe/miner.jpg" style="position: absolute; top: 86px; left: 447px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/miner_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/miner.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawnMiner(); destroyBuildMenu(); }" />
+		</div>
+
+		<table id="gameover" style="background-color: rgba(0, 0, 0, 0.5); width: 100%; height: 100%; display: none;" onclick="window.location='AstroCatastrophe.html?random=' + Math.random();">
+			<tr><td align="center" valign="center">
+				<font style="font-size: 100px; font-weight: 900; font-family: Arial; text-shadow: -1px -1px 0 #0077aa, 1px -1px 0 #0077aa, -1px 1px 0 #0077aa, 1px 1px 0 #0077aa;">GAME OVER</font><br />
+				<font style="font-size: 50px; font-weight: 900; font-family: Arial;">(CLICK TO RETRY)</font>
+			</td></tr>
+		</table>
+
+		<!-- JumpStart SDK Core Include -->
+		<script src="JumpStart.js"></script>
+
+		<!-- Window-Level Event Callbacks -->
+		<script>
+			var g_waveDisplayElem = document.getElementById("waveDisplay");
+			var g_spawning = null;
+
+			// Configure JumpStart.  You really only need to list
+			// properties you want non-default values for.
+			var myOptions =
+			{
+				"showFPS": false,
+				"legacyLoader": false,
+				"worldScale": 1.0,
+				"scaleWithEnclosure": false,
+				"showCrosshair": false,
+				"showCursorPlanes": false,
+				"titleImageURL": "misc/astrotitle.png",
+				"camera":
+				{
+					"lookAtOrigin": true,
+					"position": new THREE.Vector3(-5.0, 10.0, 30.0),
+					"translation": new THREE.Vector3(40.0, 30.0, 180.0)
+				},
+				"firebase":
+				{
+					"rootUrl": "https://jump-start.firebaseio.com/",
+					"appId": "JumpStart",
+					"suppressPersonalBrowser": true
+				}
+			};
+
+			JumpStart.setOptions(myOptions);
+
+			// Window-level callback for onPrecache event
+			function onPrecache()
+			{
+//				var allDataRef = JumpStart.firebaseSync.firebaseRoot;
+//				allDataRef.remove();
+//				return;
+
+				if( JumpStart.personalBrowser || !JumpStart.requestedRoomId )
+				{
+					JumpStart.doneCaching();
+					return;
+				}
+
+				// Precaching is important with networked apps!!
+				// Networked objects might get spawned before the
+				// local client gets the onReady window-level callback!!
+
+				// You can think of precaching sounds as synchronous (but it's not)
+				JumpStart.precacheSound("sounds/SpacePilot/laser2");
+				JumpStart.precacheSound("sounds/SpacePilot/laser0");
+				JumpStart.precacheSound("sounds/SpacePilot/explosion0");
+				JumpStart.precacheSound("sounds/SpacePilot/explosion1");
+				//JumpStart.precacheSound("sounds/JumpStart/trumpet");
+				//JumpStart.precacheSound("sounds/JumpStart/cashout");
+
+				// Precache any models that your app needs (asynchronous)
+				var myModels = [
+					"models/JumpStart/jewel.obj",
+					"models/JumpStart/grass.obj",
+					"models/AstroCatastrophe/capitol.obj",
+					"models/AstroCatastrophe/crystals.obj",
+					"models/AstroCatastrophe/asteroid.obj",
+					"models/AstroCatastrophe/manualgun.obj",
+					"models/AstroCatastrophe/manualgun_base.obj",
+					"models/AstroCatastrophe/manualgun_tower.obj",
+					"models/AstroCatastrophe/manualgun_barrels.obj",
+					"models/AstroCatastrophe/autogun.obj",
+					"models/AstroCatastrophe/autogun_base.obj",
+					"models/AstroCatastrophe/autogun_tower.obj",
+					"models/AstroCatastrophe/autogun_barrel.obj",
+					"models/AstroCatastrophe/missile.obj",
+					"models/SpacePilot/enemy_laser.obj",
+					"models/SpacePilot/explosion.obj",
+					"models/AstroCatastrophe/gold.obj",
+					"models/AstroCatastrophe/miner.obj",
+					"models/JumpStart/reset.obj"
+				];
+
+				JumpStart.loadModels(myModels).then(function() {
+
+					// All assets cached.
+					JumpStart.doneCaching();
+				});
+			}
+
+			//var g_marker = null;
+
+			var g_resetButton = null;
+
+			var g_rayCastObjects = new Array();
+			var g_crystals = null;
+			var g_asteroid = null;
+			var g_capitol = null;
+			// Window-level callback for onReady event
+			function onReady()
+			{
+				if( !JumpStart.requestedRoomId )
+					return;
+
+				// Do nothing if we are not in an enclosure yet.
+				if( JumpStart.personalBrowser )
+				{
+					var loadingRingElem = document.getElementById("loadingRing");
+					if( loadingRingElem )
+					{
+						loadingRingElem.parentNode.removeChild(loadingRingElem);
+					}
+
+					var loadingLogoElem = document.getElementById("loadingLogo");
+					if( loadingLogoElem )
+					{
+						loadingLogoElem.src = "misc/beamnow.png";
+					}
+
+					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
+					return;
+				}
+
+				g_rayCastObjects.push(JumpStart.floorPlane);
+
+				// Only the 1st user needs to create the networked object
+				if( g_localUser.firstUser )
+				{
+					/*
+					// Spawn a jewel block
+					var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
+
+					// Do something each render tick
+					myInstance.JumpStart.onTick["spinObject"] = spinObject;
+
+					// Do something on spawn
+					myInstance.JumpStart.onSpawn["prepJewel"] = prepJewel;
+
+					// Do something when it's clicked
+					myInstance.JumpStart.onCursorDown["growObject"] = growObject;
+					myInstance.JumpStart.onCursorUp["shrinkObject"] = shrinkObject;
+
+					// Do something when it's hovered over
+					myInstance.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+					myInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+
+					// Sync this object's state to the network
+					myInstance.JumpStart.sync();
+
+
+
+					// Spawn a grass block
+					var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
+
+					// Adjust the Object3D's position and scale
+					var offset = new THREE.Vector3(100.0, 0.0, 0.0);
+					myOtherInstance.position.add(offset);
+					myOtherInstance.scale.multiplyScalar(2.0);
+
+					// Must block line-of-sight to be hoverable!!
+					myOtherInstance.JumpStart.blocksLOS = true;	// TRUE by default anyways
+
+					// Do something when it's hovered over
+					myOtherInstance.JumpStart.onCursorEnter["highlightOnObject"] = highlightOnObject;
+					myOtherInstance.JumpStart.onCursorLeave["highlightOffObject"] = highlightOffObject;
+
+					// Make the grass spin only when hovered
+					myOtherInstance.JumpStart.onTick["hoverSpin"] = hoverSpin;
+
+					// Sync this object's state to the network
+					myOtherInstance.JumpStart.sync();
+
+					*/
+
+					/*
+					g_buildMenu = JumpStart.spawnInstance();
+					g_buildMenu.translateY(50.0);
+					g_buildMenu.JumpStart.onSpawn["scoreSpawn"] = scoreSpawn;
+					g_buildMenu.JumpStart.onTick["scoreTick"] = scoreTick;
+					g_buildMenu.JumpStart.sync();
+					*/
+				}
+
+				/*
+					TOWER GUN:
+						5
+
+					SLOW RAY:
+						10
+
+					MISSLE:
+						20
+
+					MINER:
+						30
+				*/
+
+				setTimeout(function()
+				{
+					//g_marker = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_base.obj");
+
+					if( !g_capitol )
+					{
+						g_capitol = JumpStart.spawnInstance(null);
+						g_capitol.position.x = -(g_enclosure.innerWidth / 2.0) / g_worldScale;
+						g_capitol.position.z = -(g_enclosure.innerWidth / 2.0) / g_worldScale;
+						g_capitol.translateX(60);
+						g_capitol.translateZ(60);
+						g_capitol.JumpStart.health = 1000;
+						g_capitol.JumpStart.asteroidHealth = 100.0;
+						g_capitol.JumpStart.money = 24;
+						g_capitol.JumpStart.slowCount = 0;
+						g_capitol.JumpStart.onSpawn["capitolSpawn"] = capitolSpawn;
+						g_capitol.JumpStart.onTick["capitolTick"] = capitolTick;
+						g_capitol.JumpStart.ownerId = g_localUser.userId;
+						g_capitol.JumpStart.wins = 0;
+						g_capitol.JumpStart.sync();
+
+						g_asteroid = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+						g_asteroid.JumpStart.ownerId = g_localUser.userId;
+						g_asteroid.scale.set(1, 1, 1).multiplyScalar(0.5);
+						g_asteroid.JumpStart.radius = 50.0;
+						g_asteroid.position.y = (g_enclosure.innerHeight / 2.0) / g_worldScale;
+						g_asteroid.position.x = (g_enclosure.innerWidth / 2.0) / g_worldScale;
+						g_asteroid.position.z = (g_enclosure.innerWidth / 2.0) / g_worldScale;
+						g_asteroid.JumpStart.onSpawn["asteroidSpawn"] = asteroidSpawn;
+						g_asteroid.JumpStart.onTick["asteroidTick"] = asteroidTick;
+						g_asteroid.JumpStart.sync();
+
+						g_crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+						g_crystals.position.x += 120.0;
+						g_crystals.position.z += 20.0;
+						g_crystals.JumpStart.ownerId = g_localUser.userId;
+						g_crystals.JumpStart.onSpawn["crystalsSpawn"] = crystalsSpawn;
+						g_crystals.JumpStart.sync();
+
+						spawnMiner(true);
+					}
+
+					//var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+					/*
+					var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+					crystals.position.x += 120.0;
+					crystals.position.z += 20.0;
+					crystals.scale.set(0.5, 0.5, 0.5);
+
+					crystals = JumpStart.spawnInstance("models/AstroCatastrophe/miner.obj");
+					crystals.position.x += 120.0;
+
+					crystals.position.z += 100.0;
+*/
+					//g_asteroid = asteroid;
+					//g_asteroid.translate.z(160.0);
+					//g_asteroid.scale.set(0.4, 0.4, 0.4);
+
+					g_resetButton = JumpStart.spawnInstance("models/JumpStart/reset.obj");
+					g_resetButton.translateX(g_worldOffset.y - (g_worldOffset.y / 8.0));
+					g_resetButton.translateZ(-g_worldOffset.y + (g_worldOffset.y / 8.0));
+					g_resetButton.rotateY(-Math.PI / 2.0);
+
+					g_rayCastObjects.push(g_resetButton);
+					g_resetButton.JumpStart.onCursorDown = function()
+					{
+						window.location = "AstroCatastrophe.html?random=" + Math.random();
+					};
+					//g_resetButton.JumpStart.sync();
+				}, 1000);
+				//asteroid.position.z += 50.0;
+
+/*
+				// Spawn a virtual mouse pad.
+				// This is an invisible plane that the user's 3D cursor will collide with.
+				// More details on how to use these in future examples! (sry)
+				var instance = JumpStart.spawnCursorPlane({
+					"position": new THREE.Vector3(-40, 10.0, 0).add(g_worldOffset),
+					"rotation": new THREE.Vector3(0, 0, 0),
+					"width": "33.3",
+					"height": "33.3"
+				});
+
+*/
+
+/*
+var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+					crystals.position.x += 120.0;
+					crystals.position.z += 20.0;
+					crystals.scale.set(0.5, 0.5, 0.5);
+					*/
+
+				document.getElementById("controls").style.display = "block";
+
+				// Start the simulation
+				JumpStart.run();
+
+				//g_rayCastObjects.push(JumpStart.floorPlane);
+//				g_rayCastObjects.push(JumpStart.roofPlane);
+//				g_rayCastObjects.push(JumpStart.northPlane);
+//				g_rayCastObjects.push(JumpStart.southPlane);
+//				g_rayCastObjects.push(JumpStart.eastPlane);
+//				g_rayCastObjects.push(JumpStart.westPlane);
+			}
+
+			// Window-level callback for onTick event
+			var g_attract = document.body;
+			function onTick()
+			{
+				if( !JumpStart.webMode )
+				{
+					if( g_localUser && g_localUser.lookOrigin && g_localUser.lookOrigin.z < 0 && (!g_attract.hasOwnProperty("mirrored") || !g_attract.mirrored) )
+					{
+						g_attract.style.webkitTransform = "scaleX(-1)";
+						g_attract.style.filter = "FlipH";
+						g_attract.mirrored = true;
+					}
+					else if( g_localUser.lookOrigin.z >= 0 && g_attract.hasOwnProperty("mirrored") && g_attract.mirrored )
+					{
+						g_attract.style.webkitTransform = "none";
+						g_attract.style.filter = "none";
+						g_attract.mirrored = false;
+					}
+				}
+
+				if( !g_capitol )
+					return;
+
+				// do work
+				if( g_capitol.userData.isDirty )
+				{
+					g_capitol.JumpStart.sync();
+					g_capitol.userData.isDirty = false;
+				}
+			}
+
+			// Window-level callback for onCursorDown event
+			function onCursorDown()
+			{
+				// do work
+				if( g_lookHit && g_buildMenu && g_buildMenu.userData.active && g_lookHit.object === g_buildMenu.userData.cursorPlane )
+				{
+					// Figure out which button was clicked
+					var buildMenuElem = document.getElementById("buildmenu");
+					var imgElems = buildMenuElem.getElementsByTagName("img");
+
+					var needsUpdate = false;
+					var i, elem;
+					for( i = 0; i < buildMenuElem.images.length; i++ )
+					{
+						if( buildMenuElem.images[i].elem.hovering === true )
+						{
+							elem = buildMenuElem.images[i].elem;
+
+							if( elem.onclick )
+								elem.onclick.call(elem);
+
+							break;
+						}
+					}
+				}
+				else if( g_lookHit && g_lookHit.object === JumpStart.floorPlane && g_spawning )
+				{
+					if( g_spawning.type === "manualgun" )
+					{
+						var manualgun = JumpStart.spawnInstance();//"models/AstroCatastrophe/manualgun_base.obj");
+						manualgun.JumpStart.onSpawn["manualgunSpawn"] = manualgunSpawn;
+						manualgun.JumpStart.onTick["manualgunTick"] = manualgunTick;
+						manualgun.position.copy(g_spawning.object.position);
+						manualgun.JumpStart.ownerId = g_localUser.userId;
+						manualgun.JumpStart.shotsFired = 0;
+
+						manualgun.userData.cooldown = 0;
+
+						// FIXME: DEBUG ONLY!! (remove after network syncing is added!!)
+						//manualgun.JumpStart.onSpawn["manualgunSpawn"].call(manualgun);
+						manualgun.JumpStart.sync();
+
+						doneSpawning();
+					}
+					else if( g_spawning.type === "autogun" )
+					{
+						var autogun = JumpStart.spawnInstance();
+						autogun.JumpStart.onSpawn["autogunSpawn"] = autogunSpawn;
+						autogun.JumpStart.onTick["autogunTick"] = autogunTick;
+						autogun.position.copy(g_spawning.object.position);
+						autogun.JumpStart.ownerId = g_localUser.userId;
+						autogun.JumpStart.shotsFired = 0;
+
+						autogun.userData.cooldown = 0;
+
+						autogun.JumpStart.sync();
+						doneSpawning();
+					}
+
+					//console.log(g_spawning);
+					/*
+					g_spawning = {
+						"type": type,
+						"object": manualgun
+					};
+					*/
+				}
+			}
+
+			// Window-level callback for onCursorUp event
+			function onCursorUp()
+			{
+				// do work
+			}
+		</script>
+
+		<!-- Custom Object-Level Event Callbacks -->
+		<script>
+			function crystalsSpawn()
+			{
+				if( !g_crystals )
+					g_crystals = this;
+			}
+
+			function spawnMiner(force)
+			{
+				if( g_capitol.JumpStart.money >= 30 || (typeof force !== "undefined" && force) )
+				{
+					var miner = JumpStart.spawnInstance("models/AstroCatastrophe/miner.obj");
+					miner.position.copy(g_capitol.position);
+					miner.JumpStart.ownerId = g_localUser.userId;
+					miner.JumpStart.onSpawn["minerSpawn"] = minerSpawn;
+					miner.JumpStart.onTick["minerTick"] = minerTick;
+					miner.JumpStart.destination = new THREE.Vector3().copy(miner.position);
+					miner.JumpStart.holding = false;
+					miner.userData.cooldown = 0;
+					miner.JumpStart.sync();
+
+					if( g_capitol.JumpStart.money >= 30 )
+					{
+						g_capitol.JumpStart.money = parseInt(g_capitol.JumpStart.money) - 30;
+
+						if( g_capitol.JumpStart.ownerId === g_localUser.userId )
+							g_capitol.userData.isDirty = true;
+						else
+							g_capitol.JumpStart.sync();
+					}
+				}
+			}
+
+			function minerSpawn()
+			{
+				if( this.JumpStart.ownerId === g_localUser.userId && !this.userData.hasOwnProperty("cooldown") )
+					this.userData.cooldown = Math.random() * 3.0;
+				else
+					this.userData.cooldown = 0;
+
+				this.userData.holdObject = null;
+				this.userData.oldHolding = this.JumpStart.holding;
+			}
+
+			function minerTick()
+			{
+				if( !g_capitol || !g_crystals )
+					return;
+
+				if( this.userData.cooldown > 0 )
+				{
+					this.userData.cooldown -= g_deltaTime;
+					return;
+				}
+
+				if( this.JumpStart.holding !== this.userData.oldHolding )
+				{
+					if( this.JumpStart.holding )
+					{
+						var object = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj", {"parent": this});
+						object.scale.set(0.5, 0.5, 0.5);
+						object.translateZ(15.0);
+						object.translateY(6.0);
+
+						this.userData.holdObject = object;
+					}
+					else
+					{
+						this.remove(this.userData.holdObject);
+						this.userData.holdObject = null;
+					}
+				}
+
+				this.userData.oldHolding = this.JumpStart.holding;
+
+				//if( this.position.equals(this.JumpStart.destination) )
+				if( this.position.distanceTo(this.JumpStart.destination) < 50.0 )
+				{
+					if( this.JumpStart.ownerId === g_localUser.userId )
+					{
+						//if( this.position.equals(g_capitol.position) )
+						if( this.position.distanceTo(g_capitol.position) < this.position.distanceTo(g_crystals.position) )
+						{
+							var destination = new THREE.Vector3().copy(g_crystals.position);
+							destination.y = this.position.y;
+
+							this.JumpStart.destination.copy(destination);
+							this.JumpStart.holding = false;
+							this.lookAt(this.JumpStart.destination);
+							this.JumpStart.sync();
+
+							g_capitol.JumpStart.money = parseInt(g_capitol.JumpStart.money) + 1;
+							g_capitol.userData.isDirty = true;
+						}
+						else
+						{
+//							var destination = new THREE.Vector3().copy(g_capitol.position);
+//							destination.y = this.position.y;
+
+//							var targetDestination = new THREE.Vector3().copy(destination);
+//							targetDestination.sub(this.position);
+//							targetDestination.multiplyScalar(0.6);
+//							targetDestination.add(this.position);
+//							targetDestination.y = this.position.y;
+
+//							this.JumpStart.destination.copy(targetDestination);
+							this.JumpStart.destination.copy(g_capitol.position);
+							this.JumpStart.holding = true;
+							this.lookAt(this.JumpStart.destination);
+							this.JumpStart.sync();
+						}
+					}
+				}
+				else
+				{
+//					if( this.position.distanceTo(this.JumpStart.destination) < 10.0 )
+//						this.position.copy(this.JumpStart.destination);
+//					else
+						this.translateZ(70.0 * g_deltaTime);
+				}
+			}
+
+			function asteroidSpawn()
+			{
+				if( !g_asteroid )
+					g_asteroid = this;
+			}
+
+			var g_manualgunElem = document.getElementById("manualgun");
+			var g_autogunElem = document.getElementById("autogun");
+			var g_missileElem = document.getElementById("missile");
+			var g_minerElem = document.getElementById("miner");
+			var gameOverElem = document.getElementById("gameover");
+			function capitolTick()
+			{
+				if( this.userData.oldWins !== this.JumpStart.wins )
+				{
+					DestroyAsteroid();
+
+					g_waveDisplayElem.innerHTML = "Asteroids Destroyed: " + this.JumpStart.wins;
+				}
+				
+				this.userData.oldWins = this.JumpStart.wins;
+
+				if( this.userData.oldMoney !== this.JumpStart.money || this.userData.oldHealth !== this.JumpStart.health )
+				{
+					if( this.JumpStart.money < 5 && g_manualgunElem.src.indexOf("_disabled.jpg") < 0 )
+						g_manualgunElem.src = "misc/AstroCatastrophe/manualgun_disabled.jpg";
+					else if( this.JumpStart.money >= 5 && g_manualgunElem.src.indexOf("_disabled.jpg") >= 0 )
+						g_manualgunElem.src = "misc/AstroCatastrophe/manualgun.jpg";
+
+					if( this.JumpStart.money < 10 && g_autogunElem.src.indexOf("_disabled.jpg") < 0 )
+						g_autogunElem.src = "misc/AstroCatastrophe/autogun_disabled.jpg";
+					else if( this.JumpStart.money >= 10 && g_autogunElem.src.indexOf("_disabled.jpg") >= 0 )
+						g_autogunElem.src = "misc/AstroCatastrophe/autogun.jpg";
+
+					if( this.JumpStart.money < 20 && g_missileElem.src.indexOf("_disabled.jpg") < 0 )
+						g_missileElem.src = "misc/AstroCatastrophe/missile_disabled.jpg";
+//					else if( this.JumpStart.money >= 20 && g_missileElem.src.indexOf("_disabled.jpg") >= 0 )
+//						g_missileElem.src = "misc/AstroCatastrophe/missile.jpg";
+
+					if( this.JumpStart.money < 30 && g_minerElem.src.indexOf("_disabled.jpg") < 0 )
+						g_minerElem.src = "misc/AstroCatastrophe/miner_disabled.jpg";
+					else if( this.JumpStart.money >= 30 && g_minerElem.src.indexOf("_disabled.jpg") >= 0 )
+						g_minerElem.src = "misc/AstroCatastrophe/miner.jpg";
+
+					updateTexture();
+
+//					if( needsBuildRedraw )
+//						compositeMenu()
+				}
+				
+				this.userData.oldMoney = this.JumpStart.money;				
+				this.userData.oldHealth = this.JumpStart.health;
+
+				if( this.JumpStart.health <= 0 && gameOverElem.style.display !== "table" )
+					gameOverElem.style.display = "table";
+				else if( this.JumpStart.health > 0 && gameOverElem.style.display !== "none" )
+					gameOverElem.style.display = "none";
+/*
+				if( this.userData.isDirty )
+				{
+					this.JumpStart.sync();
+					this.userData.isDirty = false;
+				}
+				*/
+			}
+
+			function capitolSpawn()
+			{
+				if( !g_capitol )
+					g_capitol = this;
+
+				this.userData.oldWins = this.JumpStart.wins;
+				this.userData.oldMoney = this.JumpStart.money;
+				this.userData.oldHealth = this.JumpStart.health;
+				this.userData.isDirty = false;
+
+				var capitolBuilding = JumpStart.spawnInstance("models/AstroCatastrophe/capitol.obj", {parent: this});
+				//console.log(JumpStart.worldScale);
+				//capitolBuilding.scale.multiplyScalar(1 / JumpStart.worldScale);
+				//capitolBuilding.scale.set(1, 1, 1);
+				g_rayCastObjects.push(capitolBuilding);
+
+				capitolBuilding.JumpStart.onCursorDown = function()
+				{
+					if( !g_spawning )
+					{
+						if( g_buildMenu && g_buildMenu.userData.active )
+							destroyBuildMenu();
+						else
+							createBuildMenu();
+					}
+					else
+					{
+						// FIXME: Need to refund the money too? only if it's alreayd deducted!
+						g_spawning.price = 0;
+						doneSpawning();
+					}
+				};
+
+				var scoreboard = JumpStart.spawnInstance(null);
+				scoreboard.position.copy(this.position);
+				scoreboard.rotation.copy(this.rotation);
+				scoreboard.translateY(56.0);
+
+				var geometry = new THREE.BoxGeometry(60, 6.5, 0);
+				var material;
+
+				// create a canvas element
+				var scoreCanvas = document.createElement('canvas');
+				scoreCanvas.width = 550 * g_worldScale;
+				scoreContext = scoreCanvas.getContext('2d');
+				scoreContext.textAlign = "center";
+				scoreContext.textBaseline = "middle";
+				scoreContext.font = "Bold 100px Arial";
+				scoreContext.fillStyle = "rgba(255,0,0,0.95)";
+			   	scoreContext.fillText('8888', scoreCanvas.width / 2.0, scoreCanvas.height / 2.0);
+    
+				// canvas contents will be used for a texture
+				var scoreTexture = new THREE.Texture(scoreCanvas) 
+				scoreTexture.needsUpdate = true;
+
+				material = new THREE.MeshBasicMaterial({map: scoreTexture, visible: true});
+
+				scoreboard.userData.parentObject = this;
+
+				var scoreSlate = new THREE.Mesh(geometry, material);
+				scoreboard.add(scoreSlate);
+
+				scoreboard.JumpStart.onTick = function()
+				{
+					if( !g_capitol )
+						return;
+
+					//this.rotateY(10.0 * g_deltaTime);
+					//var parent = this.userData.parentObject;
+					//this.parent.updateMatrixWorld();
+					//THREE.SceneUtils.detach(this, parent, g_scene);
+
+					var userOrigin;
+					if( JumpStart.webMode )
+						origin = g_localUser.lookOrigin;
+					else
+					{
+						var joint = g_localUser.trackingSkeleton.getJoint("Eye");
+						var scaledJointPosition = new THREE.Vector3().copy(joint.position).multiplyScalar(1/g_worldScale);
+						userOrigin = scaledJointPosition;
+					}
+//console.log(userOrigin);
+					this.lookAt(userOrigin);
+					//this.updateMatrixWorld();
+					//THREE.SceneUtils.attach(this, g_scene, parent);
+				};
+
+				this.userData.scoreBoard = scoreboard;
+				this.userData.scoreCanvas = scoreCanvas;
+				this.userData.scoreContext = scoreContext;
+				this.userData.scoreTexture = scoreTexture;
+
+				updateTexture();
+			}
+
+			var g_asteroidCooldown = 5.0;
+			function asteroidTick()
+			{
+				if( this.scale.x === 0.0001 )
+				{
+					if( this.JumpStart.ownerId === g_localUser.userId && g_capitol.JumpStart.health > 0 )
+					{
+						g_asteroidCooldown -= g_deltaTime;
+
+						if( g_asteroidCooldown <= 0 )
+						{
+							g_asteroidCooldown = 0;
+
+							var max = 1.0 + (1.0 * (g_capitol.JumpStart.wins/30.0));
+							var min = 0.5;
+							var randoScale = Math.random() * max;
+							if( randoScale < min )
+								randoScale = min;
+							else if( randoScale > max )
+								randoScale = max;
+
+							this.scale.set(1, 1, 1).multiplyScalar(randoScale);
+
+							//this.JumpStart.radius = 100.0 * randoScale;
+							this.JumpStart.radius = 50.0;
+
+							this.position.y = (g_enclosure.innerHeight / 2.0) / g_worldScale;
+							this.position.x = (g_enclosure.innerWidth / 2.0) / g_worldScale;
+							this.position.z = (g_enclosure.innerWidth / 2.0) / g_worldScale;
+
+							this.JumpStart.sync();
+
+							g_capitol.JumpStart.asteroidHealth = (50.0 + (100.0 * (g_capitol.JumpStart.wins/20.0))) * randoScale;
+
+							if( g_capitol.JumpStart.asteroidHealth == 0 )
+								g_capitol.JumpStart.asteroidHealth = 100.0;
+
+							g_capitol.userData.isDirty = true;
+						}
+					}
+
+					return;
+				}
+
+				this.rotateX(1.0 * g_deltaTime);
+				this.rotateY(2.0 * g_deltaTime);
+				this.rotateZ(0.5 * g_deltaTime);
+
+				var motion = g_capitol.position.clone().sub(g_asteroid.position).normalize();
+
+				//var scaleTotal = (50.0 * g_deltaTime / this.scale.z);
+				var scaleTotal = 100.0 * g_deltaTime;
+				scaleTotal = scaleTotal / (1.0 + (0.3 * g_capitol.JumpStart.slowCount));
+
+				motion.multiplyScalar(scaleTotal);
+
+				this.position.add(motion);
+
+				if( this.position.distanceTo(g_capitol.position) < 70.0 )
+				{
+					if( g_capitol.JumpStart.ownerId === g_localUser.userId )
+					{
+						g_capitol.JumpStart.health -= Math.round(200 * this.scale.z);
+						g_capitol.userData.isDirty = true;
+					}
+
+					DestroyAsteroid();
+				}
+			}
+
+			function DestroyAsteroid()
+			{
+				var scale = g_asteroid.scale.z;
+
+				SpawnExplosion(g_asteroid.position, 1.7, "sounds/SpacePilot/explosion1", 0.5, 3.0);
+
+				var debris0 = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+				debris0.position.copy(g_asteroid.position);
+				debris0.scale.set(0.5, 0.5, 0.5).multiplyScalar(g_asteroid.scale.z);
+				explodeRandomly(debris0);
+
+				var debris1 = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+				debris1.position.copy(g_asteroid.position);
+				debris1.scale.set(0.2, 0.5, 0.5).multiplyScalar(g_asteroid.scale.z);
+				explodeRandomly(debris1);
+
+				var debris2 = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+				debris2.position.copy(g_asteroid.position);
+				debris2.scale.set(0.4, 0.2, 0.3).multiplyScalar(g_asteroid.scale.z);
+				explodeRandomly(debris2);
+
+				g_asteroid.scale.set(0.0001, 0.0001, 0.0001);
+
+				if( g_asteroid.JumpStart.ownerId === g_localUser.userId )
+				{
+					g_asteroid.JumpStart.sync();
+					g_asteroidCooldown = 5.0;
+				}
+			}
+
+			function explodeRandomly(debris)
+			{
+				var randoX = 5.0 * Math.random();
+				if( Math.random() > 0.5 )
+					randoX *= -1.0;
+
+				var randoZ = 5.0 * Math.random();
+				if( Math.random() > 0.5 )
+					randoZ *= -1.0;
+
+				var momentum = new THREE.Vector3(0, 0, 0);
+
+				var randoY = 15.0;
+				debris.JumpStart.applyForce(new THREE.Vector3(momentum.x + randoX, (momentum.y * 5.0) + randoY, momentum.z + randoZ));
+
+				debris.JumpStart.onTick = function()
+				{
+					if( this.position.y <= g_worldOffset.y && !this.userData.hasOwnProperty("cooldown") )
+					{
+						this.userData.cooldown = 1.0;
+
+						//this.JumpStart.makeStatic();
+						//this.JumpStart.onTick = {};
+					}
+
+					if( this.userData.hasOwnProperty("cooldown") )
+					{
+						this.userData.cooldown -= g_deltaTime;
+
+						if( this.userData.cooldown <= 0 )
+						{
+							this.userData.cooldown = 0;
+
+							g_scene.remove(this);
+							//this.JumpStart.makeStatic();
+							//this.JumpStart.onTick = {};
+						}
+					}
+				};
+			}
+
+			function doneSpawning()
+			{
+				//console.log(g_spawning);
+				g_capitol.JumpStart.money = parseInt(g_capitol.JumpStart.money) - g_spawning.price;
+
+				if( g_capitol.JumpStart.ownerid === g_localUser.userId )
+					g_capitol.userData.isDirty = true;
+				else
+					g_capitol.JumpStart.sync();
+
+				g_scene.remove(g_spawning.object);
+				g_spawning = null;
+			}
+
+			function createBuildMenu()
+			{
+				if( !g_buildMenu )
+				{
+					g_buildMenu = JumpStart.spawnInstance();
+					g_buildMenu.translateY(50.0);
+					g_buildMenu.JumpStart.onSpawn["scoreSpawn"] = scoreSpawn;
+					g_buildMenu.JumpStart.onTick["scoreTick"] = scoreTick;
+					g_buildMenu.position.copy(g_capitol.position);
+					g_buildMenu.translateY(70.0);
+					g_buildMenu.userData.active = true;
+
+					scoreSpawn.call(g_buildMenu);
+				}
+
+				if( !g_buildMenu.userData.active )
+				{
+					g_buildMenu.scale.set(1, 1, 1);
+					g_buildMenu.userData.active = true;
+				}
+
+				//scoreSpawn.call(g_buildMenu);
+				//g_buildMenu.JumpStart.sync();
+			}
+
+			function destroyBuildMenu()
+			{
+				OnBuildMenuMouseMove(0, 0);
+				g_buildMenu.userData.active = false;
+				g_buildMenu.scale.set(0.0001, 0.0001, 0.0001);
+				//g_scene.remove(g_buildMenu);
+				//g_buildMenu = null;
+			}
+
+			function manualgunSpawn()
+			{
+				if( this.JumpStart.ownerId === g_localUser.userId && !this.userData.hasOwnProperty("cooldown") )
+					this.userData.cooldown = Math.random() * 3.0;
+				else
+					this.userData.cooldown = 0;
+
+				this.userData.oldShotsFired = this.JumpStart.shotsFired;
+
+				//this.userData.target = g_asteroid;
+				this.userData.lastTargetPos = new THREE.Vector3();
+				this.userData.parts = {};
+
+				// base
+				this.userData.parts["base"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_base.obj", {"parent": this})};
+
+				// tower
+				this.userData.parts["tower"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_tower.obj", {"parent": this.userData.parts["base"].object}).translateY(9.0)};
+
+				// barrels
+				this.userData.parts["barrelHousing"] = {"object": JumpStart.spawnInstance(null, {"parent": this.userData.parts["tower"].object}).translateZ(3.7).translateY(5.0)};
+
+				var barrels = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_barrels.obj", {"parent": this.userData.parts["barrelHousing"].object});
+
+				//barrels.position.copy(this.userData.parts["barrelHousing"].object.position);
+
+				this.userData.parts["barrelHousing"].object.userData.barrels = barrels;
+
+				//this.userData.parts["barrels"].object.JumpStart.onTick = function()
+				//{
+					//this.translateZ(0.1);
+				//};
+
+				//var part = this.userData.parts["base"];
+				//console.log("Hello world!");
+			}
+
+			function autogunSpawn()
+			{
+				if( this.JumpStart.ownerId === g_localUser.userId && !this.userData.hasOwnProperty("cooldown") )
+					this.userData.cooldown = Math.random() * 3.0;
+				else
+					this.userData.cooldown = 0;
+
+				this.userData.oldShotsFired = this.JumpStart.shotsFired;
+
+				//this.userData.target = g_asteroid;
+				this.userData.lastTargetPos = new THREE.Vector3();
+				this.userData.parts = {};
+
+				// base
+				this.userData.parts["base"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/autogun_base.obj", {"parent": this})};
+
+				// tower
+				this.userData.parts["tower"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/autogun_tower.obj", {"parent": this.userData.parts["base"].object}).translateY(3.5)};
+
+				// barrel
+				this.userData.parts["barrel"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/autogun_barrel.obj", {"parent": this.userData.parts["tower"].object}).translateY(13.9)};
+			}
+
+			function manualgunTick()
+			{
+				if( !g_capitol || !g_asteroid || !g_crystals )
+					return;
+
+				if( g_asteroid.scale.x === 0.0001 )
+					return;
+
+				this.userData.target = g_asteroid;
+
+				var towerObject = this.userData.parts["tower"].object;
+				var barrelsObject = this.userData.parts["barrelHousing"].object;
+				var baseObject = this.userData.parts["base"].object;
+
+				this.parent.updateMatrixWorld();
+				if( this.userData.target && !this.userData.lastTargetPos.equals(this.userData.target.position) )
+				{
+					this.userData.lastTargetPos.copy(this.userData.target.position);
+
+					// aim the tower
+					var targetPos = this.userData.target.position.clone();
+					targetPos.multiplyScalar(g_worldScale);
+					baseObject.worldToLocal(targetPos);
+					//targetPos.multiplyScalar(1.0 / g_worldScale);
+
+					//targetPos.multiplyScalar(g_worldScale);
+					targetPos.y = towerObject.position.y;
+					towerObject.lookAt(targetPos);
+					//towerObject.rotation.x = 0;
+					//towerObject.rotation.z = 0;
+
+					// aim the barrels
+					barrelsObject.parent.updateMatrixWorld();
+					THREE.SceneUtils.detach(barrelsObject, towerObject, g_scene);
+
+/*
+					var pos = new THREE.Vector3();
+					if( !JumpStart.webMode )
+							pos.copy(barrelsObject.position);
+
+					THREE.SceneUtils.detach(barrelsObject, towerObject, g_scene);
+
+					// Do some adjustments if we are rendering inside of Altspace
+					if( !JumpStart.webMode )
+					{
+						barrelsObject.scale.copy(towerObject.scale);
+						barrelsObject.position.copy(towerObject.position);
+						barrelsObject.rotation.copy(towerObject.rotation);
+
+						barrelsObject.translateX(pos.x);
+						barrelsObject.translateY(pos.y);
+						barrelsObject.translateZ(pos.z);
+					}
+*/
+
+					targetPos = this.userData.target.position.clone();
+					targetPos.multiplyScalar(g_worldScale);
+					//targetPos.multiplyScalar(1 / g_worldScale);
+					//console.log(g_worldScale);
+
+					//barrelsObject.up = new THREE.Vector3(1, 0, 0);
+					barrelsObject.lookAt(targetPos);
+					barrelsObject.updateMatrixWorld();
+					THREE.SceneUtils.attach(barrelsObject, g_scene, towerObject);
+
+				//	console.log(barrelsObject.rotation.x);
+				}
+
+				if( this.JumpStart.ownerId === g_localUser.userId )
+				{
+					if( this.userData.cooldown <= 0 )
+					{
+						if( !this.userData.target.userData.cooldown )
+						{
+							this.JumpStart.shotsFired++;
+							this.JumpStart.sync();
+						}
+
+//						manualgunFireLaser.call(barrelsObject, new THREE.Vector3(1.0, -1.0, 6.0), this, true);
+//						manualgunFireLaser.call(barrelsObject, new THREE.Vector3(-1.0, -1.0, 6.0), this, false);
+
+						this.userData.cooldown = 2.0;
+					}
+					else
+						this.userData.cooldown -= g_deltaTime;
+				}
+
+				if( this.JumpStart.shotsFired > 0 && this.userData.oldShotsFired !== this.JumpStart.shotsFired )
+				{
+					var barrelsObject = this.userData.parts["barrelHousing"].object;
+
+					var barrels = barrelsObject.userData.barrels;
+					barrels.userData.zig = true;
+					barrels.JumpStart.onTick = function()
+					{
+						if( this.userData.zig )
+						{
+							this.translateZ(-20.0 * g_deltaTime);
+
+							if( this.position.distanceTo(barrelsObject.position) > 8.0 )
+								this.userData.zig = false;
+						}
+						else
+						{
+							this.translateZ(20.0 * g_deltaTime);
+
+							if( this.position.z > 0 )
+							{
+								//this.position.copy(barrelsObject.position);
+								this.position.z = 0;
+								barrels.JumpStart.onTick = {};
+							}
+						}
+					};
+
+					PlayDynamicSound("sounds/SpacePilot/laser0", 0.05, 2.0);
+					manualgunFireLaser.call(barrelsObject, new THREE.Vector3(2.4, 0, 6.0), this, true);
+					manualgunFireLaser.call(barrelsObject, new THREE.Vector3(-2.4, 0, 6.0), this, false);
+				}
+
+				this.userData.oldShotsFired = this.JumpStart.shotsFired;
+			}
+
+
+			function autogunTick()
+			{
+				if( !g_capitol || !g_asteroid || !g_crystals)
+					return;
+
+				if( g_asteroid.scale.x === 0.0001 )
+					return;
+
+				this.userData.target = g_asteroid;
+
+				var towerObject = this.userData.parts["tower"].object;
+				var barrelObject = this.userData.parts["barrel"].object;
+				var baseObject = this.userData.parts["base"].object;
+
+				this.parent.updateMatrixWorld();
+				if( this.userData.target && !this.userData.lastTargetPos.equals(this.userData.target.position) )
+				{
+					this.userData.lastTargetPos.copy(this.userData.target.position);
+
+					// aim the tower
+					var targetPos = this.userData.target.position.clone();
+					targetPos.multiplyScalar(g_worldScale);
+					baseObject.worldToLocal(targetPos);
+					//targetPos.multiplyScalar(1.0 / g_worldScale);
+
+					//targetPos.multiplyScalar(g_worldScale);
+					targetPos.y = towerObject.position.y;
+					towerObject.lookAt(targetPos);
+					//towerObject.rotation.x = 0;
+					//towerObject.rotation.z = 0;
+
+					// aim the barrel
+					barrelObject.parent.updateMatrixWorld();
+					THREE.SceneUtils.detach(barrelObject, towerObject, g_scene);
+
+					targetPos = this.userData.target.position.clone();
+					targetPos.multiplyScalar(g_worldScale);
+					//targetPos.multiplyScalar(1 / g_worldScale);
+					//console.log(g_worldScale);
+
+					//barrelObject.up = new THREE.Vector3(1, 0, 0);
+					barrelObject.lookAt(targetPos);
+					barrelObject.updateMatrixWorld();
+					THREE.SceneUtils.attach(barrelObject, g_scene, towerObject);
+					//console.log("aim barrel");
+
+				//	console.log(barrelObject.rotation.x);
+				}
+
+				if( this.JumpStart.ownerId === g_localUser.userId && this.userData.target )
+				{
+					if( this.userData.cooldown <= 0 )
+					{
+						if( !this.userData.target.userData.cooldown )
+						{
+							this.JumpStart.shotsFired++;
+							this.JumpStart.sync();
+						}
+
+//						manualgunFireLaser.call(barrelObject, new THREE.Vector3(1.0, -1.0, 6.0), this, true);
+//						manualgunFireLaser.call(barrelObject, new THREE.Vector3(-1.0, -1.0, 6.0), this, false);
+
+						this.userData.cooldown = 2.0;
+					}
+					else
+						this.userData.cooldown -= g_deltaTime;
+				}
+
+				if( this.JumpStart.shotsFired > 0 && this.userData.oldShotsFired !== this.JumpStart.shotsFired )
+				{
+					//console.log("fire!");
+					/*
+					var barrelObject = this.userData.parts["barrelHousing"].object;
+
+					var barrel = barrelObject.userData.barrel;
+					barrel.userData.zig = true;
+					barrel.JumpStart.onTick = function()
+					{
+						if( this.userData.zig )
+						{
+							this.translateZ(-20.0 * g_deltaTime);
+
+							if( this.position.distanceTo(barrelObject.position) > 8.0 )
+								this.userData.zig = false;
+						}
+						else
+						{
+							this.translateZ(20.0 * g_deltaTime);
+
+							if( this.position.z > 0 )
+							{
+								//this.position.copy(barrelObject.position);
+								this.position.z = 0;
+								barrel.JumpStart.onTick = {};
+							}
+						}
+					};
+					*/
+
+					autogunFireLaser.call(barrelObject, new THREE.Vector3(0, 0, 34.0), this);
+					//manualgunFireLaser.call(barrelObject, new THREE.Vector3(-2.4, 0, 6.0), this, false);
+				}
+
+				this.userData.oldShotsFired = this.JumpStart.shotsFired;
+			}
+
+			function SpawnExplosion(position, scale, sound, in_volume, in_period)
+			{
+				var soundFile = ( typeof sound === "undefined" ) ? "sounds/SpacePilot/explosion0" : sound;
+
+				var volume = (typeof in_volume === "undefined" ) ? 0.2 : in_volume;
+				var period = (typeof in_period === "undefined" ) ? 1.0 : in_period;
+				//console.log(arguments);
+				//JumpStart.playSoundInstance(soundFile, 0.5);
+				PlayDynamicSound(soundFile, volume, period);
+
+				var explosion = JumpStart.spawnInstance("models/SpacePilot/explosion.obj");
+				explosion.position.copy(position);
+				//explosion.scale.set(0.001, 0.001, 0.001);
+
+				explosion.userData.scaleSize = 0.001;
+				explosion.userData.scaleDirection = 1;
+				explosion.userData.maxScale = scale;
+
+				explosion.JumpStart.blocksLOS = false;
+
+				explosion.JumpStart.onTick = function()
+				{
+					if( this.userData.scaleDirection === 1 )
+					{
+						this.userData.scaleSize += 5.0 * g_deltaTime;
+
+						if( this.userData.scaleSize >= this.userData.maxScale )
+							this.userData.scaleDirection = -1;
+					}
+					else
+					{
+						this.userData.scaleSize -= 4.0 * g_deltaTime;
+
+						if( this.userData.scaleSize <= 0.001 )
+						{
+							g_scene.remove(this);
+							return;
+						}
+					}
+
+					this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+					this.rotateY(15.0 * g_deltaTime);
+					this.rotateX(20.0 * g_deltaTime);
+				};
+			}
+
+			function manualgunFireLaser(offset, parent, explosive)
+			{
+				var laser;
+				if( !JumpStart.webMode )
+				{
+					laser = JumpStart.spawnInstance("models/SpacePilot/enemy_laser.obj", {"parent": this});
+				}
+				else
+					laser = JumpStart.spawnInstance("models/SpacePilot/enemy_laser.obj");
+
+				laser.userData.parent = parent;
+				laser.userData.explosive = explosive;
+
+				this.parent.updateMatrixWorld();
+				var vector = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+
+				if( !JumpStart.webMode )
+				{
+					vector.multiplyScalar(1.0 / g_worldScale);
+					//this.worldToLocal(vector);
+				}
+
+//				laser.scale.copy(this.scale);
+//				laser.position.copy(this.position);
+//				laser.rotation.copy(this.rotation);
+
+//console.log(vector);
+//				this.parent.updateMatrixWorld();
+				var rotation = new THREE.Euler().setFromRotationMatrix(this.matrixWorld);
+
+//				laser.position.copy(vector);
+
+				if( !JumpStart.webMode )
+				{
+					//laser.parent.updateMatrixWorld();
+					THREE.SceneUtils.detach(laser, this, g_scene);
+//					laser.position.copy(vector);
+				}
+				else
+				{
+//					laser.position.copy(vector);
+					laser.rotation.copy(rotation);
+				}
+
+				laser.position.copy(vector);
+//					console.log(rotation);
+
+				laser.translateX(offset.x);
+				laser.translateY(offset.y);
+				laser.translateZ(offset.z);
+
+				laser.scale.set(0.2, 0.2, 1.0);
+
+				laser.userData.power = 10.0;
+
+				laser.JumpStart.onTick = function()
+				{
+					//return;
+//					console.lg
+//					this.translateZ(5.0 * g_deltaTime);
+//					return;
+					if( !g_capitol || !g_asteroid || !g_crystals )
+						return;
+
+//					this.translateZ(5.0 * g_deltaTime);
+//					return;
+					/*
+					if( !g_myShip )
+					{
+						g_galaxy.remove(this);
+						return;
+					}
+*/
+					this.translateZ(150 * g_deltaTime);
+
+					if( (!JumpStart.webMode && this.position.distanceTo(g_capitol.position) > 200.0 * g_worldScale) ||
+					 	(JumpStart.webMode && this.position.distanceTo(g_capitol.position) > 200.0 ) )
+					{
+						g_scene.remove(this);
+						return;
+					}
+
+					//console.log(this.userData.parent.userData.target);
+
+					var target = this.userData.parent.userData.target;
+					var dist = this.position.distanceTo(target.position);
+
+					if( dist < target.JumpStart.radius * target.scale.z )
+					{
+						if( this.userData.explosive )
+						{
+							SpawnExplosion(this.position, 0.5);
+							if( this.userData.parent.JumpStart.ownerId === g_localUser.userId )
+								CauseAsteroidDamage(this.userData.power);
+						}
+
+						g_scene.remove(this);
+						//console.log("close!");
+//						g_galaxy.remove(this);
+					}
+
+					//*/
+				};
+			}
+
+			function CauseAsteroidDamage(dmg)
+			{
+				if( !g_capitol || g_capitol.JumpStart.ownerId !== g_localUser.userId )
+					return;
+
+				g_capitol.JumpStart.asteroidHealth = parseInt(g_capitol.JumpStart.asteroidHealth) - parseInt(dmg);
+
+				if( g_capitol.JumpStart.asteroidHealth <= 0 )
+				{
+					g_capitol.JumpStart.asteroidHealth = 0;
+					g_capitol.JumpStart.wins++;
+					//g_capitol.JumpStart.money += 5;
+				}
+
+				g_capitol.userData.isDirty = true;
+				//console.log(g_capitol.JumpStart.asteroidHealth);
+				//console.log(dmg);
+			}
+
+			// Purpose:
+			// Play a sound at a volume relative to how recently this same sound has been played.
+			// The amount param specifies the time scale to consider.
+			var g_soundStamps = {};
+
+			function PlayDynamicSound(sound, volume, period)
+			{
+				var isFirstPlay = false;
+				if( !g_soundStamps.hasOwnProperty(sound + "") )
+				{
+					isFirstPlay = true;
+					g_soundStamps[sound + ""] = g_clock.elapsedTime;
+				}
+
+				var volumeScale = 1.0;
+				if( g_soundStamps[sound + ""] === g_clock.elapsedTime && !isFirstPlay )
+					return;
+				else
+				{
+					var dif = g_clock.elapsedTime - g_soundStamps[sound + ""];
+					volumeScale = dif / period;
+
+					if( volumeScale >= 0.2 )
+					{
+					//	volumeScale += volumeScale;
+					}
+					else
+						volumeScale -= volumeScale;
+
+					if( volumeScale > 1.0 )
+						volumeScale = 1.0;
+					else if( volumeScale < 0 )
+						volumeScale = 0;
+				}
+
+//console.log(volumeScale);
+
+				var realVolume = volumeScale * volume;
+				if( realVolume > 0.01 )
+				{
+					JumpStart.playSoundInstance(sound, volume * volumeScale);
+					g_soundStamps[sound + ""] = g_clock.elapsedTime;
+				}
+			}
+
+			function autogunFireLaser(offset, parent)
+			{
+				PlayDynamicSound("sounds/SpacePilot/laser2", 0.1, 3.0);
+//				JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.2);//volume * volumeScale);
+				//JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.4);
+
+				var laser;
+				//if( !JumpStart.webMode )
+				//{
+					laser = JumpStart.spawnInstance("models/AstroCatastrophe/gold.obj", {"parent": this});
+				//}
+				//else
+				//	laser = JumpStart.spawnInstance("models/AstroCatastrophe/gold.obj");
+
+				laser.userData.parent = parent;
+//				laser.userData.explosive = explosive;
+
+				this.parent.updateMatrixWorld();
+				var vector = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+
+				if( !JumpStart.webMode )
+				{
+					vector.multiplyScalar(1.0 / g_worldScale);
+					//this.worldToLocal(vector);
+				}
+
+//				laser.scale.copy(this.scale);
+//				laser.position.copy(this.position);
+//				laser.rotation.copy(this.rotation);
+
+//console.log(vector);
+//				this.parent.updateMatrixWorld();
+				var rotation = new THREE.Euler().setFromRotationMatrix(this.matrixWorld);
+
+//				laser.position.copy(vector);
+/*
+				if( !JumpStart.webMode )
+				{
+					//laser.parent.updateMatrixWorld();
+					THREE.SceneUtils.detach(laser, this, g_scene);
+//					laser.position.copy(vector);
+				}
+				else
+				{
+//					laser.position.copy(vector);
+					laser.rotation.copy(rotation);
+				}
+
+				laser.position.copy(vector);
+				*/
+//					console.log(rotation);
+
+				laser.translateX(offset.x);
+				laser.translateY(offset.y);
+				laser.translateZ(offset.z);
+
+				//laser.scale.set(0.2, 0.2, 1.0);
+				//console.log( parent.userData.target.position );
+				//laser.scale.set(1.0, 1.0, vector.distanceTo(parent.userData.target.position));
+				laser.scale.set(1.0, 1.0, 1.0);
+
+				laser.userData.power = 10.0;
+				laser.userData.cooldown = 1.0;
+
+				createSlowDust(laser);
+
+				laser.JumpStart.onTick = function()
+				{
+					this.userData.cooldown -= g_deltaTime;
+//console.log(this.userData.cooldown);
+					if( this.userData.cooldown <= 0 )
+					{
+						this.userData.cooldown = 0;
+						this.parent.remove(this);
+
+						if( g_capitol.JumpStart.ownerId === g_localUser.userId )
+						{
+							g_capitol.JumpStart.slowCount--;
+							g_capitol.JumpStart.sync();
+						}
+
+						//g_scene.remove(this);
+						return;
+					}
+
+					this.parent.updateMatrixWorld();
+					//this.scale.z = this.matrixWorld.getPosition().multiplyScalar(1 / g_worldScale).distanceTo(parent.userData.target.position) / (g_worldScale / 7.2);
+					var vector1 = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+					var vector2 = new THREE.Vector3().copy(parent.userData.target.position).multiplyScalar(g_worldScale);
+					this.scale.z = vector1.distanceTo(vector2) / (g_worldScale / 2.0);
+				};
+
+				if( g_capitol.JumpStart.ownerId === g_localUser.userId )
+				{
+					g_capitol.JumpStart.slowCount++;
+					g_capitol.JumpStart.sync();
+				}
+			}
+
+			function createSlowDust(laser)
+			{
+				//JumpStart.playSoundInstance("sounds/SpacePilot/laser1", 0.4);
+				//console.log("laser dust");
+				// Make fairy dust
+				var pos = new THREE.Vector3();
+
+				var maxParticles = 3;
+
+				var i, particle;
+				for( i = 0; i < maxParticles; i++ )
+				{
+					particle = JumpStart.spawnInstance("models/AstroCatastrophe/gold.obj");
+
+					//var vector = laser.userData.parent.userData.target.position.clone();
+					//vector.sub(laser.userData.parent.position);
+					//laser.userData.parent.userData.parts["tower"].object.localToWorld(vector);
+
+					if( !JumpStart.webMode )
+					{
+						//particle.position.copy(vector);
+						particle.scale.set(1, 1, 1);
+						//var vector = laser.userData.parent.userData.target.position.clone();
+						//laser.worldToLocal(vector);
+						//vector.multiplyScalar(1 / g_worldScale);
+//						vector.multiplyScalar(1 / g_worldScale);
+						//particle.position.copy(laser.position);
+						//particle.position.copy(vector);
+						particle.position.copy(laser.userData.parent.userData.target.position);
+						//particle.rotation.copy(laser.rotation);
+						particle.lookAt(laser.matrixWorld.getPosition());
+					}
+					else
+					{
+						pos.setFromMatrixPosition( laser.matrixWorld );
+						particle.position.copy(pos);
+						particle.rotation.copy(laser.rotation);
+					}
+
+					var scale = Math.random();
+					if( scale < 0.5 )
+						scale = 0.5;
+
+					particle.scale.multiplyScalar(scale);
+
+					var randoX = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoX *= -1.0;
+
+					var randoY = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoY *= -1.0;
+
+					var randoZ = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoZ *= -1.0;
+
+					//particle.translateX(randoX);
+					//particle.translateY(randoY);
+					//particle.translateZ(randoZ);
+					particle.translateZ(50);
+
+					particle.userData.life = 0.3;
+					particle.scale.multiplyScalar(4.0);
+
+					particle.JumpStart.onTick = function()
+					{
+						if( this.userData.hasOwnProperty("will") )
+							this.userData.will -= 1.0 * g_deltaTime;
+
+						if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+						{
+							var randoPitch = 1.0 * Math.random();
+							if( Math.random() > 0.5 )
+								randoPitch *= -1.0;
+
+							var randoYaw = 1.0 * Math.random();
+							if( Math.random() > 0.5 )
+								randoYaw *= -1.0;
+
+							var randoRoll = 1.0 * Math.random();
+							if( Math.random() > 0.5 )
+								randoRoll *= -1.0;
+
+							this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+							this.userData.will = 3.0 * Math.random();
+						}
+
+						this.userData.life -= g_deltaTime;
+						if( this.userData.life <= 0 )
+						{
+							//g_scene.remove(this);
+							//return;
+
+							this.scale.x -= 1.0 * g_deltaTime;
+							this.scale.y -= 1.0 * g_deltaTime;
+							this.scale.z -= 1.0 * g_deltaTime;
+						}
+
+						this.rotateX(this.userData.direction.x * g_deltaTime);
+						this.rotateY(this.userData.direction.y * g_deltaTime);
+						this.rotateZ(this.userData.direction.z * g_deltaTime);
+
+						this.translateZ(15.0 * g_deltaTime);
+						this.position.y += 10.0 * g_deltaTime;
+
+						if( this.scale.x <= 0.1 )
+							g_scene.remove(this);
+					};
+				}
+			}
+
+			function spawn(type)
+			{
+				//console.log(type);
+				if( type === "manualgun" && g_capitol.JumpStart.money >= 5 )
+				{
+					var manualgun = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun.obj");
+					//manualgun.scale.set(0.3, 0.3, 0.3);
+					//manualgun.position.set(-22.0, -10.0, 8.0);
+					if( g_lookHit )
+						manualgun.position.copy(g_lookHit.scaledPoint);
+
+					manualgun.JumpStart.onTick = function()
+					{
+						//this.rotateY(1.0 * g_deltaTime);
+						//var planes = [JumpStart.floorPlane, JumpStart.roofPlane, JumpStart.westPlane, JumpStart.northPlane, JumpStart.eastPlane, JumpStart.southPlane];
+//						var planes = [JumpStart.floorPlane];
+//						if( g_lookHit && planes.indexOf(g_lookHit.object) !== -1 )
+						if( g_lookHit && g_lookHit.object === JumpStart.floorPlane )
+							this.position.copy(g_lookHit.scaledPoint);
+					};
+
+					g_spawning = {
+						"type": type,
+						"object": manualgun,
+						"price": 5
+					};
+				}
+				else if( type === "autogun" && g_capitol.JumpStart.money >= 10 )
+				{
+					var autogun = JumpStart.spawnInstance("models/AstroCatastrophe/autogun.obj");
+					//autogun.scale.set(0.3, 0.3, 0.3);
+					//autogun.position.set(-22.0, -10.0, 8.0);
+					if( g_lookHit )
+						autogun.position.copy(g_lookHit.scaledPoint);
+
+					autogun.JumpStart.onTick = function()
+					{
+						//this.rotateY(1.0 * g_deltaTime);
+						//var planes = [JumpStart.floorPlane, JumpStart.roofPlane, JumpStart.westPlane, JumpStart.northPlane, JumpStart.eastPlane, JumpStart.southPlane];
+//						var planes = [JumpStart.floorPlane];
+//						if( g_lookHit && planes.indexOf(g_lookHit.object) !== -1 )
+						if( g_lookHit && g_lookHit.object === JumpStart.floorPlane )
+							this.position.copy(g_lookHit.scaledPoint);
+					};
+
+					g_spawning = {
+						"type": type,
+						"object": autogun,
+						"price": 10
+					};
+				}
+
+				destroyBuildMenu();
+			}
+
+			function updateTexture()
+			{
+				var scoreboard = g_capitol.userData.scoreBoard;
+				var scoreCanvas= g_capitol.userData.scoreCanvas;
+				var scoreContext = g_capitol.userData.scoreContext;
+				var scoreTexture = g_capitol.userData.scoreTexture;
+
+				scoreContext.clearRect(0, 0, scoreCanvas.width, scoreCanvas.height);
+
+//				scoreContext.fillStyle = "#ffffff";
+//				scoreContext.fillRect(0, 0, scoreCanvas.width, scoreCanvas.height);
+
+				// create a canvas element
+				scoreContext.textAlign = "center";
+				scoreContext.textBaseline = "middle";
+				scoreContext.font = "Bold 100px Arial";
+				scoreContext.fillStyle = "rgba(255,255,255,0.95)";
+				scoreContext.fillText("MONEY: " + g_capitol.JumpStart.money + "   HEALTH: " + g_capitol.JumpStart.health, scoreCanvas.width / 2.0, scoreCanvas.height / 2.0);
+
+				scoreTexture.needsUpdate = true;
+			}
+
+			function compositeMenu()
+			{
+				//console.log("do it");
+				//g_scoreContext.clearRect(0, 0, g_scoreCanvas.height, g_scoreCanvas.height);
+
+//				g_scoreContext.drawImage(image, 0, 0, g_scoreCanvas.width, g_scoreCanvas.height);
+//				g_scoreTexture.needsUpdate = true;
+//console.log("here")
+				var buildMenuElem = document.getElementById("buildmenu");
+				var imgElems = buildMenuElem.getElementsByTagName("img");
+
+				buildMenuElem.images = new Array();
+
+				var elem, i, width, height, top, left, params;
+				for( i = 0; i < imgElems.length; i++ )
+				{
+					img = imgElems[i];
+
+					params = {
+						"elem": img,
+						"width": (parseInt(img.width) / parseInt(buildMenuElem.style.width)),
+						"height": (parseInt(img.height) / parseInt(buildMenuElem.style.height)),
+						"top": (parseInt(img.style.top) / parseInt(buildMenuElem.style.height)),
+						"left": (parseInt(img.style.left) / parseInt(buildMenuElem.style.width))
+					};
+
+					width = params.width * g_scoreCanvas.width;
+					height = params.height * g_scoreCanvas.height;
+					top = params.top * g_scoreCanvas.height;
+					left = params.left * g_scoreCanvas.width;
+					
+					buildMenuElem.images.push(params);
+
+					g_scoreContext.drawImage(img, left, top, width, height);	
+				}
+
+				g_scoreTexture.needsUpdate = true;
+			}
+
+			function scoreTick()
+			{
+				if( !g_localUser || !g_capitol || !this.userData.active )
+					return;
+
+				this.position.copy(g_capitol.position);
+				this.rotation.set(0, 0, 0);
+				this.translateY(75.0);
+				
+				var userOrigin;
+				if( JumpStart.webMode )
+					origin = g_localUser.lookOrigin;
+				else
+				{
+					var joint = g_localUser.trackingSkeleton.getJoint("Eye");
+					var scaledJointPosition = new THREE.Vector3().copy(joint.position).multiplyScalar(1/g_worldScale);
+					userOrigin = scaledJointPosition;
+				}
+
+				this.lookAt(userOrigin);
+
+				this.userData.cursorPlane.rotation.copy(this.rotation);
+				this.userData.cursorPlane.position.copy(this.position);
+
+				if( g_lookHit && g_lookHit.object.hasOwnProperty("isCursorPlane") && g_lookHit.object.isCursorPlane )
+				{
+					this.updateMatrixWorld();
+
+					var horizPos = -1;
+					var vertPos = -1;
+
+					//var cursorPos = new THREE.Vector3().copy(g_lookHit.scaledPoint).sub(this.position);
+					var cursorPos = new THREE.Vector3().copy(g_lookHit.scaledPoint);
+					//cursorPos.multiplyScalar(1 / g_worldScale);
+//					this.worldToLocal(cursorPos);
+					//g_marker.position.copy(cursorPos);
+
+					//g_marker.position.copy(cursorPos);
+					//cursorPos.multiplyScalar(g_worldScale);
+
+					var topLeft = new THREE.Vector3().copy(this.userData.cursorPlane.geometry.vertices[2]);
+					var temp = new THREE.Vector3().copy(this.position).multiplyScalar(g_worldScale);
+					//topLeft.sub(this.position);
+					topLeft.applyMatrix4(this.matrixWorld);
+					topLeft.multiplyScalar(1 / g_worldScale);
+
+					var topRight = new THREE.Vector3().copy(this.userData.cursorPlane.geometry.vertices[0]);
+					var temp = new THREE.Vector3().copy(this.position).multiplyScalar(g_worldScale);
+					//topRight.sub(this.position);
+					topRight.applyMatrix4(this.matrixWorld);
+					topRight.multiplyScalar(1 / g_worldScale);
+
+					var direction = new THREE.Vector3().copy(topRight).sub(topLeft);
+					var horizontalRay = new THREE.Ray(topLeft, direction.normalize());
+					var horizontalPoint = horizontalRay.closestPointToPoint(cursorPos);
+
+					var distLong = topLeft.distanceTo(topRight);
+					var distShort = topLeft.distanceTo(horizontalPoint);
+
+					horizPos = distShort / distLong;
+
+					var bottomLeft = new THREE.Vector3().copy(this.userData.cursorPlane.geometry.vertices[3]);
+					var temp = new THREE.Vector3().copy(this.position).multiplyScalar(g_worldScale);
+					//bottomLeft.sub(this.position);
+					bottomLeft.applyMatrix4(this.matrixWorld);
+					bottomLeft.multiplyScalar(1 / g_worldScale);
+
+					var direction = new THREE.Vector3().copy(bottomLeft).sub(topLeft);
+					var verticalRay = new THREE.Ray(topLeft, direction.normalize());
+					var verticalPoint = verticalRay.closestPointToPoint(cursorPos);
+
+					distLong = topLeft.distanceTo(bottomLeft);
+					distShort = topLeft.distanceTo(verticalPoint);
+
+					vertPos = distShort / distLong;
+
+					//console.log(horizPos + ", " + vertPos);
+
+					OnBuildMenuMouseMove(horizPos, vertPos);
+				}
+			}
+
+			function OnBuildMenuMouseMove(horizPos, vertPos)
+			{
+				var buildMenuElem = document.getElementById("buildmenu");
+				var imgElems = buildMenuElem.getElementsByTagName("img");
+
+				var somethingHovered = false;
+				var i, image, elem, j, oldImage;
+				for( i = 0; i < buildMenuElem.images.length; i++ )
+				{
+					image = buildMenuElem.images[i];
+
+					if( (horizPos >= image.left && horizPos < image.left + image.width) &&
+						(vertPos >= image.top && vertPos < image.top + image.height) && image.elem.onmouseover )
+					{
+						somethingHovered = true;
+
+						if( image.elem.hovering === true )
+							continue;
+
+						var elem = image.elem;
+
+						// unhover anything that is already hovering
+						for( j = 0; j < buildMenuElem.images.length; j++ )
+						{
+							oldImage = buildMenuElem.images[j];
+							if( oldImage.elem.hovering === true )
+							{
+								if( oldImage.elem.onmouseout )
+								{
+									oldImage.elem.hovering = false;
+									oldImage.elem.onmouseout.call(oldImage.elem);
+								}
+							}
+						}
+
+						// now hover us
+						elem.onmouseover.call(elem);
+						elem.hovering = true;
+						break;
+					}
+				}
+
+				if( !somethingHovered )
+				{
+					var needsUpdate = false;
+					for( j = 0; j < buildMenuElem.images.length; j++ )
+					{
+						oldImage = buildMenuElem.images[j];
+						if( oldImage.elem.hovering === true )
+						{
+							if( oldImage.elem.onmouseout )
+							{
+								oldImage.elem.hovering = false;
+								oldImage.elem.onmouseout.call(oldImage.elem);
+								needsUpdate = true;
+							}
+						}
+					}
+
+					if( needsUpdate )
+						setTimeout(compositeMenu, 100);
+				}
+
+//				if( needsUpdate )
+//				{
+//					setTimeout(compositeMenu, 100);
+					//compositeMenu();
+//				}
+			}
+
+			var g_buildMenu = null;
+			var g_scoreTexture = null;
+			var g_scoreCanvas = null;
+			var g_scoreContext = null;
+			function scoreSpawn(isLocal)
+			{
+				g_buildMenu = this;
+
+				var geometry = new THREE.BoxGeometry(80, 30, 0);
+				var material;
+
+				// create a canvas element
+				g_scoreCanvas = document.createElement('canvas');
+				g_scoreCanvas.width = 80.0 * g_worldScale;
+				g_scoreCanvas.height = 30.0 * g_worldScale;
+				g_scoreContext = g_scoreCanvas.getContext('2d');
+//				g_scoreContext.drawImage(img, 0, 0, 160, 60);
+/*
+				g_scoreContext.textAlign = "center";
+				g_scoreContext.textBaseline = "middle";
+				g_scoreContext.font = "Bold 20px Arial";
+				g_scoreContext.fillStyle = "rgba(255,0,0,0.95)";
+			   	g_scoreContext.fillText('BUILD MENU', g_scoreCanvas.width / 2.0, g_scoreCanvas.height / 2.0);
+			   	*/
+    
+				// canvas contents will be used for a texture
+				g_scoreTexture = new THREE.Texture(g_scoreCanvas) 
+				g_scoreTexture.needsUpdate = false;
+
+				material = new THREE.MeshBasicMaterial({map: g_scoreTexture, visible: true});
+
+				var scoreSlate = new THREE.Mesh(geometry, material);
+
+				this.userData.cursorPlane = JumpStart.spawnCursorPlane({
+					"position": new THREE.Vector3(0, 0, 0).add(g_worldOffset),
+					"rotation": new THREE.Vector3(0, 0, 0),
+					"width": g_scoreCanvas.width / g_worldScale,
+					"height": g_scoreCanvas.height / g_worldScale
+				});
+
+				g_rayCastObjects.push(this.userData.cursorPlane);
+
+				// add the image to the slate
+				/*
+				var img = document.createElement("img");
+				img.src = "misc/AstroCatastrophe/buildslate.jpg";
+				img.addEventListener("load", function()
+				{
+					var _this = this;
+					compositeMenu(_this);
+				});
+				*/
+
+				var buildMenuElem = document.getElementById("buildmenu");
+				var imgElems = buildMenuElem.getElementsByTagName("img");
+
+				var elem, i;
+				for( i = 0; i < imgElems.length; i++ )
+				{
+					imgElems[i].hovering = false;
+
+					imgElems[i].addEventListener("load", function(e)
+					{
+						var elem = e.srcElement;
+
+						//if( elem.src.indexOf("_on.jpg") === elem.src.length - 7 )
+							compositeMenu();
+					}, true);
+				}
+
+				compositeMenu();
+
+/*
+				var manualgun = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun.obj", {parent: this});
+				manualgun.scale.set(0.3, 0.3, 0.3);
+				manualgun.position.set(-22.0, -10.0, 8.0);
+
+				manualgun.JumpStart.onTick = function()
+				{
+					this.rotateY(1.0 * g_deltaTime);
+				};
+				
+				var autogun = JumpStart.spawnInstance("models/AstroCatastrophe/autogun.obj", {parent: this});
+				autogun.scale.set(0.3, 0.3, 0.3);
+				autogun.position.set(-8.0, -10.0, 8.0);
+
+				autogun.JumpStart.onTick = function()
+				{
+					this.rotateY(1.0 * g_deltaTime);
+				};
+
+				var missile = JumpStart.spawnInstance("models/AstroCatastrophe/missile.obj", {parent: this});
+				missile.scale.set(0.25, 0.25, 0.25);
+				missile.position.set(8.0, -10.0, 8.0);
+
+				missile.JumpStart.onTick = function()
+				{
+					this.rotateY(1.0 * g_deltaTime);
+				};
+*/
+				this.add(scoreSlate);
+
+//				parentInstance.JumpStart.makePhysics();
+			}
+
+			function spinObject()
+			{
+				this.rotateY(1.0 * g_deltaTime);
+			}
+
+			function growObject()
+			{
+				this.scale.multiplyScalar(2.0);
+			}
+
+			function shrinkObject()
+			{
+				this.scale.multiplyScalar(0.5);
+			}
+
+			function highlightOnObject()
+			{
+				var myColor = new THREE.Color(1.5, 1.5, 1.5);
+				this.JumpStart.setTint(myColor);
+			}
+
+			function highlightOffObject()
+			{
+				var myColor = new THREE.Color(1.0, 1.0, 1.0);
+				this.JumpStart.setTint(myColor);
+			}
+
+			function hoverSpin()
+			{
+				if( g_hoveredObject === this )
+					this.rotateY(1.0 * g_deltaTime);
+			}
+
+			function prepJewel(isLocal)
+			{
+				console.log("spawned");
+				// Play a sound when this object is spawned.
+				// Use a different sound depending on if we created
+				// this object or somebody else did over the network.
+
+				if( isLocal )
+					JumpStart.playSound("sounds/JumpStart/trumpet", 0.5, false);
+				else
+					JumpStart.playSound("sounds/JumpStart/cashout", 0.5, false);
+			}
+		</script>
+	</body>
+</html>

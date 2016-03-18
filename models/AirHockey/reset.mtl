@@ -1,24 +1,4 @@
-# Blender MTL File: 'reset.blend'
-# Material Count: 2
-
-newmtl Cylinder
-Ns 96.078431
-Ka 1.000000 1.000000 1.000000
-Kd 1.000000 1.000000 1.000000
-Ks 0.000000 0.000000 0.000000
-Ke 0.000000 0.000000 0.000000
-Ni 1.000000
-d 1.000000
-illum 1
-map_Kd reset.jpg
-
-newmtl Symbol
-Ns 96.078431
-Ka 1.000000 1.000000 1.000000
-Kd 0.138455 0.585983 0.799103
-Ks 0.000000 0.000000 0.000000
-Ke 0.000000 0.000000 0.000000
-Ni 1.000000
-d 1.000000
-illum 1
+newmtl wire_115115115
+Kd 1 1 1
+illum 0
 map_Kd reset.jpg
