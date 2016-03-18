@@ -503,6 +503,27 @@
 				JumpStart.models.push({textOffset: displacement, object: mesh, fileName: text, batch: "text"});
 			}
 
+			function spawnText(text, parent)
+			{
+				var textObject = JumpStart.spawnInstance(text, {parent: parent});
+				textObject.JumpStart.blocksLOS = false;
+
+				var offset = new THREE.Vector3();
+				var i;
+				for( i = 0; i < JumpStart.models.length; i++ )
+				{
+					if( JumpStart.models[i].fileName === text )
+					{
+						offset.copy(JumpStart.models[i].textOffset);
+						break;
+					}
+				}
+
+				offset.multiply(textObject.scale);
+				textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+				return textObject;
+			}
+
 			function spawnScore(score, scoreBoard, jumpStart)
 			{
 				var scoreCached = false;
@@ -520,22 +541,7 @@
 					LoadTextModel(score);
 				}
 
-				var scoreObject = JumpStart.spawnInstance(score, {parent: scoreBoard});
-				scoreObject.JumpStart.blocksLOS = false;
-
-				var offset = new THREE.Vector3();
-				var i;
-				for( i = 0; i < JumpStart.models.length; i++ )
-				{
-					if( JumpStart.models[i].fileName === jumpStart.score )
-					{
-						offset.copy(JumpStart.models[i].textOffset);
-						break;
-					}
-				}
-
-				offset.multiply(scoreObject.scale);
-				scoreObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+				var scoreObject = spawnText(score, scoreBoard);
 
 				if( jumpStart.ownerId !== g_localUser.userId )
 				{
@@ -543,6 +549,54 @@
 				}
 
 				scoreBoard.userData.scoreObject = scoreObject;
+			}
+
+			function constructScoreBoard () 
+			{
+				var scoreBoard = JumpStart.spawnInstance(null);
+				var scoreFrame = window.scoreFrame = JumpStart.spawnInstance(
+					"models/AirHockey/scoreframe.obj", {parent: scoreBoard});
+				scoreFrame.name = 'scoreFrame';
+				scoreFrame.rotation.y = Math.PI / 2;
+				scoreFrame.scale.set(5, 5.3, 10.1);
+				scoreFrame.position.set(11.5, -2.8, 1);
+				var scoreBoardBase = new THREE.Mesh(
+					new THREE.BoxGeometry(2, 1, 0.05),
+					new THREE.MeshBasicMaterial({color: 'lightgrey'})
+				);
+				scoreBoardBase.position.z -= 0.3;
+				scoreBoardBase.scale.multiplyScalar(10);
+				scoreBoard.add(scoreBoardBase);
+
+				if( this.JumpStart.ownerId === g_localUser.userId )
+					scoreBoard.rotateY(Math.PI);
+
+				scoreBoard.userData.scoreObject = null;
+
+				if( this.JumpStart.side === "b" ) 
+				{
+					scoreBoard.position.x = g_tableWidth / 2;
+					scoreBoard.rotateY(Math.PI);
+					scoreFrame.JumpStart.cloneMaterial();
+					var frameColor = new THREE.Color('blue');
+					scoreFrame.JumpStart.color = frameColor;
+					scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
+					scoreFrame.JumpStart.setColor(frameColor);
+					g_scoreBoardB = scoreBoard;
+				}
+				else
+				{
+					scoreBoard.position.x = -g_tableWidth / 2;
+					scoreFrame.JumpStart.cloneMaterial();
+					var frameColor = new THREE.Color('red');
+					scoreFrame.JumpStart.color = frameColor;
+					scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
+					scoreFrame.JumpStart.setColor(frameColor);
+					g_scoreBoardA = scoreBoard;
+				}
+
+				scoreBoard.position.y = g_worldOffset.y + g_tableHeight * 3 + 5.0;
+				return scoreBoard;
 			}
 
 			function strikerTick()
@@ -558,69 +612,12 @@
 					if( scoreBoard )
 						g_scene.remove(scoreBoard);
 
-					scoreBoard = JumpStart.spawnInstance(null);
-					var scoreFrame = window.scoreFrame = JumpStart.spawnInstance(
-						"models/AirHockey/scoreframe.obj", {parent: scoreBoard});
-					scoreFrame.name = 'scoreFrame';
-					scoreFrame.rotation.y = Math.PI / 2;
-					scoreFrame.scale.set(5, 5.3, 10.1);
-					scoreFrame.position.set(11.5, -2.8, 1);
-					var scoreBoardBase = new THREE.Mesh(
-						new THREE.BoxGeometry(2, 1, 0.05),
-						new THREE.MeshBasicMaterial({color: 'lightgrey'})
-					);
-					scoreBoardBase.position.z -= 0.3;
-					scoreBoardBase.scale.multiplyScalar(10);
-					scoreBoard.add(scoreBoardBase);
-
-					if( this.JumpStart.ownerId === g_localUser.userId )
-						scoreBoard.rotateY(Math.PI);
-
-					scoreBoard.userData.scoreObject = null;
-
-					if( this.JumpStart.side === "b" ) 
-					{
-						scoreBoard.position.x = g_tableWidth / 2;
-						scoreBoard.rotateY(Math.PI);
-						scoreFrame.JumpStart.cloneMaterial();
-						var frameColor = new THREE.Color('blue');
-						scoreFrame.JumpStart.color = frameColor;
-						scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
-						scoreFrame.JumpStart.setColor(frameColor);
-						g_scoreBoardB = scoreBoard;
-					}
-					else
-					{
-						scoreBoard.position.x = -g_tableWidth / 2;
-						scoreFrame.JumpStart.cloneMaterial();
-						var frameColor = new THREE.Color('red');
-						scoreFrame.JumpStart.color = frameColor;
-						scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
-						scoreFrame.JumpStart.setColor(frameColor);
-						g_scoreBoardA = scoreBoard;
-					}
-
-					scoreBoard.position.y = g_worldOffset.y + g_tableHeight * 3 + 5.0;
+					scoreBoard = constructScoreBoard.bind(this)();
 
 					if( this.JumpStart.ownerId !== g_localUser.userId )
 					{
 						LoadTextModel(this.JumpStart.displayName);
-						var textObject = JumpStart.spawnInstance(this.JumpStart.displayName, {parent: scoreBoard});
-						textObject.JumpStart.blocksLOS = false;
-
-						var offset = new THREE.Vector3();
-						var i;
-						for( i = 0; i < JumpStart.models.length; i++ )
-						{
-							if( JumpStart.models[i].fileName === this.JumpStart.displayName )
-							{
-								offset.copy(JumpStart.models[i].textOffset);
-								break;
-							}
-						}
-
-						offset.multiply(textObject.scale);
-						textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+						var textObject = spawnText(this.JumpStart.displayName, scoreBoard);
 					}
 
 					spawnScore("0", scoreBoard, this.JumpStart);
@@ -737,12 +734,21 @@
 					striker = g_strikers[1];
 					scoreBoard = g_scoreBoardB;
 				}
-				var flashCounter = 0;
-				var scoreFrame = scoreBoard.getChildByName('scoreFrame');
-				var flashId = setInterval(function () {
-					scoreFrame.JumpStart.setColor(flashCounter % 2 ? scoreFrame.JumpStart.color : scoreFrame.JumpStart.lighterColor);
-					if (flashCounter++ === 5) { clearInterval(flashId); }
-				}, 200);
+
+				if (scoreBoard)
+				{
+					var flashCounter = 0;
+					var scoreFrame = scoreBoard.getObjectByName('scoreFrame');
+					var flashId = setInterval(function ()
+					{
+						var color = flashCounter % 2 ? scoreFrame.JumpStart.color : scoreFrame.JumpStart.lighterColor;
+						scoreFrame.JumpStart.setColor(color);
+						if (flashCounter++ === 5)
+						{
+							clearInterval(flashId);
+						}
+					}, 200);
+				}
 
 				striker.JumpStart.score++;
 				DoAutoSync(striker, true);
