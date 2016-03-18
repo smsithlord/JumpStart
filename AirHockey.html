@@ -737,6 +737,10 @@
 					striker = g_strikers[1];
 					scoreBoard = g_scoreBoardB;
 				}
+
+				if( !scoreBoard )
+					return;
+
 				var flashCounter = 0;
 				var scoreFrame = scoreBoard.getChildByName('scoreFrame');
 				var flashId = setInterval(function () {
@@ -800,6 +804,7 @@
 						if( this.position.z < -zMax - 2.0 )
 						{
 							Goal("b");
+
 							this.JumpStart.onTick = {};
 							this.JumpStart.onTick["scoredTick"] = scoredTick;
 							this.JumpStart.makeStatic();
