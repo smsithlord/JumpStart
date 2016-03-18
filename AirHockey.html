@@ -1,5 +1,6 @@
 <!-- Powered by the JumpStart Game Engine -->
 <!DOCTYPE html>
+<!--suppress ALL -->
 <html lang="en">
 	<head>
 		<title>Air Hockey</title>
@@ -82,6 +83,7 @@
 
 			/**
 			 * @function resetStriker
+			 * @param {THREE.Object3D} striker
 			 * @param {Object} [options]
 			 * @param {String} [options.side] Side "a" or side "b"
 			 * @param {Number} [options.strikerNumber] 
@@ -386,19 +388,6 @@
 				this.userData.oldScore = 0;
 				this.userData.oldOwnerId = "";
 
-				function eventRelay(object, eventName)
-				{
-					return function(e)
-					{
-						var x;
-						for( x in object.JumpStart[eventName] )
-						{
-							// Needs to allow for callback params to make this generalized.
-							object.JumpStart[eventName][x].call(object);	
-						}
-					}
-				}
-
 				g_rayCastObjects.push(this);
 
 				if( !isLocal && g_strikers[this.JumpStart.strikerNumber] )
@@ -527,7 +516,7 @@
 			function spawnScore(score, scoreBoard, jumpStart)
 			{
 				var scoreCached = false;
-				for( i = 0; i < JumpStart.models.length; i++ )
+				for( var i = 0; i < JumpStart.models.length; i++ )
 				{
 					if( JumpStart.models[i].fileName === score )
 					{
@@ -560,6 +549,7 @@
 				scoreFrame.rotation.y = Math.PI / 2;
 				scoreFrame.scale.set(5, 5.3, 10.1);
 				scoreFrame.position.set(11.5, -2.8, 1);
+
 				var scoreBoardBase = new THREE.Mesh(
 					new THREE.BoxGeometry(2, 1, 0.05),
 					new THREE.MeshBasicMaterial({color: 'lightgrey'})
@@ -573,12 +563,13 @@
 
 				scoreBoard.userData.scoreObject = null;
 
-				if( this.JumpStart.side === "b" ) 
+				var frameColor;
+				if( this.JumpStart.side === "b" )
 				{
 					scoreBoard.position.x = g_tableWidth / 2;
 					scoreBoard.rotateY(Math.PI);
 					scoreFrame.JumpStart.cloneMaterial();
-					var frameColor = new THREE.Color('blue');
+					frameColor = new THREE.Color('blue');
 					scoreFrame.JumpStart.color = frameColor;
 					scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
 					scoreFrame.JumpStart.setColor(frameColor);
@@ -588,7 +579,7 @@
 				{
 					scoreBoard.position.x = -g_tableWidth / 2;
 					scoreFrame.JumpStart.cloneMaterial();
-					var frameColor = new THREE.Color('red');
+					frameColor = new THREE.Color('red');
 					scoreFrame.JumpStart.color = frameColor;
 					scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
 					scoreFrame.JumpStart.setColor(frameColor);
@@ -617,7 +608,7 @@
 					if( this.JumpStart.ownerId !== g_localUser.userId )
 					{
 						LoadTextModel(this.JumpStart.displayName);
-						var textObject = spawnText(this.JumpStart.displayName, scoreBoard);
+						spawnText(this.JumpStart.displayName, scoreBoard);
 					}
 
 					spawnScore("0", scoreBoard, this.JumpStart);
@@ -705,17 +696,11 @@
 			{
 				if( object.JumpStart.side === "a" )
 				{
-					if( g_lookHit && g_lookHit.scaledPoint.z <= 20.0 )
-						return true;
-					else
-						return false;
+					return g_lookHit && g_lookHit.scaledPoint.z <= 20.0;
 				}
 				else
 				{
-					if( g_lookHit && g_lookHit.scaledPoint.z >= -20.0 )
-						return true;
-					else
-						return false;
+					return g_lookHit && g_lookHit.scaledPoint.z >= -20.0;
 				}
 			}
 
@@ -919,7 +904,7 @@
 			{
 				if( g_puck && !isLocal )
 				{
-					console.log("APP ERROR: Puck already exists on local client.")
+					console.log("APP ERROR: Puck already exists on local client.");
 					return;
 				}
 				else
