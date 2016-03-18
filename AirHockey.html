@@ -743,7 +743,7 @@
 					"sounds/AirHockey/hit3"
 				];
 				var volume = THREE.Math.clamp(speed, 0.8, 5) / 5;
-				JumpStart.playSoundInstance(hitSounds[Math.floor(Math.random() * 3)], volume);
+				JumpStart.playSound(hitSounds[Math.floor(Math.random() * 3)], volume);
 			}
 
 			function puckTick()

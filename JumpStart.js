@@ -97,6 +97,7 @@ function jumpStart()
 	this.eastPlane = null;
 	this.southPlane = null;
 
+	this.audioContext = new (window.webkitAudioContext || window.AudioContext)();
 	this.cachedSounds = {};
 
 	// FIXME: placeholders for real input event handlers.  will be something basic, like unity itself uses.
@@ -3156,25 +3157,18 @@ jumpStart.prototype.stopSyncing = function(sceneObject)
 
 jumpStart.prototype.precacheSound = function(sound_file_name)
 {
-	if( typeof this.cachedSounds[sound_file_name] != 'undefined' )
+	if( typeof this.cachedSounds[sound_file_name] !== 'undefined' )
 		return;
 
-	var soundName = sound_file_name + ".ogg";
-
-//	var thisGameBoard = this;
-	var soundFileName = sound_file_name;
-	var sound = new Audio(soundName);
-	//canplay, canplaythrough
-
-	// Just mark the sound as pre-cached already, because sometimes they are not being detected as being cached...
-	this.onSoundCached(sound, soundFileName);
-
-/*
-	sound.addEventListener("canplaythrough", function() {
-		thisGameBoard.onSoundCached(sound, soundFileName);
-		sound.removeEventListener("canplaythrough", arguments.callee);
-	});
-*/
+	var req = new XMLHttpRequest();
+	req.open('GET', sound_file_name + '.ogg');
+	req.responseType = 'arraybuffer';
+	req.onload = function () {
+		this.audioContext.decodeAudioData(req.response, function (buffer) {
+			this.cachedSounds[sound_file_name] = buffer;
+		}.bind(this));
+	}.bind(this);
+	req.send();
 };
 
 jumpStart.prototype.onSoundCached = function(loadedSound, soundFileName)
@@ -3197,8 +3191,7 @@ jumpStart.prototype.onSoundCached = function(loadedSound, soundFileName)
 
 jumpStart.prototype.killSound = function(sound)
 {
-	sound.pause();
-	sound.currentTime = 0;
+	sound.source.stop(0);
 };
 
 jumpStart.prototype.killSoundInstance = function(sound)
@@ -3209,7 +3202,7 @@ jumpStart.prototype.killSoundInstance = function(sound)
 
 jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loop)
 {
-	if( typeof this.cachedSounds[sound_file_name] == 'undefined' )
+	if( typeof this.cachedSounds[sound_file_name] === 'undefined' )
 	{
 		console.log("The sound " + sound_file_name + " is not cached!");
 		this.precacheSound(sound_file_name);
@@ -3218,21 +3211,21 @@ jumpStart.prototype.playSound = function(sound_file_name, volume_scale, user_loo
 		return;
 	}
 
-	var loop;
-	if( typeof user_loop !== "undefined" )
-		loop = user_loop;
-	else
-		loop = false;
-
 	var volumeScale = (typeof volume_scale == 'undefined') ? 1.0 : volume_scale;
 
-//	var cachedSound = this.cachedSounds[sound_file_name].cloneNode();
 	var cachedSound = this.cachedSounds[sound_file_name];
-	cachedSound.loop = loop;
-	cachedSound.volume = 1.0 * volumeScale;
-	cachedSound.play();
+	var source = this.audioContext.createBufferSource();
+	source.buffer = cachedSound;
+	source.loop = !!user_loop;
 
-	return cachedSound;
+	var gainNode = this.audioContext.createGain();
+	gainNode.gain.value = 1.0 * volumeScale;
+	source.connect(gainNode);
+	gainNode.connect(this.audioContext.destination);
+
+	source.start(0);
+
+	return {source: source, gainNode: gainNode};
 };
 
 jumpStart.prototype.playSoundInstance = function(sound_file_name, volume_scale, user_loop)
