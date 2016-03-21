@@ -28,6 +28,10 @@
 			<span class="recentWinner"></span> won by
 			<span class="scoreDiff"></span> point<span class="scoreDiffPlural">s</span>
 		</script>
+		<script id="topWinnerTemplate" type="x-template">
+			<span class="topWinner"></span> won 
+			<span class="wins"></span> game<span class="winsPlural">s</span>
+		</script>
 		<div id="leaderboard">
 			<ol id="recentWins"></ol>
 			<ol id="topWinners"></ol>
@@ -610,22 +614,42 @@
 
 			function displayLeaderboard(leaderboard)
 			{
-				function $ (context, selector) { return context.querySelector(selector); }
-				var $recentWins = $(document, '#recentWins');
+				function $$ (context, selector) { return context.querySelector(selector); }
+
+				var $recentWins = $$(document, '#recentWins');
 				$recentWins.innerHTML ='';
+				var $topWinners = $$(document, '#topWinners');
+				$topWinners.innerHTML ='';
+
 				if (!leaderboard) { return; }
+
+				var recentWinHtml = $$(document, '#recentWinTemplate').innerHTML;
 				leaderboard.recentWins.forEach(function (recentWin){
-					var recentWinHtml = $(document, '#recentWinTemplate').innerHTML;
 					var $recentWin = document.createElement('li');
 					$recentWin.innerHTML = recentWinHtml;
-					$($recentWin, '.recentWinner').textContent = recentWin.winnerName;
-					$($recentWin, '.scoreDiff').textContent = recentWin.scoreDiff;
+					$$($recentWin, '.recentWinner').textContent = recentWin.winnerName;
+					$$($recentWin, '.scoreDiff').textContent = recentWin.scoreDiff;
 					if (recentWin.scoreDiff === 1)
 					{
-						$($recentWin, '.scoreDiffPlural').style.display = 'none';
+						$$($recentWin, '.scoreDiffPlural').style.display = 'none';
 					}
 					$recentWins.appendChild($recentWin);
 				})
+
+				var topWinnerHtml = $$(document, '#topWinnerTemplate').innerHTML;
+				for (var i = 0; i < 10; i++) {
+					var topWinner = leaderboard.topWinners[i];
+					if (!topWinner) { break; }
+					var $topWinner = document.createElement('li');
+					$topWinner.innerHTML = topWinnerHtml;
+					$$($topWinner, '.topWinner').textContent = topWinner.displayName;
+					$$($topWinner, '.wins').textContent = topWinner.wins;
+					if (topWinner.wins === 1)
+					{
+						$$($topWinner, '.winsPlural').style.display = 'none';
+					}
+					$topWinners.appendChild($topWinner);
+				}
 			}
 
 			function recordWinOnLeaderboard ()
@@ -634,7 +658,7 @@
 				var otherStriker = strikerZeroLocal ? g_strikers[1] : g_strikers[0];
 				if (!otherStriker.JumpStart.ownerId) { return; }
 
-					g_leaderboardRef.once('value', function (snapshot) {
+				g_leaderboardRef.once('value', function (snapshot) {
 					var leaderboard = snapshot.val();
 					if (!leaderboard)
 					{
@@ -644,14 +668,35 @@
 						};
 					}
 					var localStriker = strikerZeroLocal ? g_strikers[0] : g_strikers[1];
+
 					leaderboard.recentWins.unshift({
 						winnerName: g_localUser.displayName,
 						scoreDiff: localStriker.JumpStart.score - otherStriker.JumpStart.score
 					});
-					if (leaderboard.length >= 10)
+					if (leaderboard.recentWins.length >= 10)
 					{
-						leaderboard.pop();
+						leaderboard.recentWins.pop();
 					}
+
+					var foundTopWinner;
+					leaderboard.topWinners.forEach(function (topWinner) {
+						if (topWinner.userId == g_localUser.userId) {
+							topWinner.wins++
+							foundTopWinner = true;
+						}
+					});
+					if (!foundTopWinner) {
+						leaderboard.topWinners.push({
+								userId: g_localUser.userId,
+								displayName: g_localUser.displayName,
+								wins: 1
+						});
+					}
+
+					leaderboard.topWinners.sort(function (a, b) {
+						return a.wins - b.wins;
+					});
+
 					g_leaderboardRef.set(leaderboard);
 				})
 			}
