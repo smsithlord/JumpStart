@@ -205,27 +205,26 @@
 				poseScoreBoardToCamera(0);
 				poseScoreBoardToCamera(1);
 
-				if(
-					g_strikers[0] && g_strikers[0].JumpStart.ownerId === g_localUser.userId &&
-					(g_strikers[0].JumpStart.score >= g_winningScore || g_strikers[1].JumpStart.score >= g_winningScore)
-				)
+				var strikerZeroJS = g_strikers[0] && g_strikers[0].JumpStart;
+				var strikerOneJS = g_strikers[1] && g_strikers[1].JumpStart;
+				var eitherStrikerHasWon = (
+					strikerZeroJS.score >= g_winningScore || strikerOneJS.score >= g_winningScore);
+				if(strikerZeroJS.ownerId === g_localUser.userId && eitherStrikerHasWon)
 				{
 					resetStriker(
-						g_strikers[0], {side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
+						g_strikers[0],
+						{side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
 				}
-				else if(
-					g_strikers[1] && g_strikers[1].JumpStart.ownerId === g_localUser.userId &&
-					(g_strikers[1].JumpStart.score >= g_winningScore || g_strikers[0].JumpStart.score >= g_winningScore)
-				)
+				else if(strikerOneJS.ownerId === g_localUser.userId && eitherStrikerHasWon)
 				{
 					resetStriker(
-						g_strikers[1], {side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
+						g_strikers[1],
+						{side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
 				}
 			}
 
 			function resetDown()
 			{
-				console.log("down");
 				reset(false);
 			}
 
@@ -728,6 +727,118 @@
 				})
 			}
 
+			function reconstructScoreBoardIfOwnerChanged(scoreBoard)
+			{
+				if( this.userData.oldOwnerId === this.JumpStart.ownerId ) { return scoreBoard; }
+				if( scoreBoard )
+					g_scene.remove(scoreBoard);
+
+				scoreBoard = constructScoreBoard.call(this);
+
+				if( this.JumpStart.ownerId !== g_localUser.userId )
+				{
+					LoadTextModel(this.JumpStart.displayName);
+					spawnText(this.JumpStart.displayName, scoreBoard);
+				}
+
+				spawnScore("0", scoreBoard, this.JumpStart);
+
+				//[...]
+				// 1. create a 3d model of this display name
+				// 2. Spawn it above the player's goal.
+				// 3. create a 3d model of their score (0 - g_winningScore)
+				// 4. Spawn the number next to their name.
+
+				this.userData.oldOwnerId = this.JumpStart.ownerId;
+
+				return scoreBoard; 
+			}
+
+			function displayCelebrateAndRecordIfScoredOrWon(scoreBoard) 
+			{
+				if( this.userData.oldScore === this.JumpStart.score || !scoreBoard ) { return; }
+
+				JumpStart.playSound("sounds/AirHockey/score", 0.7, false);
+
+				DoubleRainbow(this.JumpStart.side);
+
+				if( this.JumpStart.score >= g_winningScore )
+				{
+					JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
+					if (this.JumpStart.ownerId === g_localUser.userId)
+					{
+						recordWinOnLeaderboard();
+					}
+				}
+
+
+				scoreBoard.remove(scoreBoard.userData.scoreObject);
+				spawnScore(this.JumpStart.score, scoreBoard, this.JumpStart);
+
+				this.userData.oldScore = this.JumpStart.score;
+			}
+
+			function updateLocalStrikerPositionAndLimitToTable()
+			{
+				if( this.JumpStart.ownerId !== g_localUser.userId ) { return; }
+
+				if( g_localUser.lookHit && g_localUser.lookHit.object === g_table )
+				{
+					var updatedPos = new THREE.Vector3().copy(g_localUser.lookHit.scaledPoint);
+
+					var xMax = g_tableWidth / 2.0 - g_puckRadius;
+					var zMax = g_tableLength / 2.0 - g_puckRadius;
+
+					if( updatedPos.x < -xMax )
+						updatedPos.x = -xMax;
+					else if( updatedPos.x > xMax )
+						updatedPos.x = xMax;
+
+					if( updatedPos.z < -zMax )
+						updatedPos.z = -zMax;
+					else if( updatedPos.z > zMax )
+						updatedPos.z = zMax;
+
+					if( !goodSide(this) )
+					{
+						updatedPos.z = this.position.z;
+
+						if( this.JumpStart.side === "a" )
+							g_endLine[1].scale.set(1, 1, 1);
+						else
+							g_endLine[0].scale.set(1, 1, 1);
+					}
+					else
+					{
+						if( this.JumpStart.side === "a" && g_endLine[1].scale.x >= 1 )
+							g_endLine[1].scale.set(0.0001, 0.0001, 0.0001);
+						else if( this.JumpStart.side === "b" && g_endLine[0].scale.x >= 1 )
+							g_endLine[0].scale.set(0.0001, 0.0001, 0.0001);
+					}
+
+					this.position.copy(updatedPos);
+
+					var bShouldForce = false;
+					if( this.JumpStart.offTable )
+					{
+						this.JumpStart.offTable = false;
+						bShouldForce = true;
+					}
+
+					DoAutoSync(this, bShouldForce);
+				}
+				else if( !this.JumpStart.offTable )
+				{
+					this.JumpStart.offTable = true;
+					DoAutoSync(this, true);
+
+					if( this.JumpStart.side === "a" && g_endLine[1].scale.x >= 1 )
+						g_endLine[1].scale.set(0.0001, 0.0001, 0.0001);
+					else if( this.JumpStart.side === "b" && g_endLine[0].scale.x >= 1 )
+						g_endLine[0].scale.set(0.0001, 0.0001, 0.0001);
+				}
+			}
+
 			function strikerTick()
 			{
 				var scoreBoard;
@@ -736,51 +847,9 @@
 				else
 					scoreBoard = g_scoreBoardB;
 
-				if( this.userData.oldOwnerId !== this.JumpStart.ownerId )
-				{
-					if( scoreBoard )
-						g_scene.remove(scoreBoard);
+				scoreBoard = reconstructScoreBoardIfOwnerChanged.call(this, scoreBoard);
 
-					scoreBoard = constructScoreBoard.bind(this)();
-
-					if( this.JumpStart.ownerId !== g_localUser.userId )
-					{
-						LoadTextModel(this.JumpStart.displayName);
-						spawnText(this.JumpStart.displayName, scoreBoard);
-					}
-
-					spawnScore("0", scoreBoard, this.JumpStart);
-
-					//[...]
-					// 1. create a 3d model of this display name
-					// 2. Spawn it above the player's goal.
-					// 3. create a 3d model of their score (0 - g_winningScore)
-					// 4. Spawn the number next to their name.
-
-					this.userData.oldOwnerId = this.JumpStart.ownerId;
-				}
-
-				if( this.userData.oldScore !== this.JumpStart.score && scoreBoard )
-				{
-					JumpStart.playSound("sounds/AirHockey/score", 0.7, false);
-
-					DoubleRainbow(this.JumpStart.side);
-
-					if( this.JumpStart.score >= g_winningScore )
-					{
-						JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
-						if (this.JumpStart.ownerId === g_localUser.userId)
-						{
-							recordWinOnLeaderboard();
-						}
-					}
-
-
-					scoreBoard.remove(scoreBoard.userData.scoreObject);
-					spawnScore(this.JumpStart.score, scoreBoard, this.JumpStart);
-
-					this.userData.oldScore = this.JumpStart.score;
-				}
+				displayCelebrateAndRecordIfScoredOrWon.call(this, scoreBoard);
 
 				if( !this.JumpStart.offTable )
 					this.scale.set(1.0, 1.0, 1.0);
@@ -789,73 +858,13 @@
 
 				if( this.JumpStart.ownerId !== g_localUser.userId )
 				{
-					// LERP us if we are not our own drum!
+					// LERP if this is other striker
 					doRotationLerp.call(this);
 					doPositionLerp.call(this);
 					return;
 				}
 
-				if( this.JumpStart.ownerId === g_localUser.userId )
-				{
-					if( g_localUser.lookHit && g_localUser.lookHit.object === g_table )//&& goodSide(this) )
-					{
-						var updatedPos = new THREE.Vector3().copy(g_localUser.lookHit.scaledPoint);
-
-						var xMax = g_tableWidth / 2.0 - g_puckRadius;
-						var zMax = g_tableLength / 2.0 - g_puckRadius;
-
-						if( updatedPos.x < -xMax )
-							updatedPos.x = -xMax;
-						else if( updatedPos.x > xMax )
-							updatedPos.x = xMax;
-
-						if( updatedPos.z < -zMax )
-							updatedPos.z = -zMax;
-						else if( updatedPos.z > zMax )
-							updatedPos.z = zMax;
-
-						if( !goodSide(this) )
-						{
-							updatedPos.z = this.position.z;
-
-							if( this.JumpStart.side === "a" )
-								g_endLine[1].scale.set(1, 1, 1);
-							else
-								g_endLine[0].scale.set(1, 1, 1);
-						}
-						else
-						{
-							if( this.JumpStart.side === "a" && g_endLine[1].scale.x >= 1 )
-								g_endLine[1].scale.set(0.0001, 0.0001, 0.0001);
-							else if( this.JumpStart.side === "b" && g_endLine[0].scale.x >= 1 )
-								g_endLine[0].scale.set(0.0001, 0.0001, 0.0001);
-						}
-
-						this.position.copy(updatedPos);
-
-						var bShouldForce = false;
-						if( this.JumpStart.offTable )
-						{
-							this.JumpStart.offTable = false;
-							bShouldForce = true;
-						}
-
-						DoAutoSync(this, bShouldForce);
-					}
-					else
-					{
-						if( !this.JumpStart.offTable)
-						{
-							this.JumpStart.offTable = true;
-							DoAutoSync(this, true);
-
-							if( this.JumpStart.side === "a" && g_endLine[1].scale.x >= 1 )
-								g_endLine[1].scale.set(0.0001, 0.0001, 0.0001);
-							else if( this.JumpStart.side === "b" && g_endLine[0].scale.x >= 1 )
-								g_endLine[0].scale.set(0.0001, 0.0001, 0.0001);
-						}
-					}
-				}
+				updateLocalStrikerPositionAndLimitToTable.call(this);
 			}
 
 			function goodSide(object)
