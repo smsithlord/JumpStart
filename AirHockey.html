@@ -68,6 +68,9 @@
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
+			/* global
+			   JumpStart, THREE, g_worldOffset, g_localUser, g_camera, g_scene, g_clock, g_lookHit, g_deltaTime */
+			/* exported onTick, onPrecache, onReady */
 
 			// Setup JumpStart Options
 			JumpStart.setOptions({
@@ -100,7 +103,7 @@
 					"lookAtOrigin": true,
 					"position": new THREE.Vector3(-5.0, 10.0, 50.0),
 					"translation": new THREE.Vector3(0.0, 30.0, 100.0)
-				},
+				}
 			});
 
 			var g_ready = false;
@@ -116,7 +119,6 @@
 
 			var g_table = null;
 			var g_puck = null;
-			var g_players = [null, null];
 
 			var g_rayCastObjects = new Array();
 
@@ -132,7 +134,7 @@
 			 * @param {Boolean} [options.resetOldData] If the striker's old score and owner id should be reset
 			 * @param {Boolean} [options.sync] If the striker should be synced after resetting.
 			 **/
-			function resetStriker (striker, options)
+			function resetStriker(striker, options)
 			{
 				striker.JumpStart.side = options.side;
 				striker.JumpStart.offTable = false;
@@ -140,24 +142,28 @@
 				striker.JumpStart.blocksLOS = true;
 				striker.JumpStart.ownerId = "";
 				var handlers = {
-					onSpawn: 'strikerSpawn',
-					onTick: 'strikerTick',
-					onCursorEnter: 'strikerEnter',
-					onCursorLeave: 'strikerLeave',
-					onCursorDown: 'strikerDown'
+					onSpawn: strikerSpawn,
+					onTick: strikerTick,
+					onCursorEnter: strikerEnter,
+					onCursorLeave: strikerLeave,
+					onCursorDown: strikerDown
 				};
-				if (options.resetHandlers) {
-					Object.keys(handlers).forEach(function (event) {
+				if( options.resetHandlers ) 
+				{
+					Object.keys(handlers).forEach(function(event) 
+					{
 						striker.JumpStart[event] = {};
 					});
 				}
-				Object.keys(handlers).forEach(function (event) {
+				Object.keys(handlers).forEach(function(event) 
+				{
 					var strikerHandler = handlers[event];
-					striker.JumpStart[event][strikerHandler] = window[strikerHandler];
+					striker.JumpStart[event][strikerHandler.name] = strikerHandler;
 				});
 				striker.JumpStart.lerpSync = true;
 
-				if (options.resetOldData) {
+				if( options.resetOldData ) 
+				{
 					striker.userData.oldScore = 0;
 					striker.userData.oldOwnerId = "";
 				}
@@ -167,7 +173,8 @@
 					g_worldOffset.y + g_tableHeight,
 					(options.side === "a" ? -1 : 1) * g_tableLength / 3.0);
 
-				if (options.sync) {
+				if( options.sync ) 
+				{
 					striker.JumpStart.sync();
 				}
 			}
@@ -209,13 +216,13 @@
 				var strikerOneJS = g_strikers[1] && g_strikers[1].JumpStart;
 				var eitherStrikerHasWon = (
 					strikerZeroJS.score >= g_winningScore || strikerOneJS.score >= g_winningScore);
-				if(strikerZeroJS.ownerId === g_localUser.userId && eitherStrikerHasWon)
+				if( strikerZeroJS.ownerId === g_localUser.userId && eitherStrikerHasWon )
 				{
 					resetStriker(
 						g_strikers[0],
 						{side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
 				}
-				else if(strikerOneJS.ownerId === g_localUser.userId && eitherStrikerHasWon)
+				else if( strikerOneJS.ownerId === g_localUser.userId && eitherStrikerHasWon )
 				{
 					resetStriker(
 						g_strikers[1],
@@ -320,7 +327,8 @@
 					"models/AirHockey/scoreframe.obj",
 					"models/AirHockey/pixel1.obj",
 					"models/AirHockey/pixel2.obj"
-				]).then(function() {
+				]).then(function()
+				{
 					// All assets cached.
 					JumpStart.doneCaching();
 				});
@@ -330,7 +338,8 @@
 			var g_resetButton = null;
 
 			// Window-level callback for onReady event
-			function onReady() {
+			function onReady() 
+			{
 
 				if( !JumpStart.requestedRoomId )
 					return;
@@ -338,7 +347,7 @@
 				// Do nothing if we are not in an enclosure yet.
 				if( JumpStart.personalBrowser )
 				{
-					var loadingRingElem = document.getElementById("loadingRing");
+					var loadingRingElem = document.getElementById("loadingRing" );
 					if( loadingRingElem )
 					{
 						loadingRingElem.parentNode.removeChild(loadingRingElem);
@@ -359,7 +368,8 @@
 				// Assign us as the 1st player
 
 				// Only the 1st user needs to create the networked object
-				if( g_localUser.firstUser ) {
+				if( g_localUser.firstUser ) 
+				{
 					g_resetButton = JumpStart.spawnInstance("models/AirHockey/reset.obj");
 					g_resetButton.JumpStart.numResets = 0;
 					g_resetButton.JumpStart.blocksLOS = true;
@@ -396,8 +406,9 @@
 					DoAutoSync(striker, true);
 				}
 
-				g_leaderboardRef = JumpStart.firebaseSync.firebaseRoot.child('AirHockeyLeaderboard');
-				g_leaderboardRef.on('value', function (snapshot) {
+				g_leaderboardRef = JumpStart.firebaseSync.firebaseRoot.child("AirHockeyLeaderboard");
+				g_leaderboardRef.on("value", function(snapshot) 
+				{
 					var leaderboard = snapshot.val();
 					displayLeaderboard(leaderboard);
 				});
@@ -421,7 +432,7 @@
 				}
 			}
 
-			function resetSpawn(isLocal)
+			function resetSpawn()
 			{
 				if( !g_resetButton )
 					g_resetButton = this;
@@ -454,7 +465,7 @@
 				g_strikers[this.JumpStart.strikerNumber] = this;
 
 				var strikerJS = this.JumpStart;
-				strikerJS.color = new THREE.Color(strikerJS.side === 'a' ? 'red' : 'blue');
+				strikerJS.color = new THREE.Color(strikerJS.side === "a" ? "red" : "blue");
 				strikerJS.cloneMaterial();
 				strikerJS.darkerColor = strikerJS.color.clone().offsetHSL(0, 0, -0.2);
 				strikerJS.setColor(strikerJS.ownerId ? strikerJS.color : strikerJS.darkerColor);
@@ -529,7 +540,7 @@
 				var geometry;
 				geometry = new THREE.TextGeometry(text, params);
 
-				var material = new THREE.MeshBasicMaterial({color:'#333333'});
+				var material = new THREE.MeshBasicMaterial({color:"#333333"});
 
 				var mesh = new THREE.Mesh(geometry, material);
 
@@ -588,19 +599,19 @@
 				scoreBoard.userData.scoreObject = scoreObject;
 			}
 
-			function constructScoreBoard () 
+			function constructScoreBoard() 
 			{
 				var scoreBoard = JumpStart.spawnInstance(null);
 				var scoreFrame = window.scoreFrame = JumpStart.spawnInstance(
 					"models/AirHockey/scoreframe.obj", {parent: scoreBoard});
-				scoreFrame.name = 'scoreFrame';
+				scoreFrame.name = "scoreFrame";
 				scoreFrame.rotation.y = Math.PI / 2;
 				scoreFrame.scale.set(5, 5.3, 10.1);
 				scoreFrame.position.set(11.5, -2.8, 1);
 
 				var scoreBoardBase = new THREE.Mesh(
 					new THREE.BoxGeometry(2, 1, 0.05),
-					new THREE.MeshBasicMaterial({color: 'lightgrey'})
+					new THREE.MeshBasicMaterial({color: "lightgrey"})
 				);
 				scoreBoardBase.position.z -= 0.3;
 				scoreBoardBase.scale.multiplyScalar(10);
@@ -617,7 +628,7 @@
 					scoreBoard.position.x = g_tableWidth / 2;
 					scoreBoard.rotateY(Math.PI);
 					scoreFrame.JumpStart.cloneMaterial();
-					frameColor = new THREE.Color('blue');
+					frameColor = new THREE.Color("blue");
 					scoreFrame.JumpStart.color = frameColor;
 					scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
 					scoreFrame.JumpStart.setColor(frameColor);
@@ -627,7 +638,7 @@
 				{
 					scoreBoard.position.x = -g_tableWidth / 2;
 					scoreFrame.JumpStart.cloneMaterial();
-					frameColor = new THREE.Color('red');
+					frameColor = new THREE.Color("red");
 					scoreFrame.JumpStart.color = frameColor;
 					scoreFrame.JumpStart.lighterColor = frameColor.clone().offsetHSL(0, 0, 0.3);
 					scoreFrame.JumpStart.setColor(frameColor);
@@ -640,53 +651,60 @@
 
 			function displayLeaderboard(leaderboard)
 			{
-				function $$ (context, selector) { return context.querySelector(selector); }
+				function $$(context, selector) 
+				{
+					return context.querySelector(selector);
+				}
 
-				var $recentWins = $$(document, '#recentWins');
-				$recentWins.innerHTML ='';
-				var $topWinners = $$(document, '#topWinners');
-				$topWinners.innerHTML ='';
+				var $recentWins = $$(document, "#recentWins");
+				$recentWins.innerHTML ="";
+				var $topWinners = $$(document, "#topWinners");
+				$topWinners.innerHTML ="";
 
-				if (!leaderboard) { return; }
+				if( !leaderboard ) 
+					return;
 
-				var recentWinHtml = $$(document, '#recentWinTemplate').innerHTML;
-				leaderboard.recentWins.forEach(function (recentWin){
-					var $recentWin = document.createElement('tr');
+				var recentWinHtml = $$(document, "#recentWinTemplate").innerHTML;
+				leaderboard.recentWins.forEach(function(recentWin)
+				{
+					var $recentWin = document.createElement("tr");
 					$recentWin.innerHTML = recentWinHtml;
-					$$($recentWin, '.recentWinner').textContent = recentWin.winnerName;
-					$$($recentWin, '.scoreDiff').textContent = recentWin.scoreDiff;
-					if (recentWin.scoreDiff === 1)
+					$$($recentWin, ".recentWinner").textContent = recentWin.winnerName;
+					$$($recentWin, ".scoreDiff").textContent = recentWin.scoreDiff;
+					if( recentWin.scoreDiff === 1 )
 					{
-						$$($recentWin, '.scoreDiffPlural').style.display = 'none';
+						$$($recentWin, ".scoreDiffPlural").style.display = "none";
 					}
 					$recentWins.appendChild($recentWin);
 				})
 
-				var topWinnerHtml = $$(document, '#topWinnerTemplate').innerHTML;
-				for (var i = 0; i < 10; i++) {
+				var topWinnerHtml = $$(document, "#topWinnerTemplate").innerHTML;
+				for( var i = 0; i < 10; i++ ) 
+				{
 					var topWinner = leaderboard.topWinners[i];
-					if (!topWinner) { break; }
-					var $topWinner = document.createElement('tr');
+					if( !topWinner ) 
+						break;
+					var $topWinner = document.createElement("tr");
 					$topWinner.innerHTML = topWinnerHtml;
-					$$($topWinner, '.topWinner').textContent = topWinner.displayName;
-					$$($topWinner, '.wins').textContent = topWinner.wins;
-					if (topWinner.wins === 1)
-					{
-						$$($topWinner, '.winsPlural').style.display = 'none';
-					}
+					$$($topWinner, ".topWinner").textContent = topWinner.displayName;
+					$$($topWinner, ".wins").textContent = topWinner.wins;
+					if( topWinner.wins === 1 )
+						$$($topWinner, ".winsPlural").style.display = "none";
 					$topWinners.appendChild($topWinner);
 				}
 			}
 
-			function recordWinOnLeaderboard ()
+			function recordWinOnLeaderboard()
 			{
 				var strikerZeroLocal = g_strikers[0].JumpStart.ownerId === g_localUser.userId;
 				var otherStriker = strikerZeroLocal ? g_strikers[1] : g_strikers[0];
-				if (!otherStriker.JumpStart.ownerId) { return; }
+				if( !otherStriker.JumpStart.ownerId ) 
+					return;
 
-				g_leaderboardRef.once('value', function (snapshot) {
+				g_leaderboardRef.once("value", function(snapshot) 
+				{
 					var leaderboard = snapshot.val();
-					if (!leaderboard)
+					if( !leaderboard )
 					{
 						leaderboard = {
 							recentWins: [],
@@ -699,27 +717,29 @@
 						winnerName: g_localUser.displayName,
 						scoreDiff: localStriker.JumpStart.score - otherStriker.JumpStart.score
 					});
-					if (leaderboard.recentWins.length >= 10)
-					{
+					if( leaderboard.recentWins.length >= 10 )
 						leaderboard.recentWins.pop();
-					}
 
 					var foundTopWinner;
-					leaderboard.topWinners.forEach(function (topWinner) {
-						if (topWinner.userId == g_localUser.userId) {
+					leaderboard.topWinners.forEach(function(topWinner) 
+					{
+						if( topWinner.userId == g_localUser.userId ) 
+						{
 							topWinner.wins++
 							foundTopWinner = true;
 						}
 					});
-					if (!foundTopWinner) {
+					if( !foundTopWinner ) 
+					{
 						leaderboard.topWinners.push({
-								userId: g_localUser.userId,
-								displayName: g_localUser.displayName,
-								wins: 1
+							userId: g_localUser.userId,
+							displayName: g_localUser.displayName,
+							wins: 1
 						});
 					}
 
-					leaderboard.topWinners.sort(function (a, b) {
+					leaderboard.topWinners.sort(function(a, b) 
+					{
 						return b.wins - a.wins;
 					});
 
@@ -729,7 +749,8 @@
 
 			function reconstructScoreBoardIfOwnerChanged(scoreBoard)
 			{
-				if( this.userData.oldOwnerId === this.JumpStart.ownerId ) { return scoreBoard; }
+				if( this.userData.oldOwnerId === this.JumpStart.ownerId ) 
+					return scoreBoard;
 				if( scoreBoard )
 					g_scene.remove(scoreBoard);
 
@@ -756,7 +777,8 @@
 
 			function displayCelebrateAndRecordIfScoredOrWon(scoreBoard) 
 			{
-				if( this.userData.oldScore === this.JumpStart.score || !scoreBoard ) { return; }
+				if( this.userData.oldScore === this.JumpStart.score || !scoreBoard ) 
+					return;
 
 				JumpStart.playSound("sounds/AirHockey/score", 0.7, false);
 
@@ -765,7 +787,7 @@
 				if( this.JumpStart.score >= g_winningScore )
 				{
 					JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
-					if (this.JumpStart.ownerId === g_localUser.userId)
+					if( this.JumpStart.ownerId === g_localUser.userId )
 					{
 						recordWinOnLeaderboard();
 					}
@@ -780,7 +802,8 @@
 
 			function updateLocalStrikerPositionAndLimitToTable()
 			{
-				if( this.JumpStart.ownerId !== g_localUser.userId ) { return; }
+				if( this.JumpStart.ownerId !== g_localUser.userId ) 
+					return;
 
 				if( g_localUser.lookHit && g_localUser.lookHit.object === g_table )
 				{
@@ -895,15 +918,16 @@
 					scoreBoard = g_scoreBoardB;
 				}
 
-				if (!scoreBoard) { return; }
+				if( !scoreBoard ) 
+					return;
 
 				var flashCounter = 0;
-				var scoreFrame = scoreBoard.getObjectByName('scoreFrame');
-				var flashId = setInterval(function ()
+				var scoreFrame = scoreBoard.getObjectByName("scoreFrame");
+				var flashId = setInterval(function()
 				{
 					var color = flashCounter % 2 ? scoreFrame.JumpStart.color : scoreFrame.JumpStart.lighterColor;
 					scoreFrame.JumpStart.setColor(color);
-					if (flashCounter++ === 5)
+					if( flashCounter++ === 5 )
 					{
 						clearInterval(flashId);
 					}
@@ -1153,7 +1177,7 @@
 					{
 						this.userData.direction = -1.0;
 
-						var nextIndex = null;;
+						var nextIndex = null;
 						if( this.userData.beamIndex <= 7.0 )
 						{
 							if( this.userData.beamIndex === 0.0 )
@@ -1249,40 +1273,6 @@
 				}
 			}
 
-			function doScaleLerp()
-			{
-				if( this.userData.hasOwnProperty("targetScaleLerp") && this.userData.targetScaleLerp < 1.0 )
-				{
-					this.userData.targetScaleLerp += (1.0/this.userData.targetScaleLerpTime) * g_deltaTime;
-
-					var justFinished = false;
-					if( this.userData.targetScaleLerp >= 1.0 )
-					{
-						this.userData.targetScaleLerp = 1.0;
-						justFinished = true;
-					}
-
-					this.scale.lerpVectors(
-						this.userData.targetScaleOriginal, this.userData.targetScale, this.userData.targetScaleLerp);
-
-					if( justFinished )
-					{
-						if( this.userData.hasOwnProperty("targetScaleAnim") && this.userData.targetScaleAnim.length > 0 )
-						{
-							var nextTarget = this.userData.targetScaleAnim.shift();
-							if( !nextTarget.targetScaleOriginal )
-								nextTarget.targetScaleOriginal = new THREE.Vector3().copy(this.scale);
-
-							// Set our new targets.
-							this.userData.targetScale.copy(nextTarget.targetScale);
-							this.userData.targetScaleOriginal.copy(nextTarget.targetScaleOriginal);
-							this.userData.targetScaleLerp = nextTarget.targetScaleLerp;
-							this.userData.targetScaleLerpTime = nextTarget.targetScaleLerpTime;
-						}
-					}
-				}
-			}
-
 			function doPositionLerp()
 			{
 				if( this.userData.hasOwnProperty("targetPosLerp") && this.userData.targetPosLerp < 1.0 )
@@ -1338,9 +1328,9 @@
 					}
 
 					var myQuaternionA = new THREE.Quaternion().setFromEuler(
-						new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, 'XYZ'));
+						new THREE.Euler().setFromVector3(this.userData.targetRotOriginal, "XYZ"));
 					var myQuaternionB = new THREE.Quaternion().setFromEuler(
-						new THREE.Euler().setFromVector3(this.userData.targetRot, 'XYZ'));
+						new THREE.Euler().setFromVector3(this.userData.targetRot, "XYZ"));
 
 					myQuaternionA.slerp(myQuaternionB, this.userData.targetRotLerp);
 					this.quaternion.copy(myQuaternionA);
@@ -1365,7 +1355,7 @@
 
 			if( JumpStart.webMode )
 			{
-				document.body.addEventListener('keydown', function(e)
+				document.body.addEventListener("keydown", function(e)
 				{
 					if( e.keyCode === 83 )
 						g_camera.translateZ(20);
