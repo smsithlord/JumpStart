@@ -318,14 +318,16 @@
 					"models/AirHockey/reset.obj",
 					"models/AirHockey/striker.obj",
 					"models/AirHockey/table.obj",
-					"models/AirHockey/scoreframe.obj"
+					"models/AirHockey/scoreframe.obj",
+					"models/AirHockey/pixel1.obj",
+					"models/AirHockey/pixel2.obj"
 				]).then(function() {
 					// All assets cached.
 					JumpStart.doneCaching();
 				});
 			}
 
-
+			var g_endLine = new Array();	// The lines that appear when you try to move your striker to the other side of the table.
 			var g_resetButton = null;
 
 			// Window-level callback for onReady event
@@ -762,6 +764,8 @@
 				{
 					JumpStart.playSound("sounds/AirHockey/score", 0.7, false);
 
+					DoubleRainbow(this.JumpStart.side);
+
 					if( this.JumpStart.score >= g_winningScore )
 					{
 						JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
@@ -810,6 +814,23 @@
 						else if( updatedPos.z > zMax )
 							updatedPos.z = zMax;
 
+						if( !goodSide(this) )
+						{
+							updatedPos.z = this.position.z;
+
+							if( this.JumpStart.side === "a" )
+								g_endLine[1].scale.set(1, 1, 1);
+							else
+								g_endLine[0].scale.set(1, 1, 1);
+						}
+						else
+						{
+							if( this.JumpStart.side === "a" && g_endLine[1].scale.x >= 1 )
+								g_endLine[1].scale.set(0.0001, 0.0001, 0.0001);
+							else if( this.JumpStart.side === "b" && g_endLine[0].scale.x >= 1 )
+								g_endLine[0].scale.set(0.0001, 0.0001, 0.0001);
+						}
+
 						this.position.copy(updatedPos);
 
 						var bShouldForce = false;
@@ -827,6 +848,11 @@
 						{
 							this.JumpStart.offTable = true;
 							DoAutoSync(this, true);
+
+							if( this.JumpStart.side === "a" && g_endLine[1].scale.x >= 1 )
+								g_endLine[1].scale.set(0.0001, 0.0001, 0.0001);
+							else if( this.JumpStart.side === "b" && g_endLine[0].scale.x >= 1 )
+								g_endLine[0].scale.set(0.0001, 0.0001, 0.0001);
 						}
 					}
 				}
@@ -846,7 +872,7 @@
 
 			function Goal(side)
 			{
-				g_puck.userData.delayLife = 2.0;
+				g_puck.userData.delayLife = 2.5;
 
 				var striker, scoreBoard;
 				if( side === "a" )
@@ -860,20 +886,19 @@
 					scoreBoard = g_scoreBoardB;
 				}
 
-				if (scoreBoard)
+				if (!scoreBoard) { return; }
+
+				var flashCounter = 0;
+				var scoreFrame = scoreBoard.getObjectByName('scoreFrame');
+				var flashId = setInterval(function ()
 				{
-					var flashCounter = 0;
-					var scoreFrame = scoreBoard.getObjectByName('scoreFrame');
-					var flashId = setInterval(function ()
+					var color = flashCounter % 2 ? scoreFrame.JumpStart.color : scoreFrame.JumpStart.lighterColor;
+					scoreFrame.JumpStart.setColor(color);
+					if (flashCounter++ === 5)
 					{
-						var color = flashCounter % 2 ? scoreFrame.JumpStart.color : scoreFrame.JumpStart.lighterColor;
-						scoreFrame.JumpStart.setColor(color);
-						if (flashCounter++ === 5)
-						{
-							clearInterval(flashId);
-						}
-					}, 200);
-				}
+						clearInterval(flashId);
+					}
+				}, 200);
 
 				striker.JumpStart.score++;
 				DoAutoSync(striker, true);
@@ -931,6 +956,7 @@
 						if( this.position.z < -zMax - 2.0 )
 						{
 							Goal("b");
+							this.position.z = -zMax - 2.0;
 							this.JumpStart.onTick = {};
 							this.JumpStart.onTick["scoredTick"] = scoredTick;
 							this.JumpStart.makeStatic();
@@ -951,6 +977,7 @@
 						if( this.position.z > zMax + 2.0 )
 						{
 							Goal("a");
+							this.position.z = zMax + 2.0;
 							this.JumpStart.onTick = {};
 							this.JumpStart.onTick["scoredTick"] = scoredTick;
 							this.JumpStart.makeStatic();
@@ -1071,6 +1098,129 @@
 				tableModel.position.z += 0.1;
 				tableModel.JumpStart.blocksLOS = false;
 				tableModel.rotateX(-Math.PI / 2.0);
+
+				// Make the endlines
+				var endLine = new THREE.Mesh(
+							new THREE.BoxGeometry(g_tableWidth, 1.0, 0.1),
+							new THREE.MeshBasicMaterial( { color: "#5555ff", transparent: true, opacity: 0.5, visible: true })
+						);
+				g_table.add(endLine);
+				endLine.translateY(-20.0);
+				endLine.scale.set(0.0001, 0.0001, 0.0001);
+				g_endLine.push(endLine);
+
+				endLine = new THREE.Mesh(
+							new THREE.BoxGeometry(g_tableWidth, 1.0, 0.1),
+							new THREE.MeshBasicMaterial( { color: "#ff5555", transparent: true, opacity: 0.5, visible: true })
+						);
+				g_table.add(endLine);
+				endLine.translateY(20.0);
+				endLine.scale.set(0.0001, 0.0001, 0.0001);
+				g_endLine.push(endLine);
+			}
+
+			function RainbowBeam(yaw, zOrigin, pixelModelName, beamIndex, side)
+			{
+				var beam = JumpStart.spawnInstance(pixelModelName);
+				beam.position.copy(g_puck.position);
+				beam.position.z = zOrigin;
+				beam.rotation.y = yaw;
+				beam.userData.origin = new THREE.Vector3().copy(beam.position);
+				beam.userData.direction = 1.0;
+				beam.userData.beamIndex = beamIndex;
+				beam.userData.side = side;
+
+				beam.JumpStart.onTick = function()
+				{
+					
+					this.translateZ(-300.0 * g_deltaTime * this.userData.direction);
+
+					if( (this.userData.side === "a" && (this.position.z < g_table.position.z + (-zOrigin)
+						|| this.position.x > g_table.position.x + g_tableWidth / 2.0
+						|| this.position.x < g_table.position.x - g_tableWidth / 2.0)) ||
+						(this.userData.side === "b" && (this.position.z > g_table.position.z + (-zOrigin)
+						|| this.position.x > g_table.position.x + g_tableWidth / 2.0
+						|| this.position.x < g_table.position.x - g_tableWidth / 2.0)) )
+					{
+						this.userData.direction = -1.0;
+
+						var nextIndex = null;;
+						if( this.userData.beamIndex <= 7.0 )
+						{
+							if( this.userData.beamIndex === 0.0 )
+							{
+								return;
+							}
+							else
+								nextIndex = parseInt(this.userData.beamIndex) - 1;
+						}
+						else if( this.userData.beamIndex <= 15.0 )
+						{
+							//nextIndex = parseInt(this.userData.beamIndex) + 1;
+
+							if( this.userData.beamIndex <= 9.0 )
+								return;
+							else
+								nextIndex = parseInt(this.userData.beamIndex) - 1;
+						}
+
+						if( nextIndex !== null )
+							GenerateBeam(this.userData.side, nextIndex);
+
+						return;
+					}
+
+					if( this.userData.direction < 0 && ((this.userData.side === "a" && this.position.z > this.userData.origin.z)
+						|| (this.userData.side === "b" && this.position.z < this.userData.origin.z)) )
+					{
+						g_scene.remove(this);
+						return;
+					}
+
+					var dist = beam.position.distanceTo(this.userData.origin) * 2.0;
+					this.scale.z = dist;
+				};
+			}
+
+			function GenerateBeam(side, beamIndex)
+			{
+				var zMax = (g_tableLength / 2.0 - g_puckRadius) + 4.0;
+				var zMin = -zMax;
+
+				var yaw = 0;
+				var zOrigin = zMax;
+				var pixelModelName = "models/AirHockey/pixel2.obj";
+				if( side !== "a" )
+				{
+					yaw = Math.PI;
+					zOrigin = zMin;
+					pixelModelName = "models/AirHockey/pixel1.obj";
+				}
+
+				var divisions = 8.0;
+				var amt = (Math.PI / 2.0) / divisions;
+
+				var adjustedYAW, sign, adjustedI;
+				if( beamIndex < divisions )
+				{
+					sign = -1.0;
+					adjustedI = beamIndex;
+				}
+				else
+				{
+					sign = 1.0;
+					adjustedI = beamIndex - divisions;
+				}
+
+				adjustedYAW = yaw + amt * (adjustedI * 1.0) * sign;
+				RainbowBeam(adjustedYAW, zOrigin, pixelModelName, beamIndex, side);
+			}
+
+			function DoubleRainbow(side)
+			{
+				// Now do stuff
+				GenerateBeam(side, 7.0);
+				GenerateBeam(side, 15.0);
 			}
 
 			function DoAutoSync(sceneObject, forceSync)
