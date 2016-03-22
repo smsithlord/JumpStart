@@ -1197,24 +1197,23 @@
 						if( this.userData.beamIndex <= 7.0 )
 						{
 							if( this.userData.beamIndex === 0.0 )
-							{
 								return;
-							}
 							else
-								nextIndex = parseInt(this.userData.beamIndex) - 1;
+								nextIndex = this.userData.beamIndex - 1;
 						}
 						else if( this.userData.beamIndex <= 15.0 )
 						{
-							//nextIndex = parseInt(this.userData.beamIndex) + 1;
-
 							if( this.userData.beamIndex <= 9.0 )
 								return;
 							else
-								nextIndex = parseInt(this.userData.beamIndex) - 1;
+								nextIndex = this.userData.beamIndex - 1;
 						}
 
-						if( nextIndex !== null )
+						if( nextIndex !== null && !this.userData.alreadyGeneratedBeam )
+						{
+							this.userData.alreadyGeneratedBeam = true;
 							GenerateBeam(this.userData.side, nextIndex);
+						}
 
 						return;
 					}
