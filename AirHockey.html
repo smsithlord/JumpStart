@@ -174,6 +174,9 @@
 					g_worldOffset.y + g_tableHeight,
 					(options.side === "a" ? -1 : 1) * g_tableLength / 3.0);
 
+				if (striker.userData.targetPos)
+					striker.userData.targetPos.copy(striker.position);
+
 				if( options.sync ) 
 				{
 					striker.JumpStart.sync();
@@ -778,24 +781,34 @@
 				return scoreBoard; 
 			}
 
-			function displayCelebrateAndRecordIfScoredOrWon(scoreBoard) 
+			var g_lastSoundTimestamps = {};
+			function playSoundThrottled(sound, volume, throttle)
+			{
+				if (g_lastSoundTimestamps[sound] && (Date.now() - g_lastSoundTimestamps[sound]) <= throttle) 
+					return;
+				JumpStart.playSound(sound, 0.7, false);
+				g_lastSoundTimestamps[sound] = Date.now();
+			}
+
+			function displayCelebrateAndRecordIfScoreChanged(scoreBoard) 
 			{
 				if( this.userData.oldScore === this.JumpStart.score || !scoreBoard ) 
 					return;
 
-				JumpStart.playSound("sounds/AirHockey/score", 0.7, false);
-
-				DoubleRainbow(this.JumpStart.side);
+				if( this.JumpStart.score > this.userData.oldScore )
+				{
+					playSoundThrottled("sounds/AirHockey/score", 0.7, 1000);
+					DoubleRainbow(this.JumpStart.side);
+				}
 
 				if( this.JumpStart.score >= g_winningScore )
 				{
-					JumpStart.playSound("sounds/AirHockey/gameover", 0.7, false);
+					playSoundThrottled("sounds/AirHockey/gameover", 0.7, 1000);
 					if( this.JumpStart.ownerId === g_localUser.userId )
 					{
 						recordWinOnLeaderboard();
 					}
 				}
-
 
 				scoreBoard.remove(scoreBoard.userData.scoreObject);
 				spawnScore(this.JumpStart.score, scoreBoard, this.JumpStart);
@@ -875,7 +888,7 @@
 
 				scoreBoard = reconstructScoreBoardIfOwnerChanged.call(this, scoreBoard);
 
-				displayCelebrateAndRecordIfScoredOrWon.call(this, scoreBoard);
+				displayCelebrateAndRecordIfScoreChanged.call(this, scoreBoard);
 
 				if( !this.JumpStart.offTable )
 					this.scale.set(1.0, 1.0, 1.0);
@@ -1214,7 +1227,7 @@
 					}
 
 					var dist = beam.position.distanceTo(this.userData.origin) * 2.0;
-					this.scale.z = dist;
+					this.scale.z = THREE.Math.clamp(dist, 0.0001, dist);
 				};
 			}
 
