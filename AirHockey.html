@@ -141,6 +141,7 @@
 				striker.JumpStart.strikerNumber = options.strikerNumber;
 				striker.JumpStart.blocksLOS = true;
 				striker.JumpStart.ownerId = "";
+				striker.JumpStart.score = 0;
 				var handlers = {
 					onSpawn: strikerSpawn,
 					onTick: strikerTick,
@@ -249,7 +250,8 @@
 					if( !lite )
 					{
 						resetStriker(
-							striker, {side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
+							striker,
+							{side: "a", strikerNumber: 0, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
@@ -260,7 +262,8 @@
 					if( !lite )
 					{
 						resetStriker(
-							striker, {side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
+							striker,
+							{side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
 					}
 				}
 
