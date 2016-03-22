@@ -21,20 +21,45 @@
 
 		<!-- JumpStart Styles -->
 		<link rel="stylesheet" type="text/css" href="myStyle.css" />
+		<style>
+			#leaderboard {
+				display: flex;
+				flex-direction: row;
+				background: rgba(50, 50, 50, 0.8);
+			}
+
+			#leaderboard .col {
+				flex: 1 0 auto;
+				padding-bottom: 1em;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				text-align: left;
+			}
+			#leaderboard td {
+				padding-left: 1em;
+			}
+		</style>
 	</head>
 
 	<body>
 		<script id="recentWinTemplate" type="x-template">
-			<span class="recentWinner"></span> won by
-			<span class="scoreDiff"></span> point<span class="scoreDiffPlural">s</span>
+			<td class="recentWinner"></td>
+			<td><span class="scoreDiff"></span> point<span class="scoreDiffPlural">s</span></td>
 		</script>
 		<script id="topWinnerTemplate" type="x-template">
-			<span class="topWinner"></span> won 
-			<span class="wins"></span> game<span class="winsPlural">s</span>
+			<td class="topWinner"></td>
+			<td><span class="wins"></span> game<span class="winsPlural">s</span></td>
 		</script>
 		<div id="leaderboard">
-			<ol id="recentWins"></ol>
-			<ol id="topWinners"></ol>
+			<div class="col">
+				<h2>Recent Wins</h2>
+				<table id="recentWins"></table>
+			</div>
+			<div class="col">
+				<h2>Top Winners</h2>
+				<table id="topWinners"></table>
+			</div>
 		</div>
 
 
@@ -625,7 +650,7 @@
 
 				var recentWinHtml = $$(document, '#recentWinTemplate').innerHTML;
 				leaderboard.recentWins.forEach(function (recentWin){
-					var $recentWin = document.createElement('li');
+					var $recentWin = document.createElement('tr');
 					$recentWin.innerHTML = recentWinHtml;
 					$$($recentWin, '.recentWinner').textContent = recentWin.winnerName;
 					$$($recentWin, '.scoreDiff').textContent = recentWin.scoreDiff;
@@ -640,7 +665,7 @@
 				for (var i = 0; i < 10; i++) {
 					var topWinner = leaderboard.topWinners[i];
 					if (!topWinner) { break; }
-					var $topWinner = document.createElement('li');
+					var $topWinner = document.createElement('tr');
 					$topWinner.innerHTML = topWinnerHtml;
 					$$($topWinner, '.topWinner').textContent = topWinner.displayName;
 					$$($topWinner, '.wins').textContent = topWinner.wins;
@@ -694,7 +719,7 @@
 					}
 
 					leaderboard.topWinners.sort(function (a, b) {
-						return a.wins - b.wins;
+						return b.wins - a.wins;
 					});
 
 					g_leaderboardRef.set(leaderboard);
