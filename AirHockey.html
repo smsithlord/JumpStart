@@ -685,7 +685,7 @@
 				})
 
 				var topWinnerHtml = $$(document, "#topWinnerTemplate").innerHTML;
-				for( var i = 0; i < 10; i++ ) 
+				for( var i = 0; i < 5; i++ ) 
 				{
 					var topWinner = leaderboard.topWinners[i];
 					if( !topWinner ) 
@@ -723,7 +723,7 @@
 						winnerName: g_localUser.displayName,
 						scoreDiff: localStriker.JumpStart.score - otherStriker.JumpStart.score
 					});
-					if( leaderboard.recentWins.length >= 10 )
+					if( leaderboard.recentWins.length >= 5 )
 						leaderboard.recentWins.pop();
 
 					var foundTopWinner;
