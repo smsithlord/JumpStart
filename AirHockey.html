@@ -226,9 +226,10 @@
 			function flipLeaderboardToCamera()
 			{
 				var head = JumpStart.localUser.trackingSkeleton.getJoint('Head');
-				if ( head.position.z >= 0 && leaderboard.classList.contains('flipped') ) 
+				var leaderboardIsFlipped = leaderboard.classList.contains('flipped');
+				if ( head.position.z >= 0 && leaderboardIsFlipped ) 
 					leaderboard.classList.remove('flipped');
-				else if ( head.position.z < 0 && !leaderboard.classList.contains('flipped') ) 
+				else if ( head.position.z < 0 && !leaderboardIsFlipped ) 
 					leaderboard.classList.add('flipped');
 			}
 
