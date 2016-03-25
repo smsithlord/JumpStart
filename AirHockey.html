@@ -769,8 +769,16 @@
 
 				if( this.JumpStart.ownerId !== g_localUser.userId )
 				{
-					LoadTextModel(this.JumpStart.displayName);
-					spawnText(this.JumpStart.displayName, scoreBoard);
+					var displayName = this.JumpStart.displayName;
+					LoadTextModel(displayName);
+					var displayNameObject = spawnText(displayName, scoreBoard);
+					displayNameObject.translateY(-1);
+					var displayNameWidth = displayNameObject.geometry.boundingBox.size().x;
+					if ( displayNameWidth > 8 )
+					{
+						displayNameObject.scale.multiplyScalar(16 / displayNameWidth);
+						displayNameObject.position.x = -displayNameWidth / 2 * displayNameObject.scale.x;
+					}
 				}
 
 				spawnScore("0", scoreBoard, this.JumpStart);
