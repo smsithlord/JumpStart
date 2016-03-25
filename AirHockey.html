@@ -707,6 +707,11 @@
 				if( !otherStriker.JumpStart.ownerId ) 
 					return;
 
+				var localName = g_localUser.displayName;
+				var localStriker = strikerZeroLocal ? g_strikers[0] : g_strikers[1];
+				var scoreDiff = localStriker.JumpStart.score - otherStriker.JumpStart.score;
+				var localUserId = g_localUser.userId;
+
 				g_leaderboardRef.once("value", function(snapshot) 
 				{
 					var leaderboard = snapshot.val();
@@ -717,11 +722,10 @@
 							topWinners: []
 						};
 					}
-					var localStriker = strikerZeroLocal ? g_strikers[0] : g_strikers[1];
 
 					leaderboard.recentWins.unshift({
-						winnerName: g_localUser.displayName,
-						scoreDiff: localStriker.JumpStart.score - otherStriker.JumpStart.score
+						winnerName: localName,
+						scoreDiff: scoreDiff
 					});
 					if( leaderboard.recentWins.length >= 5 )
 						leaderboard.recentWins.pop();
@@ -729,17 +733,18 @@
 					var foundTopWinner;
 					leaderboard.topWinners.forEach(function(topWinner) 
 					{
-						if( topWinner.userId == g_localUser.userId ) 
+						if( topWinner.userId == localUserId ) 
 						{
-							topWinner.wins++
+							topWinner.wins++;
+							topWinner.displayName = localName;
 							foundTopWinner = true;
 						}
 					});
 					if( !foundTopWinner ) 
 					{
 						leaderboard.topWinners.push({
-							userId: g_localUser.userId,
-							displayName: g_localUser.displayName,
+							userId: localUserId,
+							displayName: localName,
 							wins: 1
 						});
 					}
