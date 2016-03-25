@@ -26,6 +26,8 @@
 				display: flex;
 				flex-direction: row;
 				background: rgba(50, 50, 50, 0.8);
+				-webkit-transform: scaleX(1);
+				transform: scaleX(1);
 			}
 
 			#leaderboard .col {
@@ -38,6 +40,10 @@
 			}
 			#leaderboard td {
 				padding-left: 1em;
+			}
+			#leaderboard.flipped {
+				-webkit-transform: scaleX(-1);
+				transform: scaleX(-1);
 			}
 		</style>
 	</head>
@@ -211,6 +217,15 @@
 				}
 			}
 
+			function flipLeaderboardToCamera()
+			{
+				var head = JumpStart.localUser.trackingSkeleton.getJoint('Head');
+				if ( head.position.z >= 0 && leaderboard.classList.contains('flipped') ) 
+					leaderboard.classList.remove('flipped');
+				else if ( head.position.z < 0 && !leaderboard.classList.contains('flipped') ) 
+					leaderboard.classList.add('flipped');
+			}
+
 			function onTick()
 			{
 				poseScoreBoardToCamera(0);
@@ -232,6 +247,8 @@
 						g_strikers[1],
 						{side: "b", strikerNumber: 1, resetOldData: true, sync: true, resetHandlers: true});
 				}
+
+				flipLeaderboardToCamera();
 			}
 
 			function resetDown()
