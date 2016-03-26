@@ -1,0 +1,28 @@
+.JS_SLATE_HEADER
+{
+	width: 100%;
+	border: 2px solid #00ff00;
+	background-color: rgba(0, 0, 0, 0.9);
+}
+
+.JS_SLATE_LOGTEXT_CONTAINER
+{
+	position: fixed;
+	left: 0;
+	width: 100%;
+/*	right: 0;*/
+	bottom: 0;
+	margin-left: auto;
+	margin-right: auto;
+}
+
+.JS_SLATE_LOGTEXT
+{
+	height: 150px;
+	width: 100%;
+	font-weight: 900;
+	font-family: Arial;
+	font-size: 20px;
+	background-color: rgba(255, 255, 255, 0.7);
+	border: 2px solid #00ff00;
+}

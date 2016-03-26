@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Example Project</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			window.JumpStart.addEventListener("precache", function()
+			{
+				// Async
+				JumpStart.loadModels(["models/block"]).then( function()
+				{
+					JumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			window.JumpStart.addEventListener("ready", function()
+			{
+				var myObject = JumpStart.spawnInstance("models/block");
+				myObject.JumpStart.addEventListener("tick", function()
+				{
+					this.rotateY(2.0 * g_deltaTime);
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>

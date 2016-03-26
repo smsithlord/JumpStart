@@ -1,0 +1,38 @@
+html
+{
+	width: 100%;
+	height: 100%;
+}
+
+body
+{
+	width: 100%;
+	height: 100%;
+	background-color: rgba(0, 0, 0, 0);
+	margin: 0px;
+	overflow: hidden;
+
+	color: #FFFFFF;
+	font-family: Monospace;
+	font-size: 18px;
+	text-align: center;
+}
+
+.JS_BLOCKER_INFOBOX
+{
+	color: #fff;
+	font-size: 60px;
+}
+
+.JS_BLOCKER_CONTAINER
+{
+	display: block;
+	position: fixed;
+	left: 0;
+	top: 0;
+	width: 100%;
+	height: 100%;
+	color: #000;
+	background-color: rgba(0, 0, 0, 0.9);
+	z-index: 999999;
+}
