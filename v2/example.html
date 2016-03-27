@@ -5,6 +5,7 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
+			jumpStart.setOptions({"sceneScale": 1.0, "debug": {"showCursorPlanes": true}});
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
@@ -20,7 +21,7 @@
 
 			jumpStart.addEventListener("ready", function()
 			{
-				var southBoundary = jumpStart.spawnCursorPlane();
+				var southBoundary = jumpStart.spawnCursorPlane({"parent": jumpStart.scene});
 				southBoundary.blocksLOS = true;
 				southBoundary.rotateX(Math.PI / 2.0);
 
@@ -64,6 +65,8 @@
 				{
 					console.log("Object is being clicked down (then shifted on x-axis)! " + this);
 					myObject.translateX(20.0);
+
+					jumpStart.world.translateX(100.0);
 				});
 
 				myObject.addEventListener("cursorup", function()

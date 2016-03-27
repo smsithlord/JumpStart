@@ -51,11 +51,12 @@ function JumpStart()
 		"enclosure",
 		"localUser",
 		"scene",
+		"world",
+		"worldOffset",
 		"deltaTime",
 		"crosshair",
 		"gamepads",
-		"activeGamepad",
-		"worldOffset"
+		"activeGamepad"
 	];
 
 	// Declare them all as null
@@ -107,7 +108,7 @@ function JumpStart()
 		"appId": "example",
 		"multiuserOnly": false,
 		"enclosureOnly": true,
-		"worldScale": 1.0,	// relative scale
+		"sceneScale": 1.0,	// relative scale
 		"scaleWithEnclosure": true,	// false means consistent size, regardless of enclosure size
 		"timeScale": 1.0,
 		"webControls": true,
@@ -183,19 +184,19 @@ function JumpStart()
 						switch(keydownEvent.keyCode )
 						{
 							case 83:
-								g_camera.translateZ(20);
+								jumpStart.camera.translateZ(20 * jumpStart.options.sceneScale);
 								break;
 
 							case 87:
-								g_camera.translateZ(-20);
+								jumpStart.camera.translateZ(-20 * jumpStart.options.sceneScale);
 								break;
 
 							case 65:
-								g_camera.translateX(-20);
+								jumpStart.camera.translateX(-20 * jumpStart.options.sceneScale);
 								break;
 
 							case 68:
-								g_camera.translateX(20);
+								jumpStart.camera.translateX(20 * jumpStart.options.sceneScale);
 								break;
 						}
 					}, true);
@@ -354,15 +355,15 @@ function JumpStart()
 						var pixelsPerMeter = 100;	// FIX ME: Why this magic number?
 
 						if( !this.options["scaleWithEnclosure"] )
-							this.options.worldScale *= pixelsPerMeter / 100;	// FIX ME: Why this magic number?
+							this.options.sceneScale *= pixelsPerMeter / 100;	// FIX ME: Why this magic number?
 
 						var enclosure = {
 							"innerWidth": commonVal,
 							"innerHeight": commonVal,
 							"innerDepth": commonVal,
-							"scaledWidth": Math.round(commonVal * (1 / this.options.worldScale)),
-							"scaledHeight": Math.round(commonVal * (1 / this.options.worldScale)),
-							"scaledDepth": Math.round(commonVal * (1 / this.options.worldScale)),
+							"scaledWidth": Math.round(commonVal * (1 / this.options.sceneScale)),
+							"scaledHeight": Math.round(commonVal * (1 / this.options.sceneScale)),
+							"scaledDepth": Math.round(commonVal * (1 / this.options.sceneScale)),
 							"pixelsPerMeter": pixelsPerMeter
 						};
 
@@ -377,16 +378,16 @@ function JumpStart()
 						altspace.getEnclosure().then(function(enclosure)
 						{
 							if( !this.options["scaleWithEnclosure"] )
-								this.options.worldScale *= enclosure.pixelsPerMeter / 100.0;	// FIX ME: Why this magic number?
+								this.options.sceneScale *= enclosure.pixelsPerMeter / 100.0;	// FIX ME: Why this magic number?
 
 							// FIX ME: These are only needed in specific cases.
-							enclosure.adjustedWidth = Math.round(enclosure.innerWidth * this.options.worldScale);
-							enclosure.adjustedHeight = Math.round(enclosure.innerHeight * this.options.worldScale);
-							enclosure.adjustedDepth = Math.round(enclosure.innerDepth * this.options.worldScale);
+							enclosure.adjustedWidth = Math.round(enclosure.innerWidth * this.options.sceneScale);
+							enclosure.adjustedHeight = Math.round(enclosure.innerHeight * this.options.sceneScale);
+							enclosure.adjustedDepth = Math.round(enclosure.innerDepth * this.options.sceneScale);
 
-							enclosure.scaledWidth = enclosure.innerWidth * (1 / this.options.worldScale);
-							enclosure.scaledHeight = enclosure.innerHeight * (1 / this.options.worldScale);
-							enclosure.scaledDepth = enclosure.innerDepth * (1 / this.options.worldScale);
+							enclosure.scaledWidth = enclosure.innerWidth * (1 / this.options.sceneScale);
+							enclosure.scaledHeight = enclosure.innerHeight * (1 / this.options.sceneScale);
+							enclosure.scaledDepth = enclosure.innerDepth * (1 / this.options.sceneScale);
 
 							onGetEnclosure.call(this, enclosure);
 						}.bind(this));
@@ -432,12 +433,33 @@ function JumpStart()
 	}
 }
 
+JumpStart.prototype.setOptions = function(options)
+{
+	// Merg options with defaultOptions (up to 2 lvls deep)
+	if( !!options )
+	{
+		var x, y;
+		for( x in this.options )
+		{
+			if( typeof this.options[x] !== "object" )
+			{
+				this.options[x] = (!!options[x]) ? options[x] : this.options[x];
+			}
+			else if( options.hasOwnProperty(x) )
+			{
+				for( y in this.options[x] )
+					this.options[x][y] = (!!options[x][y]) ? options[x][y] : this.options[x][y];
+			}
+		}
+	}
+};
+
 JumpStart.prototype.spawnCursorPlane = function(options)
 {
 	var defaultOptions = {
 		"width": this.enclosure.scaledWidth,
 		"height": this.enclosure.scaledHeight,
-		"parent": this.scene
+		"parent": this.world
 	};
 
 	// Merg options with defaultOptions
@@ -489,10 +511,14 @@ JumpStart.prototype.doneCaching = function()
 	this.worldOffset = new THREE.Vector3(0.0, -this.enclosure.scaledHeight / 2.0, 0.0);
 
 	this.scene = new THREE.Scene();
-	this.scene.scale.multiplyScalar(this.options.worldScale);
+	this.scene.scale.multiplyScalar(this.options.sceneScale);
 	this.scene.addEventListener( "cursormove", function(e) { jumpStart.onCursorMove(e); });
 	this.scene.addEventListener("cursordown", function(e) { jumpStart.onCursorDown(e); });
 	this.scene.addEventListener("cursorup", function(e) { jumpStart.onCursorUp(e); });
+
+	this.world = new THREE.Group();
+	//this.world.position.add(this.worldOffset);
+	this.scene.add(this.world);
 
 	this.clock = new THREE.Clock();
 	this.raycaster = new THREE.Raycaster();
@@ -512,12 +538,12 @@ JumpStart.prototype.doneCaching = function()
 		document.body.appendChild( this.renderer.domElement );
 
 		var aspect = window.innerWidth / window.innerHeight;
-		this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 2000 * this.options.worldScale );
+		this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 2000 * this.options.sceneScale );
 
-		var pos = this.options.camera.position.clone().multiplyScalar(this.options.worldScale).add(this.worldOffset);
+		var pos = this.options.camera.position.clone().add(this.worldOffset);
 		this.camera.position.copy(pos);
 
-		var lookAtSpot = this.worldOffset.clone().multiplyScalar(this.options.worldScale);
+		var lookAtSpot = this.worldOffset.clone().multiplyScalar(this.options.sceneScale);
 		lookAtSpot.y += 50;
 
 		this.camera.lookAt(lookAtSpot);
@@ -571,7 +597,7 @@ JumpStart.prototype.onTick = function()
 	for( x in this.objects )
 	{
 		object = this.objects[x];
-		if( object.parent !== this.scene )
+		if( false && object.parent !== this.scene )
 		{
 			// FIX ME: Delete this property from the object.
 			console.log("It's gone!!");
@@ -691,7 +717,7 @@ JumpStart.prototype.onMouseDown = function(e)
 			break;
 
 		case 2:
-			var pos = this.localUser.cursorRayOrigin.clone().add(this.localUser.cursorRayDirection);
+			var pos = this.localUser.cursorRayOrigin.clone().multiplyScalar(this.options.sceneScale).add(this.localUser.cursorRayDirection);
 			this.camera.lookAt(pos);
 			break;
 	}
@@ -722,7 +748,7 @@ JumpStart.prototype.processCursorMove = function()
 
 	// Update the local user's look info
 	this.localUser.cursorRayOrigin.copy(this.cursorRay.origin);
-	this.localUser.cursorRayOrigin.multiplyScalar(1.0 / this.options.worldScale);
+	this.localUser.cursorRayOrigin.multiplyScalar(1.0 / this.options.sceneScale);
 	this.localUser.cursorRayDirection.copy(this.cursorRay.direction);
 
 	// Set the raycaster
@@ -768,14 +794,8 @@ JumpStart.prototype.processCursorMove = function()
 		}
 
 		this.localUser.cursorHit = intersection;
-		this.localUser.cursorHit.scaledPoint = intersection.point.clone().multiplyScalar(1 / this.options.worldScale);
-		/*
-		this.localUser.cursorHit.scaledPoint = {
-			"x": intersection.point.x / this.options.worldScale,
-			"y": intersection.point.y / this.options.worldScale,
-			"z": intersection.point.z / this.options.worldScale
-		};
-		*/
+		this.localUser.cursorHit.scaledPoint = intersection.point.clone().multiplyScalar(1 / this.options.sceneScale).sub(this.world.position);
+
 		hasIntersection = true;
 		break;
 	}
@@ -953,7 +973,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 
 	var defaultOptions = {
 		"object": null,
-		"parent": this.scene
+		"parent": this.world
 	};
 
 	// Merg options with defaultOptions
@@ -961,7 +981,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	{
 		var x;
 		for( x in defaultOptions )
-			options[x] = (!!options[x]) ? options[x] : defaultOptions.height;
+			options[x] = (!!options[x]) ? options[x] : defaultOptions[x];
 	}
 	else
 		options = defaultOptions;
@@ -998,7 +1018,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	}
 	*/
 	
-	this.scene.add(instance);
+	options.parent.add(instance);
 
 	// We will need to check for spawn listeners on this object before the next tick
 	this.freshObjects.push(instance);
