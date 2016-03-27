@@ -21,9 +21,30 @@
 			window.JumpStart.addEventListener("ready", function()
 			{
 				var myObject = JumpStart.spawnInstance("models/block");
+				myObject.JumpStart.blocksLOS = true;
 				myObject.JumpStart.addEventListener("tick", function()
 				{
 					this.rotateY(2.0 * g_deltaTime);
+				});
+
+				myObject.JumpStart.addEventListener("cursorenter", function()
+				{
+					this.scale.set(2, 2, 2);
+				});
+
+				myObject.JumpStart.addEventListener("cursorexit", function()
+				{
+					this.scale.set(1, 1, 1);
+				});
+
+				myObject.JumpStart.addEventListener("cursordown", function()
+				{
+					myObject.translateX(20.0);
+				});
+
+				myObject.JumpStart.addEventListener("cursorup", function()
+				{
+					myObject.translateY(20.0);
 				});
 
 				// true	: SYNCHRONOUS

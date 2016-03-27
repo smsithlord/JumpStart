@@ -1,6 +1,6 @@
 /*	
 	CURRENT DEV STATUS:
-		Runs with every limited functionality in both Altspace & Chrome.
+		Runs with very limited functionality in both Altspace & Chrome.
 */
 
 // Global objects
@@ -40,12 +40,13 @@ function jumpStart()
 		"util",	// Helper class.
 		"requestedRoomId",	// Given in the URI query as "room". null if none.
 		"isAltspace",	// Altspace or web mode
+		"isGear",
 		"isInitialized",
 		"isEnclosure",	// Enclosure or personal browser
 		"camera",
 		"renderer",
 		"clock",
-		"rayCaster",
+		"raycaster",
 		"cursorRay",
 		"enclosure",
 		"localUser",
@@ -69,11 +70,6 @@ function jumpStart()
 		"futureCursorRay",
 		"clickedObject",
 		"hoveredObject",
-		"firebaseSync",
-		"materialCreator",
-		"syncedInstances",
-		"infoSlate",
-		"fpsSlate",
 		"webLook",
 		"webLookPrev",
 		"webMouse",
@@ -83,7 +79,9 @@ function jumpStart()
 		"models",
 		"objects",
 		"listeners",
+		"raycastArray",	// gets used locally every tick
 		"debug"	// Helper class
+		//"octree"	// Octree disabled for now
 	];
 
 	// Declare them all as null
@@ -95,8 +93,11 @@ function jumpStart()
 
 	this.requestedRoomId = this.util.getQueryVariable("room");
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
+	this.isGear = navigator.userAgent.match(/mobile/i);
 	this.isInitialized = false;
 	this.gamepads = (this.isAltspace) ? altspace.getGamepads() : navigator.getGamepads();
+	this.hoveredObject = null;
+	this.clickedObject = null;
 
 	// Set as many synchronous non-null PRIVATE member veriables as possible 
 	this.options =
@@ -120,6 +121,7 @@ function jumpStart()
 	};
 	this.models = [];
 	this.objects = {};
+	this.raycastArray = [];
 	this.listeners = {
 		"precache": {},
 		"ready": {},
@@ -316,6 +318,7 @@ function jumpStart()
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/OBJMTLLoader.js",
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/MTLLoader.js",
 							"http://sdk.altvr.com/libs/altspace.js/0.5.3/altspace.min.js"
+							//"engine/misc/threeoctree.js"	// Octree disabled for now
 						];
 
 						// Load extra stuff if we are in debug mode
@@ -424,6 +427,14 @@ function jumpStart()
 	}
 }
 
+jumpStart.prototype.onCursorMove = function(e)
+{
+	if( e.hasOwnProperty("ray") )
+		this.futureCursorRay = e.ray;
+	else
+		this.futureCursorRay = e.cursorRay;	// Only needed until 0.1 is completely depreciated
+};
+
 jumpStart.prototype.doneCaching = function()
 {
 	// Now it's time to initiate the THREE.js scene...
@@ -431,13 +442,19 @@ jumpStart.prototype.doneCaching = function()
 
 	this.scene = new THREE.Scene();
 	this.scene.scale.multiplyScalar(this.options.worldScale);
+	this.scene.addEventListener( "cursormove", function(e) { window.JumpStart.onCursorMove(e); });
+	this.scene.addEventListener("cursordown", function(e) { window.JumpStart.onCursorDown(e); });
+	this.scene.addEventListener("cursorup", function(e) { window.JumpStart.onCursorUp(e); });
 
 	this.clock = new THREE.Clock();
-	this.rayCaster = new THREE.Raycaster();
+	this.raycaster = new THREE.Raycaster();
 
 	// FIXME: Why is this a spoofed ray?  We should have THREE.js loaded by now to make a real one.
 	this.cursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
 	this.futureCursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
+
+	// Create the octree (disabled for now)
+	//this.octree = new THREE.Octree({"undeferred": false, "depthMax": Infinity, "objectsThreshold": 8, "overlapPct": 0.15});
 
 	if ( !this.isAltspace )
 	{
@@ -498,10 +515,11 @@ jumpStart.prototype.run = function()
 
 jumpStart.prototype.onTick = function()
 {
-	if( !this.isInitialized )
+	if( !this.isInitialized || !this.isRunning)
 		return;
 
-	var x, object, y, tickListener;
+	var count = 0;
+	var x, object, y;
 	for( x in this.objects )
 	{
 		object = this.objects[x];
@@ -512,16 +530,20 @@ jumpStart.prototype.onTick = function()
 		}
 		else
 		{
-			if( object.JumpStart.listeners.hasOwnProperty("tick") )
+			// Determine if this will be raycasted against this tick
+			if( object.JumpStart.blocksLOS )
 			{
-				for( y in object.JumpStart.listeners.tick )
-				{
-					tickListener = object.JumpStart.listeners.tick[y];
-					tickListener.call(object);
-				}
+				this.raycastArray[count] = object;
+				count++;
 			}
+
+			// Check for tick listeners on the object
+			for( y in object.JumpStart.listeners.tick )
+				object.JumpStart.listeners.tick[y].call(object);
 		}
 	}
+
+	this.raycastArray.length = count;
 
 	// Check for tick listeners
 	var listenerName;
@@ -567,6 +589,9 @@ jumpStart.prototype.onMouseMove = function(e)
 
 jumpStart.prototype.onMouseDown = function(e)
 {
+	if( !this.isRunning )
+		return;
+
 	switch( e.button )
 	{
 		case 0:
@@ -582,6 +607,9 @@ jumpStart.prototype.onMouseDown = function(e)
 
 jumpStart.prototype.onMouseUp = function(e)
 {
+	if( !this.isRunning )
+		return;
+
 	switch( e.button )
 	{
 		case 0:
@@ -595,6 +623,9 @@ jumpStart.prototype.onMouseUp = function(e)
 
 jumpStart.prototype.processCursorMove = function()
 {
+	if( !this.isRunning )
+		return;
+
 	this.cursorRay = this.futureCursorRay;
 
 	// Update the local user's look info
@@ -603,19 +634,89 @@ jumpStart.prototype.processCursorMove = function()
 	this.localUser.cursorRayDirection.copy(this.cursorRay.direction);
 
 	// Set the raycaster
-	this.rayCaster.set(this.cursorRay.origin, this.cursorRay.direction);
+	this.raycaster.set(this.cursorRay.origin, this.cursorRay.direction);
+
+	// Octree disabled for now
+	/* http://threejs.org/examples/#webgl_octree_raycasting
+	var octreeObjects = this.octree.search( this.cursorRay.origin, 200000, true, this.cursorRay.direction );
+	var intersections = this.raycaster.intersectOctreeObjects( octreeObjects );
+	if( intersections.length )
+	{
+		console.log("yar");
+	}
+	*/
+
+	// FIX ME: Might want to raycast against collision boxes of all objects, then another raycast against the faces of intersected objects.
+	var intersects = this.raycaster.intersectObjects(this.raycastArray, true);	// FIX ME: Wish there was a way to quit after 1st "hit".
+
+	// Hover events
+	var hasIntersection = false;
+	var x, object;
+	for( x in intersects )
+	{
+		intersection = intersects[x];
+		object = intersection.object.parent;
+
+		// If there already is a hovered object, unhover it.
+		if( this.hoveredObject && this.hoveredObject !== object )
+			unhoverObject.call(this, this.hoveredObject);
+
+		if( !this.hoveredObject )
+		{
+			this.hoveredObject = object;
+
+			// Check for cursorenter listeners
+			// FIX ME: Add support for event bubbling
+			var listenerName;
+			for( listenerName in object.JumpStart.listeners.cursorenter )
+				object.JumpStart.listeners.cursorenter[listenerName].call(object);
+		}
+
+		hasIntersection = true;
+		break;
+	}
+
+	// If nothing is hovered, then unhover us
+	if( this.hoveredObject && !hasIntersection )
+		unhover.call(this, this.hoveredObject);
+
+	function unhover(object)
+	{
+		var oldObject = this.hoveredObject;
+		this.hoveredObject = null;
+
+		// Check for cursorexit listeners
+		// FIX ME: Add support for event bubbling
+		var listenerName;
+		for( listenerName in oldObject.JumpStart.listeners.cursorexit )
+			oldObject.JumpStart.listeners.cursorexit[listenerName].call(oldObject);
+	}
 };
 
-jumpStart.prototype.onCursorDown = function()
+jumpStart.prototype.onCursorDown = function(e)
 {
-	// FIX ME: do work
-	return;
+	if( this.hoveredObject )
+	{
+		// Check for cursordown listeners
+		var listenerName;
+		for( listenerName in this.hoveredObject.JumpStart.listeners.cursordown )
+			this.hoveredObject.JumpStart.listeners.cursordown[listenerName].call(this.hoveredObject);
+
+		this.clickedObject = this.hoveredObject;
+	}
 };
 
-jumpStart.prototype.onCursorUp = function()
+jumpStart.prototype.onCursorUp = function(e)
 {
-	// FIX ME: do work
-	return;
+	if( this.clickedObject )
+	{
+		// Check for cursorup listeners
+		var listenerName;
+		for( listenerName in this.clickedObject.JumpStart.listeners.cursorup )
+			this.clickedObject.JumpStart.listeners.cursorup[listenerName].call(this.clickedObject);
+
+		this.clickedObject = null;
+	}
 };
 
 jumpStart.prototype.onWindowResize = function()
@@ -729,18 +830,53 @@ jumpStart.prototype.spawnInstance = function(modelFile)
 
 	instance.position.set(0, this.worldOffset.y, 0);
 
+	/* OCTREE DISABLED FOR NOW
+	// FIXME: Objects should only be added to the octree when they are blocksLOS = true
+	var i, mesh;
+	for( i in instance.children )
+	{
+		mesh = instance.children[i];
+
+		if( mesh.geometry.faces.length > 0 )
+			this.octree.add( mesh, { "useFaces": true } );
+	}
+	*/
+	
 	this.scene.add(instance);
 
+	// Compute a collision radius based on a bounding sphere for a child mesh that contains geometry
+	var computedRadius = 0.0;
+	var i, mesh;
+	for( i in instance.children )
+	{
+		mesh = instance.children[i];
+
+		if( mesh.geometry.faces.length > 0 )
+		{
+			mesh.geometry.computeBoundingSphere();
+			computedRadius = mesh.geometry.boundingSphere;
+			break;
+		}
+	}
+
 	// Now extend the object with a JumpStart namespace
-	var validEvents = ["tick"];
+
+	// List all the object-level listeners
+	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup"];
+	var computedListeners = {};
+	for( i in validEvents )
+		computedListeners[validEvents[i]] = {};
+
 	instance.JumpStart = {
-		"listeners": {},
+		"blocksLOS": false,
+		"radius": computedRadius,
+		"listeners": computedListeners,
 		"addEventListener": function(eventType, listener)
 			{
 				// Make sure this is a valid event type
 				if( validEvents.indexOf(eventType) < 0 )
 				{
-					window.JumpStart.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
+					this.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
 					return;
 				}
 
