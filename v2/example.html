@@ -20,6 +20,26 @@
 
 			jumpStart.addEventListener("ready", function()
 			{
+				var southBoundary = jumpStart.spawnCursorPlane();
+				southBoundary.blocksLOS = true;
+				southBoundary.rotateX(Math.PI / 2.0);
+
+				var cursor = jumpStart.spawnInstance("models/block");
+				cursor.addEventListener("tick", function()
+				{
+					if( !jumpStart.localUser.cursorHit )
+						return;
+
+					var pos = jumpStart.localUser.cursorHit.scaledPoint.clone();
+					pos.y += 100.0;
+
+					this.position.copy(pos);
+				});
+				cursor.translateY(100);
+
+				var extraBlock = jumpStart.spawnInstance("models/block");
+				extraBlock.translateY(200);
+
 				var myObject = jumpStart.spawnInstance("models/block");
 				myObject.blocksLOS = true;
 
@@ -50,6 +70,16 @@
 				{
 					console.log("Object is being clicked up (then removed)! " + this);
 					jumpStart.removeInstance(this);
+				});
+
+				myObject.addEventListener("spawn", function()
+				{
+					console.log("Object is being spawned! " + this);
+				});
+
+				myObject.addEventListener("remove", function()
+				{
+					console.log("Object is being removed! " + this);
 				});
 
 				// true	: SYNCHRONOUS

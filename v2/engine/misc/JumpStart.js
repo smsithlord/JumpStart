@@ -8,18 +8,6 @@ window.g_deltaTime = null;
 
 function JumpStart()
 {
-	/*
-	// Overwrite the window.addEventListener method
-	var originalAddEventListener = window.addEventListener;
-	window.addEventListener = function()
-	{
-		// FIX ME: Filter out any JumpStart listeners from being sent to the window object.
-		if( arguments.length === 2 )
-			originalAddEventListener.call(window, arguments[0], arguments[1]);
-		else if( arguments.length === 3 )
-			originalAddEventListener.call(window, arguments[0], arguments[1], arguments[2]);
-	};
-*/
 	this.version = "0.2.0";
 
 	// Only allow ONE instance
@@ -90,6 +78,7 @@ function JumpStart()
 		"boundFadeObjects",
 		"models",
 		"objects",
+		"cursorPlanes",
 		"listeners",
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
@@ -136,6 +125,7 @@ function JumpStart()
 	this.objects = {};
 	this.raycastArray = [];
 	this.freshObjects = [];
+	this.cursorPlanes = {};
 	this.listeners = {
 		"precache": {},
 		"ready": {},
@@ -431,6 +421,7 @@ function JumpStart()
 						{
 							user.cursorRayOrigin = new THREE.Vector3();
 							user.cursorRayDirection = new THREE.Vector3();
+							user.cursorHit = null;
 
 							this.localUser = user;
 							resolveEnvironmentCallback();
@@ -440,6 +431,49 @@ function JumpStart()
 		}
 	}
 }
+
+JumpStart.prototype.spawnCursorPlane = function(options)
+{
+	var defaultOptions = {
+		"width": this.enclosure.scaledWidth,
+		"height": this.enclosure.scaledHeight,
+		"parent": this.scene
+	};
+
+	// Merg options with defaultOptions
+	if( !!options )
+	{
+		var x;
+		for( x in defaultOptions )
+			options[x] = (!!options[x]) ? options[x] : defaultOptions[x];
+	}
+	else
+		options = defaultOptions;
+
+	// Now create the hit plane
+	// color generator from:
+	// http://stackoverflow.com/questions/1484506/random-color-generator-in-javascript
+	function getRandomColor() {
+		var letters = '0123456789abcdef'.split('');
+		var color = '#';
+		for (var i = 0; i < 6; i++ ) {
+			color += letters[Math.floor(Math.random() * 16)];
+		}
+
+		return color;
+	}
+
+	var depth = 0;
+	var cursorPlane;
+
+	cursorPlane = new THREE.Mesh(
+		new THREE.BoxGeometry(options.width, options.height, depth),
+		new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: this.options.debug["showCursorPlanes"] })
+	);
+
+	this.spawnInstance(null, {"object": cursorPlane, "parent": options.parent});
+	return cursorPlane;
+};
 
 JumpStart.prototype.onCursorMove = function(e)
 {
@@ -544,6 +578,17 @@ JumpStart.prototype.onTick = function()
 		}
 		else
 		{
+			// Apply any object.visible settings since last tick
+			if( object.spoofVisible !== object.visible )
+			{
+				object.spoofVisible = object.visible;
+
+				if( object.visible )
+					this.makeMaterialsVisible(object);
+				else
+					this.makeMaterialsInvisible(object);
+			}
+
 			// Determine if this will be raycasted against this tick
 			if( object.blocksLOS )
 			{
@@ -585,6 +630,28 @@ JumpStart.prototype.onTick = function()
 	window.g_deltaTime = this.deltaTime;
 
 	this.processCursorMove();
+};
+
+JumpStart.prototype.makeMaterialsInvisible = function(object)
+{
+	object.traverse(function(child)
+	{
+		if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+		{
+			child.material.visible = false;
+		}
+	}.bind(this));
+};
+
+JumpStart.prototype.makeMaterialsVisible = function(object)
+{
+	object.traverse(function(child)
+	{
+		if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+		{
+			child.material.visible = true;
+		}
+	}.bind(this));
 };
 
 JumpStart.prototype.onMouseMove = function(e)
@@ -680,11 +747,14 @@ JumpStart.prototype.processCursorMove = function()
 	for( x in intersects )
 	{
 		intersection = intersects[x];
-		object = intersection.object.parent;
+
+		object = intersection.object;
+		while( !object.hasOwnProperty("blocksLOS") )
+			object = object.parent;
 
 		// If there already is a hovered object, unhover it.
 		if( this.hoveredObject && this.hoveredObject !== object )
-			unhoverObject.call(this, this.hoveredObject);
+			unhover.call(this, this.hoveredObject);
 
 		if( !this.hoveredObject )
 		{
@@ -697,9 +767,21 @@ JumpStart.prototype.processCursorMove = function()
 				object.listeners.cursorenter[listenerName].call(object);
 		}
 
+		this.localUser.cursorHit = intersection;
+		this.localUser.cursorHit.scaledPoint = intersection.point.clone().multiplyScalar(1 / this.options.worldScale);
+		/*
+		this.localUser.cursorHit.scaledPoint = {
+			"x": intersection.point.x / this.options.worldScale,
+			"y": intersection.point.y / this.options.worldScale,
+			"z": intersection.point.z / this.options.worldScale
+		};
+		*/
 		hasIntersection = true;
 		break;
 	}
+
+	if( !hasIntersection )
+		this.localUser.cursorHit = null;
 
 	// If nothing is hovered, then unhover us
 	if( this.hoveredObject && !hasIntersection )
@@ -864,10 +946,30 @@ JumpStart.prototype.removeInstance = function(instance)
 	}
 };
 
-JumpStart.prototype.spawnInstance = function(modelFile)
+JumpStart.prototype.spawnInstance = function(modelFile, options)
 {
-	var instance = null;
-	if( modelFile !== "" )
+	if( !modelFile )
+		modelFile = "";
+
+	var defaultOptions = {
+		"object": null,
+		"parent": this.scene
+	};
+
+	// Merg options with defaultOptions
+	if( !!options )
+	{
+		var x;
+		for( x in defaultOptions )
+			options[x] = (!!options[x]) ? options[x] : defaultOptions.height;
+	}
+	else
+		options = defaultOptions;
+
+	var instance;
+	if( options.object )
+		instance = options.object;
+	else if( modelFile !== "" )
 	{
 		var existingModel = this.findModel(modelFile);
 
@@ -930,6 +1032,7 @@ JumpStart.prototype.spawnInstance = function(modelFile)
 		"blocksLOS": false,
 		"radius": computedRadius,
 		"listeners": computedListeners,
+		"spoofVisible": true,	// because Altspace does not respect object.visible values directly
 		"addEventListener": function(eventType, listener)
 		{
 			// Make sure this is a valid event type
@@ -986,7 +1089,8 @@ JumpStart.prototype.spawnInstance = function(modelFile)
 			// Make sure this is a valid event type
 			if( validEvents.indexOf(eventType) < 0 )
 			{
-				jumpStart.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
+				console.log("WARNING: Invalid event type \"" + eventType + "\" specified. Removing as non-JumpStart listener.");
+				originalRemoveEventListener.apply(window, arguments);
 				return;
 			}
 
@@ -1003,7 +1107,8 @@ JumpStart.prototype.spawnInstance = function(modelFile)
 				}
 			}
 
-			console.log("WARNING: The specificed " + eventType + " listener was not found in removeEventListener.");
+			// BaseClass::addEventListener
+			originalRemoveEventListener.apply(window, arguments);
 		}.bind(instance)
 	};
 	
@@ -1023,7 +1128,6 @@ JumpStart.prototype.spawnInstance = function(modelFile)
 	console.log("Spawned 1 object.");
 	return instance;
 };
-
 
 JumpStart.prototype.addEventListener = function(eventType, listener)
 {
@@ -1106,9 +1210,8 @@ JumpStart.prototype.removeEventListener = function(eventType, listener)
 
 // Class: util
 // Purpose: do some useful stuff
-function JumpStartUtil(jumpStartObject)
+function JumpStartUtil()
 {
-	this.JumpStart = jumpStartObject;
 }
 
 JumpStartUtil.prototype.displayInfoPanel = function(panelName, data)
