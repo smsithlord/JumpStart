@@ -80,6 +80,7 @@ function jumpStart()
 		"objects",
 		"listeners",
 		"raycastArray",	// gets used locally every tick
+		"freshObjects", // a list of objects that were spawned in the current tick
 		"debug"	// Helper class
 		//"octree"	// Octree disabled for now
 	];
@@ -122,6 +123,7 @@ function jumpStart()
 	this.models = [];
 	this.objects = {};
 	this.raycastArray = [];
+	this.freshObjects = [];
 	this.listeners = {
 		"precache": {},
 		"ready": {},
@@ -545,6 +547,17 @@ jumpStart.prototype.onTick = function()
 
 	this.raycastArray.length = count;
 
+	// Check for spawn listeners on fresh objects
+	var i, freshObject, listenerName;
+	for( i in this.freshObjects )
+	{
+		freshObject = this.freshObjects[i];
+
+		for( listenerName in freshObject.JumpStart.listeners.spawn )
+			freshObject.JumpStart.listeners.spawn[listenerName].call(freshObject);
+	}
+	this.freshObjects.length = 0;
+
 	// Check for tick listeners
 	var listenerName;
 	for( listenerName in this.listeners.tick )
@@ -810,6 +823,35 @@ jumpStart.prototype.findModel = function(modelFile)
 	}
 };
 
+jumpStart.prototype.removeInstance = function(instance)
+{
+	var x, object;
+	for( x in this.objects )
+	{
+		object = this.objects[x];
+
+		if( object === instance )
+		{
+			// Unhover this object, but ignore listeners
+			if( this.hoveredObject === object )
+				this.hoveredObject = null;
+
+			// Unclick this object, but ignore listeners
+			if( this.clickedObject === object )
+				this.clickedObject = null;
+
+			// Now remove this object
+			for( listenerName in object.JumpStart.listeners.remove )
+				object.JumpStart.listeners.remove[listenerName].call(object);
+
+			object.parent.remove(object);
+
+			delete this.objects[x];
+			break;
+		}
+	}
+};
+
 jumpStart.prototype.spawnInstance = function(modelFile)
 {
 	var instance = null;
@@ -844,6 +886,9 @@ jumpStart.prototype.spawnInstance = function(modelFile)
 	
 	this.scene.add(instance);
 
+	// We will need to check for spawn listeners on this object before the next tick
+	this.freshObjects.push(instance);
+
 	// Compute a collision radius based on a bounding sphere for a child mesh that contains geometry
 	var computedRadius = 0.0;
 	var i, mesh;
@@ -862,7 +907,7 @@ jumpStart.prototype.spawnInstance = function(modelFile)
 	// Now extend the object with a JumpStart namespace
 
 	// List all the object-level listeners
-	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup"];
+	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup", "spawn", "remove"];
 	var computedListeners = {};
 	for( i in validEvents )
 		computedListeners[validEvents[i]] = {};
@@ -876,7 +921,7 @@ jumpStart.prototype.spawnInstance = function(modelFile)
 				// Make sure this is a valid event type
 				if( validEvents.indexOf(eventType) < 0 )
 				{
-					this.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
+					console.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
 					return;
 				}
 

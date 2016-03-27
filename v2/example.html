@@ -22,6 +22,7 @@
 			{
 				var myObject = JumpStart.spawnInstance("models/block");
 				myObject.JumpStart.blocksLOS = true;
+
 				myObject.JumpStart.addEventListener("tick", function()
 				{
 					this.rotateY(2.0 * g_deltaTime);
@@ -29,22 +30,37 @@
 
 				myObject.JumpStart.addEventListener("cursorenter", function()
 				{
+					console.log("Object is being highlighted (and then scaled)! " + this);
 					this.scale.set(2, 2, 2);
 				});
 
 				myObject.JumpStart.addEventListener("cursorexit", function()
 				{
+					console.log("Object is being un-highlighted (then scaled)! " + this);
 					this.scale.set(1, 1, 1);
 				});
 
 				myObject.JumpStart.addEventListener("cursordown", function()
 				{
+					console.log("Object is being clicked down (then shifted on x-axis)! " + this);
 					myObject.translateX(20.0);
 				});
 
 				myObject.JumpStart.addEventListener("cursorup", function()
 				{
-					myObject.translateY(20.0);
+					console.log("Object is being clicked up (then removed)! " + this);
+					window.JumpStart.removeInstance(this);
+				});
+
+				// FIX ME: The spawn event needs a way for the client to determine if their client was isRunning when the object was created, for 1st-spawn-only effects.
+				myObject.JumpStart.addEventListener("spawn", function()
+				{
+					console.log("Object is being spawned! " + this);
+				});
+
+				myObject.JumpStart.addEventListener("remove", function()
+				{
+					console.log("Object is being removed! " + this);
 				});
 
 				// true	: SYNCHRONOUS
