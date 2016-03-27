@@ -1,15 +1,15 @@
-function jumpStartDebug()
+function JumpStartDebug()
 {
 	this.slates = {};
 }
 
-jumpStartDebug.prototype.updateSlate = function(slateName, data)
+JumpStartDebug.prototype.updateSlate = function(slateName, data)
 {
 	var slate = this.slates[slateName] || this.createSlate(slateName);
 	slate.update.call(slate, data);
 };
 
-jumpStartDebug.prototype.createSlate = function(slateName, data)
+JumpStartDebug.prototype.createSlate = function(slateName, data)
 {
 	var slate = {
 		"name": slateName,

@@ -5,12 +5,12 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
-			window.JumpStart.addEventListener("precache", function()
+			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				JumpStart.loadModels(["models/block"]).then( function()
+				jumpStart.loadModels(["models/block"]).then( function()
 				{
-					JumpStart.doneCaching();
+					jumpStart.doneCaching();
 				});
 
 				// true	: SYNCHRONOUS
@@ -18,49 +18,38 @@
 				return false;
 			});
 
-			window.JumpStart.addEventListener("ready", function()
+			jumpStart.addEventListener("ready", function()
 			{
-				var myObject = JumpStart.spawnInstance("models/block");
-				myObject.JumpStart.blocksLOS = true;
+				var myObject = jumpStart.spawnInstance("models/block");
+				myObject.blocksLOS = true;
 
-				myObject.JumpStart.addEventListener("tick", function()
+				myObject.addEventListener("tick", function()
 				{
 					this.rotateY(2.0 * g_deltaTime);
 				});
 
-				myObject.JumpStart.addEventListener("cursorenter", function()
+				myObject.addEventListener("cursorenter", function()
 				{
 					console.log("Object is being highlighted (and then scaled)! " + this);
 					this.scale.set(2, 2, 2);
 				});
 
-				myObject.JumpStart.addEventListener("cursorexit", function()
+				myObject.addEventListener("cursorexit", function()
 				{
 					console.log("Object is being un-highlighted (then scaled)! " + this);
 					this.scale.set(1, 1, 1);
 				});
 
-				myObject.JumpStart.addEventListener("cursordown", function()
+				myObject.addEventListener("cursordown", function()
 				{
 					console.log("Object is being clicked down (then shifted on x-axis)! " + this);
 					myObject.translateX(20.0);
 				});
 
-				myObject.JumpStart.addEventListener("cursorup", function()
+				myObject.addEventListener("cursorup", function()
 				{
 					console.log("Object is being clicked up (then removed)! " + this);
-					window.JumpStart.removeInstance(this);
-				});
-
-				// FIX ME: The spawn event needs a way for the client to determine if their client was isRunning when the object was created, for 1st-spawn-only effects.
-				myObject.JumpStart.addEventListener("spawn", function()
-				{
-					console.log("Object is being spawned! " + this);
-				});
-
-				myObject.JumpStart.addEventListener("remove", function()
-				{
-					console.log("Object is being removed! " + this);
+					jumpStart.removeInstance(this);
 				});
 
 				// true	: SYNCHRONOUS

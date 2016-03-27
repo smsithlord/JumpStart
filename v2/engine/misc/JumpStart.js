@@ -6,12 +6,24 @@
 // Global objects
 window.g_deltaTime = null;
 
-function jumpStart()
+function JumpStart()
 {
+	/*
+	// Overwrite the window.addEventListener method
+	var originalAddEventListener = window.addEventListener;
+	window.addEventListener = function()
+	{
+		// FIX ME: Filter out any JumpStart listeners from being sent to the window object.
+		if( arguments.length === 2 )
+			originalAddEventListener.call(window, arguments[0], arguments[1]);
+		else if( arguments.length === 3 )
+			originalAddEventListener.call(window, arguments[0], arguments[1], arguments[2]);
+	};
+*/
 	this.version = "0.2.0";
 
 	// Only allow ONE instance
-	if( window.hasOwnProperty("JumpStart") )
+	if( window.hasOwnProperty("jumpStart") )
 		return;
 
 	// Display some info into the console for devs
@@ -90,7 +102,7 @@ function jumpStart()
 		this[privateVariables[i]] = null;
 
 	// Set as many synchronous non-null PUBLIC member variables as possible
-	this.util = new jumpStartUtil(this);
+	this.util = new JumpStartUtil(this);
 
 	this.requestedRoomId = this.util.getQueryVariable("room");
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
@@ -135,7 +147,7 @@ function jumpStart()
 
 	// Attach default window-level event listeners
 	if( !this.isAltspace )
-		window.addEventListener( 'resize', function() { window.JumpStart.onWindowResize(); }, false );
+		window.addEventListener( 'resize', function() { jumpStart.onWindowResize(); }, false );
 
 	// FIX ME: Add & debug GearVR gesture events!
 	//altspace.addEventListener("touchpadgesture", onTouchpadGesture);
@@ -152,7 +164,7 @@ function jumpStart()
 	{
 		// Startup the debug stuff, if needed
 		if( this.options.debug.enabled )
-			this.debugUtil = new jumpStartDebug();
+			this.debugUtil = new JumpStartDebug();
 
 		// ASYNC 2: Wait for the BODY element (so the app has time to setOptions)
 		this.util.DOMReady.call(this).then(function()
@@ -171,9 +183,9 @@ function jumpStart()
 				if( !this.isAltspace && this.options.webControls )
 				{
 					// FIX ME: Make sure that these useCapture and preventDefaults are properly setup for web mode in these listeners
-					window.addEventListener( 'mousemove', function(e) { window.JumpStart.onMouseMove(e); }, false);
-					window.addEventListener( 'mousedown', function(e) { window.JumpStart.onMouseDown(e); e.preventDefault(); return false; }, false);
-					window.addEventListener( 'mouseup', function(e) { window.JumpStart.onMouseUp(e); e.preventDefault(); return false; }, false);
+					window.addEventListener( 'mousemove', function(e) { jumpStart.onMouseMove(e); }, false);
+					window.addEventListener( 'mousedown', function(e) { jumpStart.onMouseDown(e); e.preventDefault(); return false; }, false);
+					window.addEventListener( 'mouseup', function(e) { jumpStart.onMouseUp(e); e.preventDefault(); return false; }, false);
 
 					document.body.addEventListener("contextmenu", function(e) { e.preventDefault(); return false; }, true);
 					document.body.addEventListener("keydown", function(keydownEvent)
@@ -429,7 +441,7 @@ function jumpStart()
 	}
 }
 
-jumpStart.prototype.onCursorMove = function(e)
+JumpStart.prototype.onCursorMove = function(e)
 {
 	if( e.hasOwnProperty("ray") )
 		this.futureCursorRay = e.ray;
@@ -437,16 +449,16 @@ jumpStart.prototype.onCursorMove = function(e)
 		this.futureCursorRay = e.cursorRay;	// Only needed until 0.1 is completely depreciated
 };
 
-jumpStart.prototype.doneCaching = function()
+JumpStart.prototype.doneCaching = function()
 {
 	// Now it's time to initiate the THREE.js scene...
 	this.worldOffset = new THREE.Vector3(0.0, -this.enclosure.scaledHeight / 2.0, 0.0);
 
 	this.scene = new THREE.Scene();
 	this.scene.scale.multiplyScalar(this.options.worldScale);
-	this.scene.addEventListener( "cursormove", function(e) { window.JumpStart.onCursorMove(e); });
-	this.scene.addEventListener("cursordown", function(e) { window.JumpStart.onCursorDown(e); });
-	this.scene.addEventListener("cursorup", function(e) { window.JumpStart.onCursorUp(e); });
+	this.scene.addEventListener( "cursormove", function(e) { jumpStart.onCursorMove(e); });
+	this.scene.addEventListener("cursordown", function(e) { jumpStart.onCursorDown(e); });
+	this.scene.addEventListener("cursorup", function(e) { jumpStart.onCursorUp(e); });
 
 	this.clock = new THREE.Clock();
 	this.raycaster = new THREE.Raycaster();
@@ -507,7 +519,7 @@ jumpStart.prototype.doneCaching = function()
 		console.log("WARNING: Asynchronous ready-idle initiated by a listener.");
 };
 
-jumpStart.prototype.run = function()
+JumpStart.prototype.run = function()
 {
 	console.log("Simulation started.");
 	this.isRunning = true;
@@ -515,7 +527,7 @@ jumpStart.prototype.run = function()
 	this.onTick();
 };
 
-jumpStart.prototype.onTick = function()
+JumpStart.prototype.onTick = function()
 {
 	if( !this.isInitialized || !this.isRunning)
 		return;
@@ -533,15 +545,15 @@ jumpStart.prototype.onTick = function()
 		else
 		{
 			// Determine if this will be raycasted against this tick
-			if( object.JumpStart.blocksLOS )
+			if( object.blocksLOS )
 			{
 				this.raycastArray[count] = object;
 				count++;
 			}
 
 			// Check for tick listeners on the object
-			for( y in object.JumpStart.listeners.tick )
-				object.JumpStart.listeners.tick[y].call(object);
+			for( y in object.listeners.tick )
+				object.listeners.tick[y].call(object);
 		}
 	}
 
@@ -553,8 +565,8 @@ jumpStart.prototype.onTick = function()
 	{
 		freshObject = this.freshObjects[i];
 
-		for( listenerName in freshObject.JumpStart.listeners.spawn )
-			freshObject.JumpStart.listeners.spawn[listenerName].call(freshObject);
+		for( listenerName in freshObject.listeners.spawn )
+			freshObject.listeners.spawn[listenerName].call(freshObject);
 	}
 	this.freshObjects.length = 0;
 
@@ -563,7 +575,7 @@ jumpStart.prototype.onTick = function()
 	for( listenerName in this.listeners.tick )
 		this.listeners.tick[listenerName]();
 
-	requestAnimationFrame( function(){ window.JumpStart.onTick(); } );
+	requestAnimationFrame( function(){ jumpStart.onTick(); } );
 	this.renderer.render( this.scene, this.camera );
 
 	this.deltaTime = this.clock.getDelta();
@@ -575,7 +587,7 @@ jumpStart.prototype.onTick = function()
 	this.processCursorMove();
 };
 
-jumpStart.prototype.onMouseMove = function(e)
+JumpStart.prototype.onMouseMove = function(e)
 {
 	if( this.isAltspace || !this.isRunning )
 		return;
@@ -600,7 +612,7 @@ jumpStart.prototype.onMouseMove = function(e)
 	this.futureCursorRay.direction = direction;
 };
 
-jumpStart.prototype.onMouseDown = function(e)
+JumpStart.prototype.onMouseDown = function(e)
 {
 	if( !this.isRunning )
 		return;
@@ -618,7 +630,7 @@ jumpStart.prototype.onMouseDown = function(e)
 	}
 };
 
-jumpStart.prototype.onMouseUp = function(e)
+JumpStart.prototype.onMouseUp = function(e)
 {
 	if( !this.isRunning )
 		return;
@@ -634,7 +646,7 @@ jumpStart.prototype.onMouseUp = function(e)
 	}
 };
 
-jumpStart.prototype.processCursorMove = function()
+JumpStart.prototype.processCursorMove = function()
 {
 	if( !this.isRunning )
 		return;
@@ -681,8 +693,8 @@ jumpStart.prototype.processCursorMove = function()
 			// Check for cursorenter listeners
 			// FIX ME: Add support for event bubbling
 			var listenerName;
-			for( listenerName in object.JumpStart.listeners.cursorenter )
-				object.JumpStart.listeners.cursorenter[listenerName].call(object);
+			for( listenerName in object.listeners.cursorenter )
+				object.listeners.cursorenter[listenerName].call(object);
 		}
 
 		hasIntersection = true;
@@ -701,48 +713,48 @@ jumpStart.prototype.processCursorMove = function()
 		// Check for cursorexit listeners
 		// FIX ME: Add support for event bubbling
 		var listenerName;
-		for( listenerName in oldObject.JumpStart.listeners.cursorexit )
-			oldObject.JumpStart.listeners.cursorexit[listenerName].call(oldObject);
+		for( listenerName in oldObject.listeners.cursorexit )
+			oldObject.listeners.cursorexit[listenerName].call(oldObject);
 	}
 };
 
-jumpStart.prototype.onCursorDown = function(e)
+JumpStart.prototype.onCursorDown = function(e)
 {
 	if( this.hoveredObject )
 	{
 		// Check for cursordown listeners
 		var listenerName;
-		for( listenerName in this.hoveredObject.JumpStart.listeners.cursordown )
-			this.hoveredObject.JumpStart.listeners.cursordown[listenerName].call(this.hoveredObject);
+		for( listenerName in this.hoveredObject.listeners.cursordown )
+			this.hoveredObject.listeners.cursordown[listenerName].call(this.hoveredObject);
 
 		this.clickedObject = this.hoveredObject;
 	}
 };
 
-jumpStart.prototype.onCursorUp = function(e)
+JumpStart.prototype.onCursorUp = function(e)
 {
 	if( this.clickedObject )
 	{
 		// Check for cursorup listeners
 		var listenerName;
-		for( listenerName in this.clickedObject.JumpStart.listeners.cursorup )
-			this.clickedObject.JumpStart.listeners.cursorup[listenerName].call(this.clickedObject);
+		for( listenerName in this.clickedObject.listeners.cursorup )
+			this.clickedObject.listeners.cursorup[listenerName].call(this.clickedObject);
 
 		this.clickedObject = null;
 	}
 };
 
-jumpStart.prototype.onWindowResize = function()
+JumpStart.prototype.onWindowResize = function()
 {
-	if( window.JumpStart.isAltspace )
+	if( jumpStart.isAltspace )
 		return;
 
-	window.JumpStart.camera.aspect = window.innerWidth / window.innerHeight;
-	window.JumpStart.camera.updateProjectionMatrix();
-	window.JumpStart.renderer.setSize(window.innerWidth, window.innerHeight);
+	jumpStart.camera.aspect = window.innerWidth / window.innerHeight;
+	jumpStart.camera.updateProjectionMatrix();
+	jumpStart.renderer.setSize(window.innerWidth, window.innerHeight);
 };
 
-jumpStart.prototype.loadModels = function(fileNames)
+JumpStart.prototype.loadModels = function(fileNames)
 {
 	// fileNames are relative to the "assets/[appId]/" path.
 	// Convert all fileNames to valid paths.
@@ -810,7 +822,7 @@ jumpStart.prototype.loadModels = function(fileNames)
 
 // PURPOSE:
 //	- Private method for checking if a model is already cached.
-jumpStart.prototype.findModel = function(modelFile)
+JumpStart.prototype.findModel = function(modelFile)
 {
 	modelFile = "assets/" + this.options.appId + "/" + modelFile;
 	
@@ -823,7 +835,7 @@ jumpStart.prototype.findModel = function(modelFile)
 	}
 };
 
-jumpStart.prototype.removeInstance = function(instance)
+JumpStart.prototype.removeInstance = function(instance)
 {
 	var x, object;
 	for( x in this.objects )
@@ -841,8 +853,8 @@ jumpStart.prototype.removeInstance = function(instance)
 				this.clickedObject = null;
 
 			// Now remove this object
-			for( listenerName in object.JumpStart.listeners.remove )
-				object.JumpStart.listeners.remove[listenerName].call(object);
+			for( listenerName in object.listeners.remove )
+				object.listeners.remove[listenerName].call(object);
 
 			object.parent.remove(object);
 
@@ -852,7 +864,7 @@ jumpStart.prototype.removeInstance = function(instance)
 	}
 };
 
-jumpStart.prototype.spawnInstance = function(modelFile)
+JumpStart.prototype.spawnInstance = function(modelFile)
 {
 	var instance = null;
 	if( modelFile !== "" )
@@ -904,90 +916,106 @@ jumpStart.prototype.spawnInstance = function(modelFile)
 		}
 	}
 
-	// Now extend the object with a JumpStart namespace
-
 	// List all the object-level listeners
 	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup", "spawn", "remove"];
 	var computedListeners = {};
 	for( i in validEvents )
 		computedListeners[validEvents[i]] = {};
 
-	instance.JumpStart = {
+	// Just extend this object instead of adding a namespace
+	var originalAddEventListener = window.addEventListener;
+	var originalRemoveEventListener = window.removeEventListener;
+
+	var jumpStartData = {
 		"blocksLOS": false,
 		"radius": computedRadius,
 		"listeners": computedListeners,
 		"addEventListener": function(eventType, listener)
+		{
+			// Make sure this is a valid event type
+			if( validEvents.indexOf(eventType) < 0 )
 			{
-				// Make sure this is a valid event type
-				if( validEvents.indexOf(eventType) < 0 )
+				console.log("WARNING: Invalid event type \"" + eventType + "\" specified. Applying as non-JumpStart listener.");
+				originalAddEventListener.apply(window, arguments);
+				return;
+			}
+
+			// Create the container if this is the first listener being added for this event type
+			if( !this.listeners.hasOwnProperty(eventType) )
+				this.listeners[eventType] = {};
+
+			// Determine if this is a global named function that can be used as a synced listener
+			var isLocalListener, listenerName;
+			if( listener.name === "" )
+				isLocalListener = true;
+			else
+				isLocalListener = (typeof window[listener.name] !== "function");
+
+			if( isLocalListener )
+			{
+				if( jumpStart.options.multiuserOnly )
+					console.log("WARNING: Only global functions can be synced as event listeners.");
+
+				// Generate a name for this non-synced listener.
+				var highestLocal = 0;
+				var x, high;
+				for( x in this.listeners[eventType] )
 				{
-					console.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
-					return;
-				}
-
-				// Create the container if this is the first listener being added for this event type
-				if( !this.JumpStart.listeners.hasOwnProperty(eventType) )
-					this.JumpStart.listeners[eventType] = {};
-
-				// Determine if this is a global named function that can be used as a synced listener
-				var isLocalListener, listenerName;
-				if( listener.name === "" )
-					isLocalListener = true;
-				else
-					isLocalListener = (typeof window[listener.name] !== "function");
-
-				if( isLocalListener )
-				{
-					if( window.JumpStart.options.multiuserOnly )
-						console.log("WARNING: Only global functions can be synced as event listeners.");
-
-					// Generate a name for this non-synced listener.
-					var highestLocal = 0;
-					var x, high;
-					for( x in this.JumpStart.listeners[eventType] )
+					if( x.indexOf("_local") === 0 )
 					{
-						if( x.indexOf("_local") === 0 )
-						{
-							high = parseInt(x.substring(6));
+						high = parseInt(x.substring(6));
 
-							if( high > highestLocal )
-								highestLocal = high;
-						}
+						if( high > highestLocal )
+							highestLocal = high;
 					}
-
-					listenerName = "_local" + (highestLocal + 1);
 				}
-				else
-					listenerName = listener.name;
 
-				// Assign the listener
-				this.JumpStart.listeners[eventType][listenerName] = listener;
-			}.bind(instance),
+				listenerName = "_local" + (highestLocal + 1);
+			}
+			else
+				listenerName = listener.name;
+
+			// Assign the listener
+			this.listeners[eventType][listenerName] = listener;
+
+			// BaseClass::addEventListener
+			originalAddEventListener.apply(window, arguments);
+		}.bind(instance),
 		"removeEventListener": function(eventType, listener)
+		{
+			// Make sure this is a valid event type
+			if( validEvents.indexOf(eventType) < 0 )
 			{
-				// Make sure this is a valid event type
-				if( validEvents.indexOf(eventType) < 0 )
-				{
-					window.JumpStart.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
-					return;
-				}
+				jumpStart.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
+				return;
+			}
 
-				if( this.JumpStart.listeners.hasOwnProperty(eventType) )
+			if( jumpStart.listeners.hasOwnProperty(eventType) )
+			{
+				var x;
+				for( x in jumpStart.listeners[eventType] )
 				{
-					var x;
-					for( x in this.JumpStart.listeners[eventType] )
+					if( jumpStart.listeners[eventType][x] === listener )
 					{
-						if( this.JumpStart.listeners[eventType][x] === listener )
-						{
-							delete this.JumpStart.listeners[eventType][x];
-							return;
-						}
+						delete jumpStart.listeners[eventType][x];
+						return;
 					}
 				}
+			}
 
-				window.JumpStart.log("WARNING: The specificed " + eventType + " listener was not found in removeEventListener.");
-			}.bind(instance)
+			console.log("WARNING: The specificed " + eventType + " listener was not found in removeEventListener.");
+		}.bind(instance)
 	};
+	
+	var x;
+	for( x in jumpStartData )
+	{
+		// Warn if we are overwriting anything (other than *EventListener methods, because we call BaseClass on those).
+		if( typeof instance[x] !== "undefined" && x !== "addEventListener" && x !== "removeEventListener" )
+			console.log("WARNING: Object already has property " + x + ".");
+		
+		instance[x] = jumpStartData[x];
+	}
 
 	// JumpStart object bookkeeping.
 	this.objects[instance.uuid] = instance;
@@ -997,7 +1025,7 @@ jumpStart.prototype.spawnInstance = function(modelFile)
 };
 
 
-jumpStart.prototype.addEventListener = function(eventType, listener)
+JumpStart.prototype.addEventListener = function(eventType, listener)
 {
 	var validEvents = Object.keys(this.listeners);
 
@@ -1048,7 +1076,7 @@ jumpStart.prototype.addEventListener = function(eventType, listener)
 	this.listeners[eventType][listenerName] = listener;
 };
 
-jumpStart.prototype.removeEventListener = function(eventType, listener)
+JumpStart.prototype.removeEventListener = function(eventType, listener)
 {
 	var validEvents = Object.keys(this.listeners);
 
@@ -1078,12 +1106,12 @@ jumpStart.prototype.removeEventListener = function(eventType, listener)
 
 // Class: util
 // Purpose: do some useful stuff
-function jumpStartUtil(jumpStartObject)
+function JumpStartUtil(jumpStartObject)
 {
 	this.JumpStart = jumpStartObject;
 }
 
-jumpStartUtil.prototype.displayInfoPanel = function(panelName, data)
+JumpStartUtil.prototype.displayInfoPanel = function(panelName, data)
 {
 	switch(panelName)
 	{
@@ -1119,7 +1147,7 @@ jumpStartUtil.prototype.displayInfoPanel = function(panelName, data)
 	}
 };
 
-jumpStartUtil.prototype.throbScaleDOM = function(elem, interval, scale)
+JumpStartUtil.prototype.throbScaleDOM = function(elem, interval, scale)
 {
 	// Immediately set it's transform
 	elem.style.webkitTransform = "scale(" + (1.0 - (scale - 1.0)) + ")";
@@ -1152,7 +1180,7 @@ jumpStartUtil.prototype.throbScaleDOM = function(elem, interval, scale)
 	}.bind(elem));
 };
 
-jumpStartUtil.prototype.rockDOM = function(elem, interval, degrees)
+JumpStartUtil.prototype.rockDOM = function(elem, interval, degrees)
 {
 	// Immediately set it's transform
 	elem.style.webkitTransform = "rotate(" + degrees + "deg)";
@@ -1185,7 +1213,7 @@ jumpStartUtil.prototype.rockDOM = function(elem, interval, degrees)
 	}.bind(elem));
 };
 
-jumpStartUtil.prototype.throbHeightDOM = function(elem, interval)
+JumpStartUtil.prototype.throbHeightDOM = function(elem, interval)
 {
 	// Immediately set it's size to min-height
 	elem.style.height = elem.style.minHeight;
@@ -1218,7 +1246,7 @@ jumpStartUtil.prototype.throbHeightDOM = function(elem, interval)
 	}.bind(elem));
 };
 
-jumpStartUtil.prototype.loadStylesheets = function(fileNames)
+JumpStartUtil.prototype.loadStylesheets = function(fileNames)
 {
 	// Decalre some important variables
 	var util = this;
@@ -1255,7 +1283,7 @@ jumpStartUtil.prototype.loadStylesheets = function(fileNames)
 	}
 };
 
-jumpStartUtil.prototype.loadJavaScripts = function(fileNames)
+JumpStartUtil.prototype.loadJavaScripts = function(fileNames)
 {
 	// Decalre some important variables
 	var util = this;
@@ -1292,7 +1320,7 @@ jumpStartUtil.prototype.loadJavaScripts = function(fileNames)
 	}
 };
 
-jumpStartUtil.prototype.loadImages = function(fileNames)
+JumpStartUtil.prototype.loadImages = function(fileNames)
 {
 	// Decalre some important variables
 	var util = this;
@@ -1337,7 +1365,7 @@ jumpStartUtil.prototype.loadImages = function(fileNames)
 
 // Figure out if we are passed a roomId in our URL
 // Based on the function at: https://css-tricks.com/snippets/javascript/get-url-variables/
-jumpStartUtil.prototype.getQueryVariable = function(name)
+JumpStartUtil.prototype.getQueryVariable = function(name)
 {
 	var query = window.location.search.substring(1);
 	var vars = query.split("&");
@@ -1352,7 +1380,7 @@ jumpStartUtil.prototype.getQueryVariable = function(name)
 	return null;
 };
 
-jumpStartUtil.prototype.DOMReady = function()
+JumpStartUtil.prototype.DOMReady = function()
 {
 	// Async
 	return {
@@ -1373,7 +1401,7 @@ jumpStartUtil.prototype.DOMReady = function()
 		};
 }
 
-jumpStartUtil.prototype.DOMLoaded = function()
+JumpStartUtil.prototype.DOMLoaded = function()
 {
 	// Async
 	return {
@@ -1395,4 +1423,4 @@ jumpStartUtil.prototype.DOMLoaded = function()
 }
 
 // create the global JumpStart object
-window.JumpStart = new jumpStart();
+window.jumpStart = new JumpStart();
