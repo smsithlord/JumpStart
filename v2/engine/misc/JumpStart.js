@@ -38,7 +38,7 @@ function JumpStart()
 	// List all PUBLIC member variables
 	var publicVariables = [
 		"util",	// Helper class.
-		"requestedRoomId",	// Given in the URI query as "room". null if none.
+		"roomId",	// Given in the URI query as "room". null if none.
 		"isAltspace",	// Altspace or web mode
 		"isGear",
 		"isInitialized",
@@ -66,7 +66,7 @@ function JumpStart()
 
 	// List all PRIVATE member variables
 	var privateVariables = [
-		"state",	// 0: ready for setOptions	1: ready for precacheFile and doneCaching	2: ready for run	3: running
+		"state",	// 0: ready for setOptions	1: ready for precacheFile and doneCaching	2: ready for run	3: running // IS THIS ACTUALLY USED?
 		"options",
 		"futureCursorRay",
 		"clickedObject",
@@ -81,6 +81,7 @@ function JumpStart()
 		"objects",
 		"cursorPlanes",
 		"listeners",
+		"firebase",
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
 		"debug"	// Helper class
@@ -94,7 +95,7 @@ function JumpStart()
 	// Set as many synchronous non-null PUBLIC member variables as possible
 	this.util = new JumpStartUtil(this);
 
-	this.requestedRoomId = this.util.getQueryVariable("room");
+	this.roomId = this.util.getQueryVariable("room");
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
 	this.isGear = navigator.userAgent.match(/mobile/i);
 	this.isInitialized = false;
@@ -106,7 +107,7 @@ function JumpStart()
 	this.options =
 	{
 		"appId": "example",
-		"multiuserOnly": false,
+		"multiuserOnly": true,
 		"enclosureOnly": true,
 		"sceneScale": 1.0,	// relative scale
 		"scaleWithEnclosure": true,	// false means consistent size, regardless of enclosure size
@@ -122,6 +123,12 @@ function JumpStart()
 			"position": {x: 200, y: 240, z: 800}
 		}
 	};
+	this.firebase = {
+		"rootRef": null,
+		"roomRef": null,
+		"state": null,
+		"isLocallyInitializing": false
+	};
 	this.models = [];
 	this.objects = {};
 	this.raycastArray = [];
@@ -129,6 +136,7 @@ function JumpStart()
 	this.cursorPlanes = {};
 	this.listeners = {
 		"precache": {},
+		"initialize": {},	// Only used by the local user when initializing a multiuser room
 		"ready": {},
 		"tick": {},
 		"cursordown": {},
@@ -220,13 +228,6 @@ function JumpStart()
 						// Must call render once for Altspace to know we want a 3D enclosure
 						this.renderer = altspace.getThreeJSRenderer();
 						this.renderer.render(null, null);
-
-						/*
-							// FIX ME: This destroys the entire URI query.
-							var pathName = document.location.pathname;
-							pathName = pathName.substring(pathName.lastIndexOf("/") + 1);
-							history.replaceState(null, document.title, pathName + "?room=420");
-						*/
 					}
 					else
 					{
@@ -240,6 +241,67 @@ function JumpStart()
 				}
 				else if( this.options.multiuserOnly )
 				{
+					var root = "https://jumpstart-2.firebaseio.com/apps/" + this.options.appId;
+					this.firebase.rootRef = new Firebase(root);
+
+					// Check if this app exists
+					this.firebase.rootRef.child("appData").child("createdAt").once("value", function(snapshot)
+					{
+						if(!snapshot.exists())
+							createApp.call(this);
+						else
+							onAppExists.call(this);
+					}.bind(this));
+
+					function createApp()
+					{
+						console.log("NOTICE: AppId \"" + this.options.appId + "\" does not exist on the server, so it will be created.");
+						// FIX ME:  Add some type of app ID validity check
+						this.firebase.rootRef.child("appData").update({"createdAt": Firebase.ServerValue.TIMESTAMP}, function(error)
+						{
+							if( error )
+								console.log(error);
+							else
+								onAppExists.call(this);
+						}.bind(this));
+					}
+
+					function onAppExists()
+					{
+						// Are we given a room ID?
+						if( !this.roomId )
+							createRoom.call(this);
+						else
+						{
+							// Make sure this is a valid room ID AND subscribe to the state variable for future state change detection
+							this.firebase.rootRef.child("rooms").child(this.roomId).child("state").on("value", this.onRoomStateChange.bind(this));
+						}
+					}
+
+					function createRoom()
+					{
+						console.log("NOTICE: No room parameter given in URL, creating new room.");
+						// synchronous call with asynchronous error catching
+						this.firebase.roomRef = this.firebase.rootRef.child("rooms").push({"state": "initializing", "createdAt": Firebase.ServerValue.TIMESTAMP}, function(error)
+						{
+							if( error )
+								console.log(error);
+						});
+
+						this.roomId = this.firebase.roomRef.key();
+
+						// Update the URL
+						// FIX ME: This destroys the entire URI query.
+						var pathName = document.location.pathname;
+						pathName = pathName.substring(pathName.lastIndexOf("/") + 1);
+						window.history.replaceState(null, document.title, pathName + "?room=" + this.firebase.roomRef.key());
+
+						// ASYNC, continues in jumpStart.onRoomStateChange when isLocallyInitializing is TRUE && isFirstCheck
+						this.firebase.isLocallyInitializing = true;
+						this.firebase.rootRef.child("rooms").child(this.roomId).child("state").on("value", this.onRoomStateChange.bind(this));
+					}
+
+					//console.log(ref);
 					// If this is a multiuser app and no room ID was given in the URI, then...
 					// 1. connect to firebase
 					// 2. create a new room
@@ -251,52 +313,11 @@ function JumpStart()
 				else
 				{
 					// Non-synced app is ready to rock 'n roll
-					onReadyToPrecache.call(this);
+					this.onReadyToPrecache();
 				}
 			}.bind(this));
 		}.bind(this));
 	}.bind(this));
-
-	function onReadyToPrecache()
-	{
-		// Get stuff ready that we might use during precache
-		this.objectLoader = new THREE.OBJMTLLoader();
-
-		if( !this.isAltspace )
-			onGetSkeleton.call(this, null);
-		else
-		{
-			// Async
-			altspace.getThreeJSTrackingSkeleton().then(function(skeleton)
-			{
-				onGetSkeleton.call(this, skeleton);
-			}.bind(this));
-		}
-
-		function onGetSkeleton(skeleton)
-		{
-			this.localUser.skeleton = skeleton;
-
-			// We are now initialized
-			this.isInitialized = true;
-
-			// Check for precache listeners
-			var asyncRequested = false;
-			var listenerName, result;
-			for( listenerName in this.listeners.precache )
-			{
-				result = this.listeners.precache[listenerName]() || false;
-				if( !result )
-					asyncRequested = true;
-			}
-
-			// We are only done caching if async was NOT requested
-			if( !asyncRequested )
-				this.doneCaching();
-			else
-				console.log("WARNING: Asynchronous precaching initiated by a listener.");
-		}
-	}
 
 	function loadHeadFiles()
 	{
@@ -433,6 +454,89 @@ function JumpStart()
 	}
 }
 
+JumpStart.prototype.onRoomStateChange = function(snapshot)
+{
+	if( !snapshot.exists() )
+		console.log("ERROR: Invalid room ID \"" + this.roomId + "\" specified.");
+	else
+	{
+		var isFirstStateCheck = !this.firebase.state;
+		this.firebase.state = snapshot.val();
+
+		if( isFirstStateCheck )
+		{
+			if( this.firebase.isLocallyInitializing && this.firebase.state === "initializing" )
+			{
+				// We are locally initializing the firebase room.
+				//this.onReadyToPrecache();
+				onStateReady.call(this);
+			}
+			else if( this.firebase.state === "ready" )
+			{
+				this.firebase.roomRef = this.firebase.rootRef.child("rooms").child(this.roomId);
+				onStateReady.call(this);
+			}
+		}
+		else
+		{
+			console.log("aux check");
+		}
+
+		function onStateReady()
+		{
+			// Listen for objects being added
+			this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
+			{
+				console.log("Object added!");
+				console.log(snapshot.exists());
+			});
+
+			this.onReadyToPrecache();
+		}
+	}
+}
+
+JumpStart.prototype.onReadyToPrecache = function()
+{
+	// Get stuff ready that we might use during precache
+	this.objectLoader = new THREE.OBJMTLLoader();
+
+	if( !this.isAltspace )
+		onGetSkeleton.call(this, null);
+	else
+	{
+		// Async
+		altspace.getThreeJSTrackingSkeleton().then(function(skeleton)
+		{
+			onGetSkeleton.call(this, skeleton);
+		}.bind(this));
+	}
+
+	function onGetSkeleton(skeleton)
+	{
+		this.localUser.skeleton = skeleton;
+
+		// We are now initialized
+		this.isInitialized = true;
+
+		// Check for precache listeners
+		var asyncRequested = false;
+		var listenerName, result;
+		for( listenerName in this.listeners.precache )
+		{
+			result = this.listeners.precache[listenerName]() || false;
+			if( !result )
+				asyncRequested = true;
+		}
+
+		// We are only done caching if async was NOT requested
+		if( !asyncRequested )
+			this.doneCaching();
+		else
+			console.log("WARNING: Asynchronous precaching initiated by a listener.");
+	}
+};
+
 JumpStart.prototype.setOptions = function(options)
 {
 	// Merg options with defaultOptions (up to 2 lvls deep)
@@ -559,7 +663,31 @@ JumpStart.prototype.doneCaching = function()
 
 	// Copy JumpStart's values to the globals for easy access.
 	window.g_camera = this.camera;
-	
+
+	if( this.options.multiuserOnly && this.firebase.isLocallyInitializing )
+	{
+		// Check for initialize listeners
+		var asyncRequested = false;
+		var listenerName, result;
+		for( listenerName in this.listeners.initialize )
+		{
+			result = this.listeners.initialize[listenerName]() || true;
+			if( !result )
+				asyncRequested = true;
+		}
+
+		// We are only done caching if async was NOT requested
+		if( !asyncRequested )
+			this.onReadyToReady();
+		else
+			console.log("WARNING: Asynchronous initializing initiated by a listener.");
+	}
+	else
+		this.onReadyToReady();
+};
+
+JumpStart.prototype.onReadyToReady = function()
+{
 	this.isReady = true;
 
 	// Check for ready listeners
@@ -581,10 +709,19 @@ JumpStart.prototype.doneCaching = function()
 
 JumpStart.prototype.run = function()
 {
-	console.log("Simulation started.");
 	this.isRunning = true;
 
 	this.onTick();
+	console.log("Simulation started.");
+
+	if( this.options.multiuserOnly && this.firebase.isLocallyInitializing )
+	{
+		// We are now finished setting up the room
+		this.firebase.isLocallyInitializing = false;
+
+		// ASYNC will continue in onRoomStateChange
+		this.firebase.roomRef.update({"state": "ready"});
+	}
 };
 
 JumpStart.prototype.onTick = function()
@@ -1076,8 +1213,8 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 
 			if( isLocalListener )
 			{
-				if( jumpStart.options.multiuserOnly )
-					console.log("WARNING: Only global functions can be synced as event listeners.");
+//				if( jumpStart.options.multiuserOnly )
+//					console.log("WARNING: Only global functions can be synced as event listeners.");
 
 				// Generate a name for this non-synced listener.
 				var highestLocal = 0;
@@ -1145,7 +1282,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	// JumpStart object bookkeeping.
 	this.objects[instance.uuid] = instance;
 
-	console.log("Spawned 1 object.");
+	console.log("Spawned an object.");
 	return instance;
 };
 

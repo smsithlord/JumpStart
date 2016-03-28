@@ -5,7 +5,7 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
-			jumpStart.setOptions({"sceneScale": 1.0, "debug": {"showCursorPlanes": true}});
+			jumpStart.setOptions({"debug": {"showCursorPlanes": true}});
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
@@ -17,6 +17,17 @@
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
 				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				// This listener only gets called when initializing the room of a multiuser app.
+				var extraBlock = jumpStart.spawnInstance("models/block");
+				extraBlock.translateY(200);
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
 			});
 
 			jumpStart.addEventListener("ready", function()
@@ -37,9 +48,6 @@
 					this.position.copy(pos);
 				});
 				cursor.translateY(100);
-
-				var extraBlock = jumpStart.spawnInstance("models/block");
-				extraBlock.translateY(200);
 
 				var myObject = jumpStart.spawnInstance("models/block");
 				myObject.blocksLOS = true;
