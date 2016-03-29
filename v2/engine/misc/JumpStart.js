@@ -6,7 +6,7 @@
 // Global objects
 window.g_deltaTime = null;
 
-function JumpStart()
+function JumpStart(options)
 {
 	this.version = "0.2.0";
 
@@ -42,6 +42,8 @@ function JumpStart()
 		"isAltspace",	// Altspace or web mode
 		"isGear",
 		"isInitialized",
+		"isReady",
+		"isRunning",
 		"isEnclosure",	// Enclosure or personal browser
 		"camera",
 		"renderer",
@@ -80,6 +82,7 @@ function JumpStart()
 		"models",
 		"objects",
 		"cursorPlanes",
+		"enclosureBoundaries",
 		"listeners",
 		"syncedObjects",
 		"pendingUpdates",
@@ -101,6 +104,8 @@ function JumpStart()
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
 	this.isGear = navigator.userAgent.match(/mobile/i);
 	this.isInitialized = false;
+	this.isReady = false;
+	this.isRunning = false;
 	this.gamepads = (this.isAltspace) ? altspace.getGamepads() : navigator.getGamepads();
 	this.hoveredObject = null;
 	this.clickedObject = null;
@@ -138,6 +143,15 @@ function JumpStart()
 	this.raycastArray = [];
 	this.freshObjects = [];
 	this.cursorPlanes = {};
+	this.enclosureBoundaries = 
+	{
+		"floor": null,
+		"ceiling": null,
+		"north": null,
+		"east": null,
+		"south": null,
+		"west": null
+	};
 	this.listeners = {
 		"precache": {},
 		"initialize": {},	// Only used by the local user when initializing a multiuser room
@@ -155,6 +169,9 @@ function JumpStart()
 	// FIX ME: Add & debug GearVR gesture events!
 	//altspace.addEventListener("touchpadgesture", onTouchpadGesture);
 
+	// Merg app options
+	if( !!options )
+		this.setOptions(options);
 
 
 
@@ -377,10 +394,10 @@ function JumpStart()
 					{
 						// Spoof the enclosure for web mode
 						var commonVal = Math.round(1024 / 2.5);	// FIX ME: Why this magic number?
-						var pixelsPerMeter = 100;	// FIX ME: Why this magic number?
+						var pixelsPerMeter = 50.0;	// FIX ME: Why this magic number?
 
 						if( !this.options["scaleWithEnclosure"] )
-							this.options.sceneScale *= pixelsPerMeter / 100;	// FIX ME: Why this magic number?
+							this.options.sceneScale *= pixelsPerMeter / 100.0;	// FIX ME: Why this magic number?
 
 						var enclosure = {
 							"innerWidth": commonVal,
@@ -427,7 +444,7 @@ function JumpStart()
 						{
 							// Spoof the user for web mode
 							var user = {
-								"userID": "WebUser" + Date.now(),
+								"userId": "WebUser" + Date.now(),
 								"isLocal": true,
 								"displayName": "WebUser"
 							};
@@ -448,6 +465,7 @@ function JumpStart()
 							user.cursorRayOrigin = new THREE.Vector3();
 							user.cursorRayDirection = new THREE.Vector3();
 							user.cursorHit = null;
+							user.userID = user.userId;
 
 							this.localUser = user;
 							resolveEnvironmentCallback();
@@ -492,21 +510,81 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 		function onStateReady()
 		{
-			// Listen for objects being added
-			this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
+			// Spawn all of the initial objects
+			this.firebase.roomRef.child("objects").once("value", function(parentSnapshot)
 			{
-				if( snapshot.child("vitalData").child("ownerID").val() === this.localUser.userID )
+				var initialKeys = {};
+
+				if( !parentSnapshot.exists() || parentSnapshot.numChildren() === 0 )
+				{
+					onInitialObjectsReady.call(this, initialKeys);
+				}
+				else
+				{
+					var parentData = parentSnapshot.val();
+
+					var x;
+					for( x in parentData )
+					{
+						initialKeys[x] = true;
+						mergData.call(this, parentData[x], x, initialKeys);
+					}
+
+					console.log("JumpStart: Finished syncing initial state.")
+					onInitialObjectsReady.call(this, initialKeys);
+
+					if( this.firebase.isLocallyInitializing )
+					{
+						this.firebase.isLocallyInitializing = false;
+						this.onReadyToPrecache();
+					}
+				}
+			}.bind(this));
+
+			function onInitialObjectsReady(initialKeys)
+			{
+				// Listen for objects being added
+				this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
+				{
+					var key = snapshot.key();
+
+					// Don't doulbe-sync objects during initilization
+					if( initialKeys.hasOwnProperty(key) )
+					{
+						delete initialKeys[key];
+						return;
+					}
+
+					var data = snapshot.val();
+					mergData.call(this, data, key, initialKeys);
+				}.bind(this));
+			}
+
+			function mergData(data, key, initialKeys)
+			{
+				if( initialKeys.hasOwnProperty(key) )
+				{
+					this.pendingUpdates[key] = {};
+					this.pendingUpdates[key].needsSpawn = true;
+
+					if( !this.pendingUpdates.hasOwnProperty(key) )
+						this.pendingUpdates[key] = {};
+
+					this.pendingUpdates[key].transform = data.transform;
+					this.pendingUpdates[key].vitalData = data.vitalData;
+					this.pendingUpdates[key].syncData = data.syncData;
+					return;
+				}
+				else if( data.vitalData.ownerID === this.localUser.userID )
 					return;
 
+				this.pendingUpdates[key] = {};
+				this.pendingUpdates[key].needsSpawn = true;
 				console.log("JumpStart: New synced object detected!");
 
 				// Spawn the object
-				var data = snapshot.val();
-				var key = snapshot.key();
-
-				this.pendingUpdates[key] = {};
-
-				this.pendingUpdates[key].needsSpawn = true;
+				//var data = snapshot.val();
+				//var key = snapshot.key();
 
 				this.firebase.roomRef.child("objects").child(key).child("transform").on("value", function(snapshot)
 				{
@@ -562,7 +640,7 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 					delete this.syncedObjects[key];
 					this.removeInstance(object);
 				}
-			}.bind(this));
+			};
 
 			this.onReadyToPrecache();
 		}
@@ -619,13 +697,11 @@ JumpStart.prototype.setOptions = function(options)
 		for( x in this.options )
 		{
 			if( typeof this.options[x] !== "object" )
-			{
-				this.options[x] = (!!options[x]) ? options[x] : this.options[x];
-			}
+				this.options[x] = (options.hasOwnProperty(x)) ? options[x] : this.options[x];
 			else if( options.hasOwnProperty(x) )
 			{
 				for( y in this.options[x] )
-					this.options[x][y] = (!!options[x][y]) ? options[x][y] : this.options[x][y];
+					this.options[x][y] = (options[x].hasOwnProperty(y)) ? options[x][y] : this.options[x][y];
 			}
 		}
 	}
@@ -694,7 +770,7 @@ JumpStart.prototype.doneCaching = function()
 	this.scene.addEventListener("cursorup", function(e) { jumpStart.onCursorUp(e); });
 
 	this.world = new THREE.Group();
-	//this.world.position.add(this.worldOffset);
+	this.world.position.add(this.worldOffset);
 	this.scene.add(this.world);
 
 	this.clock = new THREE.Clock();
@@ -715,9 +791,9 @@ JumpStart.prototype.doneCaching = function()
 		document.body.appendChild( this.renderer.domElement );
 
 		var aspect = window.innerWidth / window.innerHeight;
-		this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 2000 * this.options.sceneScale );
+		this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 4000 * this.options.sceneScale );
 
-		var pos = this.options.camera.position.clone().add(this.worldOffset);
+		var pos = this.options.camera.position.clone().add(this.worldOffset.clone().multiplyScalar(this.options.sceneScale));
 		this.camera.position.copy(pos);
 
 		var lookAtSpot = this.worldOffset.clone().multiplyScalar(this.options.sceneScale);
@@ -763,7 +839,7 @@ JumpStart.prototype.onReadyToReady = function()
 {
 	this.isReady = true;
 
-	this.doPendingUpdates();
+	//this.doPendingUpdates();
 
 	// Check for ready listeners
 	var asyncRequested = false;
@@ -784,15 +860,21 @@ JumpStart.prototype.onReadyToReady = function()
 
 JumpStart.prototype.run = function()
 {
-	this.isRunning = true;
-
-	this.onTick();
-	console.log("JumpStart: Simulation started.");
-
 	if( this.options.multiuserOnly && this.firebase.isLocallyInitializing )
 	{
 		// ASYNC will continue in onRoomStateChange
-		this.firebase.roomRef.update({"state": "ready"});
+		this.firebase.roomRef.update({"state": "ready"}, function(error)
+		{
+			this.isRunning = true;
+			this.onTick();
+			console.log("JumpStart: Simulation started.");		
+		}.bind(this));
+	}
+	else
+	{
+		this.isRunning = true;
+		this.onTick();
+		console.log("JumpStart: Simulation started.");
 	}
 };
 
@@ -1083,6 +1165,9 @@ JumpStart.prototype.processCursorMove = function()
 		this.localUser.cursorHit = intersection;
 		this.localUser.cursorHit.scaledPoint = intersection.point.clone().multiplyScalar(1 / this.options.sceneScale).sub(this.world.position);
 
+		this.localUser.cursorHit.mesh = intersection.object;
+		this.localUser.cursorHit.object = object;
+
 		hasIntersection = true;
 		break;
 	}
@@ -1257,6 +1342,33 @@ JumpStart.prototype.removeInstance = function(instance)
 	delete this.objects[x];
 };
 
+JumpStart.prototype.enclosureBoundary = function(boundaryID)
+{
+	var boundary;
+
+	if( !!this.enclosureBoundaries.boundaryID )
+		boundary = this.enclosureBoundaries.boundaryID;
+	else
+	{
+		boundary = this.spawnCursorPlane({"parent": jumpStart.scene});
+		boundary.blocksLOS = true;
+
+		boundary.userData.isBoundaryPlane = true;
+
+		switch( boundaryID )
+		{
+			case "floor":
+				boundary.rotateX(Math.PI / 2.0);
+				boundary.position.copy(this.worldOffset);
+				break;
+		}
+
+		this.enclosureBoundaries[boundaryID] = boundary;
+	}
+
+	return boundary;
+};
+
 JumpStart.prototype.spawnInstance = function(modelFile, options)
 {
 	var defaultOptions = {
@@ -1277,7 +1389,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		options = defaultOptions;
 
 	if( !!!modelFile )
-		modelFile = (options.networkData) ? options.networkData.vitalData.modelFile : "";
+		modelFile = (options.networkData && !!options.networkData.vitalData) ? options.networkData.vitalData.modelFile : "";
 
 	var instance;
 	if( options.object )
@@ -1297,7 +1409,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	else
 		instance = new THREE.Object3D();
 
-	instance.position.set(0, this.worldOffset.y, 0);
+	//instance.position.set(0, this.worldOffset.y, 0);
 
 	/* OCTREE DISABLED FOR NOW
 	// FIXME: Objects should only be added to the octree when they are blocksLOS = true
@@ -1326,7 +1438,8 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		if( mesh.geometry.faces.length > 0 )
 		{
 			mesh.geometry.computeBoundingSphere();
-			computedBoundingSphere = mesh.geometry.boundingSphere;
+			computedBoundingSphere = mesh.geometry.boundingSphere.clone();
+			computedBoundingSphere.radius *= 1.15;	// Scale up slightly
 			break;
 		}
 	}
@@ -1983,5 +2096,7 @@ JumpStartUtil.prototype.DOMLoaded = function()
 		};
 }
 
-// create the global JumpStart object
-window.jumpStart = new JumpStart();
+window.loadJumpStart = function(options)
+{
+	window.jumpStart = new JumpStart(options);
+};

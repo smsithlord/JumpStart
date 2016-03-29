@@ -5,6 +5,8 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
+			loadJumpStart({"debug": {"showCursorPlanes": true}});
+
 			function spin()
 			{
 				this.rotateY(1.0 * g_deltaTime);
@@ -15,7 +17,6 @@
 				console.log("Object removed listener.");
 			}
 
-			jumpStart.setOptions({"debug": {"showCursorPlanes": true}});
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
@@ -47,12 +48,8 @@
 
 			jumpStart.addEventListener("ready", function()
 			{
-
-				var southBoundary = jumpStart.spawnCursorPlane({"parent": jumpStart.scene});
-				southBoundary.blocksLOS = true;
-				southBoundary.rotateX(Math.PI / 2.0);
-
-				southBoundary.addEventListener("cursordown", function()
+				var floorBoundary = jumpStart.enclosureBoundary("floor");
+				floorBoundary.addEventListener("cursordown", function()
 				{
 					var extraBlock = jumpStart.scene.getObjectByName("globalBlock");
 

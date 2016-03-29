@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Building Blocks</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			// Setup JumpStart
+			var options = {
+				"appID": "BuildingBlocks",
+				"scaleWithEnclosure": true,
+				"sceneScale": 2.0,
+				"debug":
+				{
+					"showCursorPlanes": true
+				}
+			};
+			loadJumpStart(options);
+
+			// Global variables that BuildingBlocks will use
+			var blockModels = ["models/bricks", "models/cube", "models/dirt", "models/grass", "models/jewel"];
+
+			function createBlock()
+			{
+				var cage = jumpStart.scene.getObjectByName("cage");
+				var sampleBlock = cage.userData.sampleBlock;
+
+				var block = jumpStart.spawnInstance(sampleBlock.modelFile);
+				block.position.copy(cage.position);
+				block.blocksLOS = true;
+				block.syncData.isBlock = true;
+				block.addEventListener("cursorup", createBlock);
+				block.sync();
+			}
+
+			// Precache our models
+			jumpStart.addEventListener("precache", function()
+			{
+				var models = [
+					"models/bricks",
+					"models/cube",
+					"models/cube_cage",
+					"models/dirt",
+					"models/grass",
+					"models/jewel"
+				];
+
+				jumpStart.loadModels(models).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				return false;
+			});
+
+			// Spawn local objects
+			jumpStart.addEventListener("ready", function()
+			{
+				// So that we can raycast against the floor of the enclosure.
+				var floorBoundary = jumpStart.enclosureBoundary("floor");
+				floorBoundary.addEventListener("cursorup", function()
+				{
+					createBlock();
+				});
+
+				var cage = jumpStart.spawnInstance("models/cube_cage");
+				cage.name = "cage";
+				cage.addEventListener("spawn", function()
+				{
+					var sampleBlock = jumpStart.spawnInstance(blockModels[0], {"parent": this});
+					this.userData.sampleBlock = sampleBlock;
+				});
+				cage.addEventListener("tick", function()
+				{
+					if( jumpStart.localUser.cursorHit )
+					{
+						var radius = this.userData.sampleBlock.boundingSphere.radius;
+						var pos = jumpStart.localUser.cursorHit.scaledPoint.clone();
+						var object = jumpStart.localUser.cursorHit.object;
+
+						if( !!object && object.syncData.isBlock )
+						{
+							var offset = jumpStart.localUser.cursorHit.face.normal.clone().normalize().multiplyScalar(radius / 5.0);
+							pos.add(offset);
+						}
+
+						var x;
+						for( x in pos )
+							pos[x] = (pos[x] < -0.01) ? pos[x] - (pos[x] % (radius / 1)) - radius / 2 : pos[x] = pos[x] - (pos[x] % (radius / 1)) + radius / 2;
+
+						this.position.copy(pos);
+					}
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>
