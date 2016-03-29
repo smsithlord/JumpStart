@@ -845,6 +845,7 @@ JumpStart.prototype.doPendingUpdates = function()
 
 		if( data.hasOwnProperty("transform") )
 		{
+			instance.name = data.transform.name;
 			instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
 			instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
 			instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
@@ -1225,8 +1226,7 @@ JumpStart.prototype.findModel = function(modelFile)
 
 JumpStart.prototype.removeInstance = function(instance)
 {
-	console.log("remove an instance " + instance.uuid);
-	if( !this.objects.hasOwnProperty(instance.uuid) )
+	if( !instance || !this.objects.hasOwnProperty(instance.uuid) )
 		return;
 
 	object = this.objects[instance.uuid];	// FIX ME: Don't search through the objects array twice! Combine this with the if statement above.
@@ -1249,7 +1249,7 @@ JumpStart.prototype.removeInstance = function(instance)
 	{
 		// Remove us from immediately from our local synced objects list
 		delete this.syncedObjects[object.syncKey];
-console.log(object.syncKey);
+
 		// Remove us from the firebase
 		this.firebase.roomRef.child("objects").child(object.syncKey).remove();
 	}
@@ -1434,27 +1434,11 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 				var transform = {
 					"position": makeSyncable(this.position),
 					"quaternion": makeSyncable(this.quaternion),
-					"scale": makeSyncable(this.scale)
+					"scale": makeSyncable(this.scale),
+					"name": this.name
 				};
 
-				// Firebase updates are formatted differently than pushes
-				/*
-				if( this.syncKey )
-				{
-					for( x in transform )
-					{
-						if( typeof transform[x] === "object" )
-						{
-							for( y in transform[x] )
-								data["transform/" + x + "/" + y] = transform[x][y];
-						}
-						else
-							data["transform/" + x] = transform[x];
-					}
-				}
-				else
-					*/
-					data.transform = transform;
+				data.transform = transform;
 			}
 
 			if( options.vitalData )
@@ -1463,55 +1447,13 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 				for( i in vitalDataNames )
 					vitalData[vitalDataNames[i]] = makeSyncable(this[vitalDataNames[i]], 1);
 
-/*
-				if( this.syncKey )
-				{
-					for( x in vitalData )
-					{
-						if( typeof vitalData[x] === "object" )
-						{
-							for( y in vitalData[x] )
-							{
-								if( typeof vitalData[x][y] === "object" )
-								{
-									for( z in vitalData[x][y] )
-									{
-										data["vitalData/" + x + "/" + y + "/" + z] = vitalData[x][y][z];
-									}
-								}
-								else
-									data["vitalData/" + x + "/" + y] = vitalData[x][y];
-							}
-						}
-						else
-							data["vitalData/" + x] = vitalData[x];
-					}
-				}
-				else
-					*/
-					data.vitalData = vitalData;
+				data.vitalData = vitalData;
 			}
 
 			if( options.syncData )
 			{
 				var syncData = makeSyncable(this.syncData);
-/*
-				if( this.syncKey )
-				{
-					for( x in syncData )
-					{
-						if( typeof syncData[x] === "object" )
-						{
-							for( y in syncData[x] )
-								data["syncData/" + x + "/" + y] = syncData[x][y];
-						}
-						else
-							data["syncData/" + x] = syncData[x];
-					}
-				}
-				else
-					*/
-					data.syncData = syncData;
+				data.syncData = syncData;
 			}
 
 			// FIX ME: Only non-default values should need to be stored on the firebase.

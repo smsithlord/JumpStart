@@ -5,16 +5,9 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
-			var g_extraBlock = null;
-
 			function spin()
 			{
 				this.rotateY(1.0 * g_deltaTime);
-			}
-
-			function extraSpawn()
-			{
-				g_extraBlock = this;
 			}
 
 			function extraRemove()
@@ -40,9 +33,9 @@
 			{
 				// This listener only gets called when initializing the room of a multiuser app.
 				var extraBlock = jumpStart.spawnInstance("models/block");
+				extraBlock.name = "globalBlock";
 				extraBlock.translateY(200);
 				extraBlock.addEventListener("tick", spin);
-				extraBlock.addEventListener("spawn", extraSpawn);
 				extraBlock.addEventListener("remove", extraRemove);
 				extraBlock.syncData.myVar = "5150";
 				extraBlock.sync();
@@ -54,14 +47,20 @@
 
 			jumpStart.addEventListener("ready", function()
 			{
+
 				var southBoundary = jumpStart.spawnCursorPlane({"parent": jumpStart.scene});
 				southBoundary.blocksLOS = true;
 				southBoundary.rotateX(Math.PI / 2.0);
 
 				southBoundary.addEventListener("cursordown", function()
 				{
-					g_extraBlock.position.copy(jumpStart.localUser.cursorHit.scaledPoint);
-					g_extraBlock.sync();
+					var extraBlock = jumpStart.scene.getObjectByName("globalBlock");
+
+					if( extraBlock )
+					{
+						extraBlock.position.copy(jumpStart.localUser.cursorHit.scaledPoint);
+						extraBlock.sync();
+					}
 				});
 
 				var cursor = jumpStart.spawnInstance("models/block");
@@ -107,9 +106,11 @@
 
 				myObject.addEventListener("cursorup", function()
 				{
-					console.log("Object is being clicked up (then removed)! " + this);
+					console.log("Object is being clicked up (then removing globalBlock)! " + this);
 					//jumpStart.removeInstance(this);
-					jumpStart.removeInstance(g_extraBlock);
+
+					var extraBlock = jumpStart.scene.getObjectByName("globalBlock");
+					jumpStart.removeInstance(extraBlock);
 				});
 
 				myObject.addEventListener("spawn", function()
