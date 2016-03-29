@@ -5,9 +5,16 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
+			var g_extraBlock = null;
+
 			function spin()
 			{
 				this.rotateY(1.0 * g_deltaTime);
+			}
+
+			function extraSpawn()
+			{
+				g_extraBlock = this;
 			}
 
 			jumpStart.setOptions({"debug": {"showCursorPlanes": true}});
@@ -24,17 +31,13 @@
 				return false;
 			});
 
-			var g_extraBlock;
 			jumpStart.addEventListener("initialize", function()
 			{
 				// This listener only gets called when initializing the room of a multiuser app.
 				var extraBlock = jumpStart.spawnInstance("models/block");
 				extraBlock.translateY(200);
 				extraBlock.addEventListener("tick", spin);
-				extraBlock.addEventListener("spawn", function()
-				{
-					g_extraBlock = this;
-				});
+				extraBlock.addEventListener("spawn", extraSpawn);
 				extraBlock.syncData.myVar = "5150";
 				extraBlock.sync();
 

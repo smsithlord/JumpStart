@@ -732,6 +732,8 @@ JumpStart.prototype.onReadyToReady = function()
 {
 	this.isReady = true;
 
+	this.doPendingUpdates();
+
 	// Check for ready listeners
 	var asyncRequested = false;
 	var listenerName, result;
@@ -763,10 +765,44 @@ JumpStart.prototype.run = function()
 	}
 };
 
+JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDepth)
+{
+	if( arguments.length < 3 )
+		maxDepth = 0;
+
+	maxDepth = Infinity;
+
+	if( arguments.length < 4 )
+		currentDepth = 0;
+
+	var x, childData, childDataType, listenerName, funcName;
+	for( x in data)
+	{
+		if( x === "listeners" )
+		{
+			for( listenerName in data[x] )
+			{
+				for( funcName in data[x][listenerName] )
+					targetData.listeners[listenerName][funcName] = window[funcName];
+			}
+		}
+		else
+		{
+			childData = data[x];
+			childDataType = typeof childData;
+
+			if( childDataType === "object" && currentDepth < maxDepth )
+				extractData.call(childData, targetData[x], maxDepth, currentDepth++);
+			else if( childDataType === "number" || childDataType === "string" || childDataType === "boolean" )
+				targetData[x] = childData;
+		}
+	}
+};
+
 JumpStart.prototype.doPendingUpdates = function()
 {
 	// Handle pending object updates
-	var x, data, instance;
+	var x, y, data, instance;
 	for( x in this.pendingUpdates )
 	{
 		data = this.pendingUpdates[x];
@@ -785,12 +821,19 @@ JumpStart.prototype.doPendingUpdates = function()
 
 		if( data.hasOwnProperty("vitalData") )
 		{
-			// FIX ME: Copy vital data in.
+			this.extractData.call(this, data.vitalData, instance, 1);
 		}
 
 		if( data.hasOwnProperty("syncData") )
 		{
-			// FIX ME: Copy sync data in.
+			this.extractData.call(this, data.syncData, instance, 1);
+		}
+
+		if( !!data.needsSpawn )
+		{
+			var listenerName;
+			for( listenerName in instance.listeners.spawn )
+				instance.listeners.spawn[listenerName].call(instance);
 		}
 
 		delete this.pendingUpdates[x];
@@ -1301,6 +1344,8 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 				if( arguments.length < 2 )
 					maxDepth = 0;
 
+				maxDepth = Infinity;
+
 				if( arguments.length < 3 )
 					currentDepth = 0;
 
@@ -1539,39 +1584,11 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	if( options.networkData )
 	{
 		// vitalData
-		function extractData(data, targetData, maxDepth, currentDepth)
-		{
-			if( arguments.length < 3 )
-				maxDepth = 0;
+		this.extractData.call(this, options.networkData.vitalData, jumpStartData, 1);
 
-			if( arguments.length < 4 )
-				currentDepth = 0;
+		// syncData
+		this.extractData.call(this, options.networkData.syncData, jumpStartData.syncData, 1);
 
-			var x, childData, childDataType, listenerName, funcName;
-			for( x in data)
-			{
-				if( x === "listeners" )
-				{
-					for( listenerName in data[x] )
-					{
-						for( funcName in data[x][listenerName] )
-							targetData.listeners[listenerName][funcName] = window[funcName];
-					}
-				}
-				else
-				{
-					childData = data[x];
-					childDataType = typeof childData;
-
-					if( childDataType === "object" && currentDepth < maxDepth )
-						extractData.call(childData, targetData[x], maxDepth, currentDepth++);
-					else if( childDataType === "number" || childDataType === "string" || childDataType === "boolean" )
-						targetData[x] = childData;
-				}
-			}
-		}
-
-		extractData.call(this, options.networkData.vitalData, jumpStartData, 1);
 		this.syncedObjects[options.syncKey] = instance;
 	}
 
