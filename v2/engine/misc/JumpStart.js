@@ -38,7 +38,7 @@ function JumpStart()
 	// List all PUBLIC member variables
 	var publicVariables = [
 		"util",	// Helper class.
-		"roomId",	// Given in the URI query as "room". null if none.
+		"roomID",	// Given in the URI query as "room". null if none.
 		"isAltspace",	// Altspace or web mode
 		"isGear",
 		"isInitialized",
@@ -81,6 +81,8 @@ function JumpStart()
 		"objects",
 		"cursorPlanes",
 		"listeners",
+		"syncedObjects",
+		"pendingUpdates",
 		"firebase",
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
@@ -95,7 +97,7 @@ function JumpStart()
 	// Set as many synchronous non-null PUBLIC member variables as possible
 	this.util = new JumpStartUtil(this);
 
-	this.roomId = this.util.getQueryVariable("room");
+	this.roomID = this.util.getQueryVariable("room");
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
 	this.isGear = navigator.userAgent.match(/mobile/i);
 	this.isInitialized = false;
@@ -106,7 +108,7 @@ function JumpStart()
 	// Set as many synchronous non-null PRIVATE member veriables as possible 
 	this.options =
 	{
-		"appId": "example",
+		"appID": "example",
 		"multiuserOnly": true,
 		"enclosureOnly": true,
 		"sceneScale": 1.0,	// relative scale
@@ -131,6 +133,8 @@ function JumpStart()
 	};
 	this.models = [];
 	this.objects = {};
+	this.syncedObjects = {};
+	this.pendingUpdates = {};
 	this.raycastArray = [];
 	this.freshObjects = [];
 	this.cursorPlanes = {};
@@ -241,7 +245,7 @@ function JumpStart()
 				}
 				else if( this.options.multiuserOnly )
 				{
-					var root = "https://jumpstart-2.firebaseio.com/apps/" + this.options.appId;
+					var root = "https://jumpstart-2.firebaseio.com/apps/" + this.options.appID;
 					this.firebase.rootRef = new Firebase(root);
 
 					// Check if this app exists
@@ -255,12 +259,12 @@ function JumpStart()
 
 					function createApp()
 					{
-						console.log("NOTICE: AppId \"" + this.options.appId + "\" does not exist on the server, so it will be created.");
+						console.warn("JumpStart: AppID \"" + this.options.appID + "\" does not exist on the server, so it will be created.");
 						// FIX ME:  Add some type of app ID validity check
 						this.firebase.rootRef.child("appData").update({"createdAt": Firebase.ServerValue.TIMESTAMP}, function(error)
 						{
 							if( error )
-								console.log(error);
+								console.log("JumpStart: " + error);
 							else
 								onAppExists.call(this);
 						}.bind(this));
@@ -269,26 +273,26 @@ function JumpStart()
 					function onAppExists()
 					{
 						// Are we given a room ID?
-						if( !this.roomId )
+						if( !this.roomID )
 							createRoom.call(this);
 						else
 						{
 							// Make sure this is a valid room ID AND subscribe to the state variable for future state change detection
-							this.firebase.rootRef.child("rooms").child(this.roomId).child("state").on("value", this.onRoomStateChange.bind(this));
+							this.firebase.rootRef.child("rooms").child(this.roomID).child("state").on("value", this.onRoomStateChange.bind(this));
 						}
 					}
 
 					function createRoom()
 					{
-						console.log("NOTICE: No room parameter given in URL, creating new room.");
+						console.warn("JumpStart: No room parameter given in URL, creating new room.");
 						// synchronous call with asynchronous error catching
 						this.firebase.roomRef = this.firebase.rootRef.child("rooms").push({"state": "initializing", "createdAt": Firebase.ServerValue.TIMESTAMP}, function(error)
 						{
 							if( error )
-								console.log(error);
+								console.log("JumpStart: " + error);
 						});
 
-						this.roomId = this.firebase.roomRef.key();
+						this.roomID = this.firebase.roomRef.key();
 
 						// Update the URL
 						// FIX ME: This destroys the entire URI query.
@@ -298,7 +302,7 @@ function JumpStart()
 
 						// ASYNC, continues in jumpStart.onRoomStateChange when isLocallyInitializing is TRUE && isFirstCheck
 						this.firebase.isLocallyInitializing = true;
-						this.firebase.rootRef.child("rooms").child(this.roomId).child("state").on("value", this.onRoomStateChange.bind(this));
+						this.firebase.rootRef.child("rooms").child(this.roomID).child("state").on("value", this.onRoomStateChange.bind(this));
 					}
 
 					//console.log(ref);
@@ -335,7 +339,7 @@ function JumpStart()
 					// Load all the CSS files
 					this.util.loadStylesheets(baseStyles).then(function()
 					{
-						console.log("Loaded " + baseStyles.length + " stylesheet(s).");
+						console.log("JumpStart: Loaded " + baseStyles.length + " stylesheet(s).");
 
 						// Define the list of JavaScript files
 						var baseScripts = [
@@ -354,7 +358,7 @@ function JumpStart()
 						// Load all the JavaScript files
 						this.util.loadJavaScripts(baseScripts).then(function(result)
 							{
-								console.log("Loaded " + baseScripts.length + " JavaScript(s).");
+								console.log("JumpStart: Loaded " + baseScripts.length + " JavaScript(s).");
 								loadHeadFilesCallback();
 							}.bind(this));
 					}.bind(this));
@@ -423,7 +427,7 @@ function JumpStart()
 						{
 							// Spoof the user for web mode
 							var user = {
-								"userId": "WebUser" + Date.now(),
+								"userID": "WebUser" + Date.now(),
 								"isLocal": true,
 								"displayName": "WebUser"
 							};
@@ -457,7 +461,7 @@ function JumpStart()
 JumpStart.prototype.onRoomStateChange = function(snapshot)
 {
 	if( !snapshot.exists() )
-		console.log("ERROR: Invalid room ID \"" + this.roomId + "\" specified.");
+		console.error("JumpStart: Invalid room ID \"" + this.roomID + "\" specified.");
 	else
 	{
 		var isFirstStateCheck = !this.firebase.state;
@@ -473,13 +477,17 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 			}
 			else if( this.firebase.state === "ready" )
 			{
-				this.firebase.roomRef = this.firebase.rootRef.child("rooms").child(this.roomId);
+				this.firebase.roomRef = this.firebase.rootRef.child("rooms").child(this.roomID);
 				onStateReady.call(this);
 			}
 		}
 		else
 		{
-			console.log("aux check");
+			console.log("JumpStart: aux check");
+			
+			// We are now finished setting up the room
+			if( this.firebase.isLocallyInitializing )
+				this.firebase.isLocallyInitializing = false;
 		}
 
 		function onStateReady()
@@ -487,9 +495,43 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 			// Listen for objects being added
 			this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
 			{
-				console.log("Object added!");
-				console.log(snapshot.exists());
-			});
+				if( snapshot.child("vitalData").child("ownerID").val() === this.localUser.userID )
+					return;
+
+				console.log("JumpStart: New synced object detected!");
+
+				// Spawn the object
+				var data = snapshot.val();
+				var key = snapshot.key();
+
+				this.pendingUpdates[key] = {};
+
+				this.pendingUpdates[key].needsSpawn = true;
+
+				this.firebase.roomRef.child("objects").child(key).child("transform").on("value", function(snapshot)
+				{
+					if( !this.pendingUpdates.hasOwnProperty(key) )
+						this.pendingUpdates[key] = {};
+
+					this.pendingUpdates[key].transform = snapshot.val();
+				}.bind(this));
+
+				this.firebase.roomRef.child("objects").child(key).child("vitalData").on("value", function(snapshot)
+				{
+					if( !this.pendingUpdates.hasOwnProperty(key) )
+						this.pendingUpdates[key] = {};
+
+					this.pendingUpdates[key].vitalData = snapshot.val();
+				}.bind(this));
+
+				this.firebase.roomRef.child("objects").child(key).child("syncData").on("value", function(snapshot)
+				{
+					if( !this.pendingUpdates.hasOwnProperty(key) )
+						this.pendingUpdates[key] = {};
+
+					this.pendingUpdates[key].syncData = snapshot.val();
+				}.bind(this));
+			}.bind(this));
 
 			this.onReadyToPrecache();
 		}
@@ -533,7 +575,7 @@ JumpStart.prototype.onReadyToPrecache = function()
 		if( !asyncRequested )
 			this.doneCaching();
 		else
-			console.log("WARNING: Asynchronous precaching initiated by a listener.");
+			console.warn("JumpStart: Asynchronous precaching initiated by a listener.");
 	}
 };
 
@@ -680,7 +722,7 @@ JumpStart.prototype.doneCaching = function()
 		if( !asyncRequested )
 			this.onReadyToReady();
 		else
-			console.log("WARNING: Asynchronous initializing initiated by a listener.");
+			console.warn("JumpStart: Asynchronous initializing initiated by a listener.");
 	}
 	else
 		this.onReadyToReady();
@@ -704,7 +746,7 @@ JumpStart.prototype.onReadyToReady = function()
 	if( !asyncRequested )
 		this.run();
 	else
-		console.log("WARNING: Asynchronous ready-idle initiated by a listener.");
+		console.warn("JumpStart: Asynchronous ready-idle initiated by a listener.");
 };
 
 JumpStart.prototype.run = function()
@@ -712,32 +754,65 @@ JumpStart.prototype.run = function()
 	this.isRunning = true;
 
 	this.onTick();
-	console.log("Simulation started.");
+	console.log("JumpStart: Simulation started.");
 
 	if( this.options.multiuserOnly && this.firebase.isLocallyInitializing )
 	{
-		// We are now finished setting up the room
-		this.firebase.isLocallyInitializing = false;
-
 		// ASYNC will continue in onRoomStateChange
 		this.firebase.roomRef.update({"state": "ready"});
 	}
 };
 
+JumpStart.prototype.doPendingUpdates = function()
+{
+	// Handle pending object updates
+	var x, data, instance;
+	for( x in this.pendingUpdates )
+	{
+		data = this.pendingUpdates[x];
+
+		if( !!data.needsSpawn )
+			instance = this.spawnInstance(null, {"networkData": data, "syncKey": x});
+		else
+			instance = this.syncedObjects[x];
+
+		if( data.hasOwnProperty("transform") )
+		{
+			instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+			instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
+			instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+		}
+
+		if( data.hasOwnProperty("vitalData") )
+		{
+			// FIX ME: Copy vital data in.
+		}
+
+		if( data.hasOwnProperty("syncData") )
+		{
+			// FIX ME: Copy sync data in.
+		}
+
+		delete this.pendingUpdates[x];
+	}
+};
+
 JumpStart.prototype.onTick = function()
 {
-	if( !this.isInitialized || !this.isRunning)
+	if( !this.isInitialized )
 		return;
 
+	this.doPendingUpdates();
+
 	var count = 0;
-	var x, object, y;
+	var y;
 	for( x in this.objects )
 	{
 		object = this.objects[x];
 		if( false && object.parent !== this.scene )
 		{
 			// FIX ME: Delete this property from the object.
-			console.log("It's gone!!");
+			console.log("JumpStart: It's gone!!");
 		}
 		else
 		{
@@ -995,13 +1070,13 @@ JumpStart.prototype.onWindowResize = function()
 
 JumpStart.prototype.loadModels = function(fileNames)
 {
-	// fileNames are relative to the "assets/[appId]/" path.
+	// fileNames are relative to the "assets/[appID]/" path.
 	// Convert all fileNames to valid paths.
 
 	var i;
 	for( i in fileNames )
 	{
-		fileNames[i] = "assets/" + this.options.appId + "/" + fileNames[i];
+		fileNames[i] = "assets/" + this.options.appID + "/" + fileNames[i];
 	}
 
 	// Return a promise-like structure
@@ -1052,7 +1127,7 @@ JumpStart.prototype.loadModels = function(fileNames)
 						});
 					}
 
-					console.log("Loaded " + loadRequest.objectsLoaded + " model(s).");
+					console.log("JumpStart: Loaded " + loadRequest.objectsLoaded + " model(s).");
 					promiseCallback(fileNames.length);
 				}.bind(this));
 			}.bind(this)
@@ -1063,7 +1138,7 @@ JumpStart.prototype.loadModels = function(fileNames)
 //	- Private method for checking if a model is already cached.
 JumpStart.prototype.findModel = function(modelFile)
 {
-	modelFile = "assets/" + this.options.appId + "/" + modelFile;
+	modelFile = "assets/" + this.options.appID + "/" + modelFile;
 	
 	var i, model;
 	for( i = 0; i < this.models.length; i++ )
@@ -1105,12 +1180,11 @@ JumpStart.prototype.removeInstance = function(instance)
 
 JumpStart.prototype.spawnInstance = function(modelFile, options)
 {
-	if( !modelFile )
-		modelFile = "";
-
 	var defaultOptions = {
 		"object": null,
-		"parent": this.world
+		"parent": this.world,
+		"networkData": null,
+		"syncKey": null
 	};
 
 	// Merg options with defaultOptions
@@ -1123,6 +1197,9 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	else
 		options = defaultOptions;
 
+	if( !!!modelFile )
+		modelFile = (options.networkData) ? options.networkData.vitalData.modelFile : "";
+
 	var instance;
 	if( options.object )
 		instance = options.object;
@@ -1132,7 +1209,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 
 		if( !existingModel )
 		{
-			console.log("ERROR: The model " + modelFile + " is not yet cached.");
+			console.error("JumpStart: The model " + modelFile + " is not yet cached.");
 			return;
 		}
 		else
@@ -1161,7 +1238,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	this.freshObjects.push(instance);
 
 	// Compute a collision radius based on a bounding sphere for a child mesh that contains geometry
-	var computedRadius = 0.0;
+	var computedBoundingSphere = null;
 	var i, mesh;
 	for( i in instance.children )
 	{
@@ -1170,7 +1247,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		if( mesh.geometry.faces.length > 0 )
 		{
 			mesh.geometry.computeBoundingSphere();
-			computedRadius = mesh.geometry.boundingSphere;
+			computedBoundingSphere = mesh.geometry.boundingSphere;
 			break;
 		}
 	}
@@ -1185,17 +1262,206 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	var originalAddEventListener = window.addEventListener;
 	var originalRemoveEventListener = window.removeEventListener;
 
+	var vitalDataNames = ["ownerID", "modelFile", "blocksLOS", "listeners"];	// These get synced
 	var jumpStartData = {
+		"ownerID": this.localUser.userID,
 		"blocksLOS": false,
-		"radius": computedRadius,
+		"modelFile": modelFile,
+		"boundingSphere": computedBoundingSphere,
 		"listeners": computedListeners,
+		"syncData": {},
 		"spoofVisible": true,	// because Altspace does not respect object.visible values directly
+		"syncKey": options.syncKey,
+		"sync": function(options)
+		{
+			var defaultOptions = {
+				"transform": false,
+				"vitalData": false,
+				"syncData": false
+			};
+
+			var autoOptions = {
+					"transform": true,
+					"vitalData": true,
+					"syncData": true
+				};
+
+			// Merg options with defaultOptions, or use autoOptions if nothing at all is given.
+			if( !!options )
+			{
+				var x;
+				for( x in defaultOptions )
+					options[x] = (!!options[x]) ? options[x] : defaultOptions[x];
+			}
+			else
+				options = autoOptions;
+
+			function makeSyncable(object, maxDepth, currentDepth)
+			{
+				if( arguments.length < 2 )
+					maxDepth = 0;
+
+				if( arguments.length < 3 )
+					currentDepth = 0;
+
+				var result;
+				var objectType = typeof object;
+				if( objectType === "function" )
+				{
+					// Add function names for global functions
+					funcName = object.name;
+
+					if( !!funcName ) 
+						result = funcName;
+				}
+				else if( objectType === "number" || objectType === "string" || objectType === "boolean" )
+				{
+					result = object;
+				}
+				else if( objectType === "object" )
+				{
+					result = {};
+
+					var keys = Object.keys(object);
+					var type, funcName;
+					for( x in keys)
+					{
+						type = typeof object[keys[x]];
+						if( type === "function" )
+						{
+							// Add TRUE for function names that are global functions
+							funcName = object[keys[x]].name;
+
+							if( !!funcName ) 
+								result[keys[x]] = true;
+						}
+						else if( type === "object" && currentDepth < maxDepth )
+							result[keys[x]] = makeSyncable(object[keys[x]], maxDepth, currentDepth++);
+						else if( type === "number" || type === "string" || type === "boolean" )
+							result[keys[x]] = object[keys[x]];
+					}
+				}
+
+				return result;
+			}
+
+			var data = {};
+			var x, y, z, i, keys, type;
+
+			if( options.transform )
+			{
+				var transform = {
+					"position": makeSyncable(this.position),
+					"quaternion": makeSyncable(this.quaternion),
+					"scale": makeSyncable(this.scale)
+				};
+
+				// Firebase updates are formatted differently than pushes
+				/*
+				if( this.syncKey )
+				{
+					for( x in transform )
+					{
+						if( typeof transform[x] === "object" )
+						{
+							for( y in transform[x] )
+								data["transform/" + x + "/" + y] = transform[x][y];
+						}
+						else
+							data["transform/" + x] = transform[x];
+					}
+				}
+				else
+					*/
+					data.transform = transform;
+			}
+
+			if( options.vitalData )
+			{
+				var vitalData = {};
+				for( i in vitalDataNames )
+					vitalData[vitalDataNames[i]] = makeSyncable(this[vitalDataNames[i]], 1);
+
+/*
+				if( this.syncKey )
+				{
+					for( x in vitalData )
+					{
+						if( typeof vitalData[x] === "object" )
+						{
+							for( y in vitalData[x] )
+							{
+								if( typeof vitalData[x][y] === "object" )
+								{
+									for( z in vitalData[x][y] )
+									{
+										data["vitalData/" + x + "/" + y + "/" + z] = vitalData[x][y][z];
+									}
+								}
+								else
+									data["vitalData/" + x + "/" + y] = vitalData[x][y];
+							}
+						}
+						else
+							data["vitalData/" + x] = vitalData[x];
+					}
+				}
+				else
+					*/
+					data.vitalData = vitalData;
+			}
+
+			if( options.syncData )
+			{
+				var syncData = makeSyncable(this.syncData);
+/*
+				if( this.syncKey )
+				{
+					for( x in syncData )
+					{
+						if( typeof syncData[x] === "object" )
+						{
+							for( y in syncData[x] )
+								data["syncData/" + x + "/" + y] = syncData[x][y];
+						}
+						else
+							data["syncData/" + x] = syncData[x];
+					}
+				}
+				else
+					*/
+					data.syncData = syncData;
+			}
+
+			// FIX ME: Only non-default values should need to be stored on the firebase.
+			if( this.syncKey )
+			{
+				jumpStart.firebase.roomRef.child("objects").child(this.syncKey).update(data, function(error)
+				{
+					if( error )
+						console.log("JumpStart: " + error);
+				});
+			}
+			else
+			{
+				var ref = jumpStart.firebase.roomRef.child("objects").push(data, function(error)
+				{
+					if( error )
+						console.log("JumpStart:" + error);
+				});
+
+				this.syncKey = ref.key();
+				jumpStart.syncedObjects[ref.key()] = this;
+
+				console.log("JumpStart: Syncing object with key " + ref.key() + " for the first time.");
+			}
+		},
 		"addEventListener": function(eventType, listener)
 		{
 			// Make sure this is a valid event type
 			if( validEvents.indexOf(eventType) < 0 )
 			{
-				console.log("WARNING: Invalid event type \"" + eventType + "\" specified. Applying as non-JumpStart listener.");
+				console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified. Applying as non-JumpStart listener.");
 				originalAddEventListener.apply(window, arguments);
 				return;
 			}
@@ -1214,7 +1480,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			if( isLocalListener )
 			{
 //				if( jumpStart.options.multiuserOnly )
-//					console.log("WARNING: Only global functions can be synced as event listeners.");
+//					console.warn("JumpStart: Only global functions can be synced as event listeners.");
 
 				// Generate a name for this non-synced listener.
 				var highestLocal = 0;
@@ -1246,7 +1512,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			// Make sure this is a valid event type
 			if( validEvents.indexOf(eventType) < 0 )
 			{
-				console.log("WARNING: Invalid event type \"" + eventType + "\" specified. Removing as non-JumpStart listener.");
+				console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified. Removing as non-JumpStart listener.");
 				originalRemoveEventListener.apply(window, arguments);
 				return;
 			}
@@ -1269,12 +1535,52 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		}.bind(instance)
 	};
 	
+	// If we are a network spawn, we need to merg our networkData in
+	if( options.networkData )
+	{
+		// vitalData
+		function extractData(data, targetData, maxDepth, currentDepth)
+		{
+			if( arguments.length < 3 )
+				maxDepth = 0;
+
+			if( arguments.length < 4 )
+				currentDepth = 0;
+
+			var x, childData, childDataType, listenerName, funcName;
+			for( x in data)
+			{
+				if( x === "listeners" )
+				{
+					for( listenerName in data[x] )
+					{
+						for( funcName in data[x][listenerName] )
+							targetData.listeners[listenerName][funcName] = window[funcName];
+					}
+				}
+				else
+				{
+					childData = data[x];
+					childDataType = typeof childData;
+
+					if( childDataType === "object" && currentDepth < maxDepth )
+						extractData.call(childData, targetData[x], maxDepth, currentDepth++);
+					else if( childDataType === "number" || childDataType === "string" || childDataType === "boolean" )
+						targetData[x] = childData;
+				}
+			}
+		}
+
+		extractData.call(this, options.networkData.vitalData, jumpStartData, 1);
+		this.syncedObjects[options.syncKey] = instance;
+	}
+
 	var x;
 	for( x in jumpStartData )
 	{
 		// Warn if we are overwriting anything (other than *EventListener methods, because we call BaseClass on those).
 		if( typeof instance[x] !== "undefined" && x !== "addEventListener" && x !== "removeEventListener" )
-			console.log("WARNING: Object already has property " + x + ".");
+			console.warn("JumpStart: Object already has property " + x + ".");
 		
 		instance[x] = jumpStartData[x];
 	}
@@ -1282,7 +1588,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	// JumpStart object bookkeeping.
 	this.objects[instance.uuid] = instance;
 
-	console.log("Spawned an object.");
+	console.log("JumpStart: Spawned an object.");
 	return instance;
 };
 
@@ -1293,7 +1599,7 @@ JumpStart.prototype.addEventListener = function(eventType, listener)
 	// Make sure this is a valid event type
 	if( validEvents.indexOf(eventType) < 0 )
 	{
-		console.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
+		console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified.");
 		return;
 	}
 
@@ -1344,7 +1650,7 @@ JumpStart.prototype.removeEventListener = function(eventType, listener)
 	// Make sure this is a valid event type
 	if( validEvents.indexOf(eventType) < 0 )
 	{
-		console.log("WARNING: Invalid event type \"" + eventType + "\" specified.");
+		console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified.");
 		return;
 	}
 
@@ -1361,7 +1667,7 @@ JumpStart.prototype.removeEventListener = function(eventType, listener)
 		}
 	}
 
-	console.log("WARNING: The specificed " + eventType + " listener was not found in removeEventListener.");
+	console.warn("JumpStart: The specificed " + eventType + " listener was not found in removeEventListener.");
 };
 
 
@@ -1623,7 +1929,7 @@ JumpStartUtil.prototype.loadImages = function(fileNames)
 	}
 };
 
-// Figure out if we are passed a roomId in our URL
+// Figure out if we are passed a roomID in our URL
 // Based on the function at: https://css-tricks.com/snippets/javascript/get-url-variables/
 JumpStartUtil.prototype.getQueryVariable = function(name)
 {

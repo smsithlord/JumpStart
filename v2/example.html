@@ -5,6 +5,11 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
+			function spin()
+			{
+				this.rotateY(1.0 * g_deltaTime);
+			}
+
 			jumpStart.setOptions({"debug": {"showCursorPlanes": true}});
 			jumpStart.addEventListener("precache", function()
 			{
@@ -19,11 +24,19 @@
 				return false;
 			});
 
+			var g_extraBlock;
 			jumpStart.addEventListener("initialize", function()
 			{
 				// This listener only gets called when initializing the room of a multiuser app.
 				var extraBlock = jumpStart.spawnInstance("models/block");
 				extraBlock.translateY(200);
+				extraBlock.addEventListener("tick", spin);
+				extraBlock.addEventListener("spawn", function()
+				{
+					g_extraBlock = this;
+				});
+				extraBlock.syncData.myVar = "5150";
+				extraBlock.sync();
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
@@ -35,6 +48,12 @@
 				var southBoundary = jumpStart.spawnCursorPlane({"parent": jumpStart.scene});
 				southBoundary.blocksLOS = true;
 				southBoundary.rotateX(Math.PI / 2.0);
+
+				southBoundary.addEventListener("cursordown", function()
+				{
+					g_extraBlock.position.copy(jumpStart.localUser.cursorHit.scaledPoint);
+					g_extraBlock.sync();
+				});
 
 				var cursor = jumpStart.spawnInstance("models/block");
 				cursor.addEventListener("tick", function()
