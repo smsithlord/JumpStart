@@ -510,6 +510,13 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 				this.firebase.roomRef.child("objects").child(key).child("transform").on("value", function(snapshot)
 				{
+					if( !snapshot.exists() )
+					{
+						// The object has been removed.
+						objectRemoved.call(this, key);
+						return;
+					}
+					
 					if( !this.pendingUpdates.hasOwnProperty(key) )
 						this.pendingUpdates[key] = {};
 
@@ -518,6 +525,13 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 				this.firebase.roomRef.child("objects").child(key).child("vitalData").on("value", function(snapshot)
 				{
+					if( !snapshot.exists() )
+					{
+						// The object has been removed.
+						objectRemoved.call(this, key);
+						return;
+					}
+
 					if( !this.pendingUpdates.hasOwnProperty(key) )
 						this.pendingUpdates[key] = {};
 
@@ -526,11 +540,28 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 				this.firebase.roomRef.child("objects").child(key).child("syncData").on("value", function(snapshot)
 				{
+					if( !snapshot.exists() )
+					{
+						// The object has been removed.
+						objectRemoved.call(this, key);
+						return;
+					}
+
 					if( !this.pendingUpdates.hasOwnProperty(key) )
 						this.pendingUpdates[key] = {};
 
 					this.pendingUpdates[key].syncData = snapshot.val();
 				}.bind(this));
+
+				function objectRemoved(key)
+				{
+					if( !this.syncedObjects.hasOwnProperty(key) )	// FIX ME: This might be getting called 3 times per- removal.
+						return;
+
+					var object = this.syncedObjects[key];
+					delete this.syncedObjects[key];
+					this.removeInstance(object);
+				}
 			}.bind(this));
 
 			this.onReadyToPrecache();
@@ -1194,31 +1225,36 @@ JumpStart.prototype.findModel = function(modelFile)
 
 JumpStart.prototype.removeInstance = function(instance)
 {
-	var x, object;
-	for( x in this.objects )
+	console.log("remove an instance " + instance.uuid);
+	if( !this.objects.hasOwnProperty(instance.uuid) )
+		return;
+
+	object = this.objects[instance.uuid];	// FIX ME: Don't search through the objects array twice! Combine this with the if statement above.
+
+	// Unhover this object, but ignore listeners
+	if( this.hoveredObject === object )
+		this.hoveredObject = null;
+
+	// Unclick this object, but ignore listeners
+	if( this.clickedObject === object )
+		this.clickedObject = null;
+
+	// Now remove this object
+	for( listenerName in object.listeners.remove )
+		object.listeners.remove[listenerName].call(object);
+
+	object.parent.remove(object);
+
+	if( object.syncKey && this.syncedObjects.hasOwnProperty(object.syncKey))
 	{
-		object = this.objects[x];
-
-		if( object === instance )
-		{
-			// Unhover this object, but ignore listeners
-			if( this.hoveredObject === object )
-				this.hoveredObject = null;
-
-			// Unclick this object, but ignore listeners
-			if( this.clickedObject === object )
-				this.clickedObject = null;
-
-			// Now remove this object
-			for( listenerName in object.listeners.remove )
-				object.listeners.remove[listenerName].call(object);
-
-			object.parent.remove(object);
-
-			delete this.objects[x];
-			break;
-		}
+		// Remove us from immediately from our local synced objects list
+		delete this.syncedObjects[object.syncKey];
+console.log(object.syncKey);
+		// Remove us from the firebase
+		this.firebase.roomRef.child("objects").child(object.syncKey).remove();
 	}
+
+	delete this.objects[x];
 };
 
 JumpStart.prototype.spawnInstance = function(modelFile, options)

@@ -17,6 +17,11 @@
 				g_extraBlock = this;
 			}
 
+			function extraRemove()
+			{
+				console.log("Object removed listener.");
+			}
+
 			jumpStart.setOptions({"debug": {"showCursorPlanes": true}});
 			jumpStart.addEventListener("precache", function()
 			{
@@ -38,6 +43,7 @@
 				extraBlock.translateY(200);
 				extraBlock.addEventListener("tick", spin);
 				extraBlock.addEventListener("spawn", extraSpawn);
+				extraBlock.addEventListener("remove", extraRemove);
 				extraBlock.syncData.myVar = "5150";
 				extraBlock.sync();
 
@@ -102,7 +108,8 @@
 				myObject.addEventListener("cursorup", function()
 				{
 					console.log("Object is being clicked up (then removed)! " + this);
-					jumpStart.removeInstance(this);
+					//jumpStart.removeInstance(this);
+					jumpStart.removeInstance(g_extraBlock);
 				});
 
 				myObject.addEventListener("spawn", function()
