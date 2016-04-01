@@ -19,6 +19,7 @@
 
 			// Global variables that BuildingBlocks will use
 			var blockModels = ["models/bricks", "models/cube", "models/dirt", "models/grass", "models/jewel"];
+			var g_placeholder = null;
 
 			function createBlock()
 			{
@@ -28,9 +29,63 @@
 				var block = jumpStart.spawnInstance(sampleBlock.modelFile);
 				block.position.copy(cage.position);
 				block.blocksLOS = true;
-				block.syncData.isBlock = true;
 				block.addEventListener("cursorup", createBlock);
+				block.addEventListener("spawn", blockSpawn);
 				block.sync();
+				block.scale.copy(cage.userData.sampleBlock.scale);
+			}
+
+			function blockSpawn(isInitialSync)
+			{
+				this.userData.isBlock = true;
+
+				if( isInitialSync )
+					return;
+
+				g_placeholder.scale.set(1, 1, 1);
+				g_placeholder.position.copy(this.position);
+
+				// Continue spawning "this" block
+				this.userData.maxScale = 1.0;
+				this.userData.minScale = 0.8;
+				this.userData.scaleDirection = 0;
+
+				if( this.ownerID !== jumpStart.localUser.userID )
+					this.scale.set(0.0001, 0.0001, 0.0001);
+
+				// Local listener
+				this.addEventListener("tick", function()
+				{
+					var amount;
+					if( !this.userData.scaleDirection )
+					{
+						amount = this.scale.x + (2.0 * g_deltaTime);
+						if( amount >= this.userData.maxScale )
+						{
+							amount = this.userData.maxScale;
+							this.removeEventListener("tick", arguments.callee);
+
+							// Hide the placeholder
+							g_placeholder.scale.set(0.0001, 0.0001, 0.0001);
+						}
+					}
+					else
+					{
+						amount = this.scale.x + (1.0 * g_deltaTime) * this.userData.scaleDirection;
+						if( amount < this.userData.minScale )
+						{
+							amount = this.userData.minScale;
+							this.userData.scaleDirection *= -1.0;
+						}
+						else if( amount > this.userData.maxScale )
+						{
+							amount = this.userData.maxScale;
+							this.userData.scaleDirection *= -1.0;
+						}
+					}
+
+					this.scale.set(amount, amount, amount);
+				});
 			}
 
 			// Precache our models
@@ -42,7 +97,8 @@
 					"models/cube_cage",
 					"models/dirt",
 					"models/grass",
-					"models/jewel"
+					"models/jewel",
+					"models/placeholder"
 				];
 
 				jumpStart.loadModels(models).then( function()
@@ -57,18 +113,13 @@
 			jumpStart.addEventListener("ready", function()
 			{
 				// So that we can raycast against the floor of the enclosure.
-				var floorBoundary = jumpStart.enclosureBoundary("floor");
-				floorBoundary.addEventListener("cursorup", function()
-				{
-					createBlock();
-				});
+				jumpStart.enclosureBoundary("floor").addEventListener("cursorup", function() { createBlock(); });
 
 				var cage = jumpStart.spawnInstance("models/cube_cage");
 				cage.name = "cage";
 				cage.addEventListener("spawn", function()
 				{
-					var sampleBlock = jumpStart.spawnInstance(blockModels[0], {"parent": this});
-					this.userData.sampleBlock = sampleBlock;
+					this.userData.sampleBlock = createSampleBlock(blockModels[0]);
 				});
 				cage.addEventListener("tick", function()
 				{
@@ -78,24 +129,134 @@
 						var pos = jumpStart.localUser.cursorHit.scaledPoint.clone();
 						var object = jumpStart.localUser.cursorHit.object;
 
-						if( !!object && object.syncData.isBlock )
+						if( !!object && object.userData.isBlock )
 						{
 							var offset = jumpStart.localUser.cursorHit.face.normal.clone().normalize().multiplyScalar(radius / 5.0);
 							pos.add(offset);
 						}
 
+						var farEnoughAway = true;
 						var x;
 						for( x in pos )
+						{
 							pos[x] = (pos[x] < -0.01) ? pos[x] - (pos[x] % (radius / 1)) - radius / 2 : pos[x] = pos[x] - (pos[x] % (radius / 1)) + radius / 2;
+						}
 
-						this.position.copy(pos);
+						var insideOfEnclosure = jumpStart.isWorldPosInsideOfEnclosure(pos);
+
+						// Make sure the cage isn't too close to the player
+						if( insideOfEnclosure )
+						{
+							this.position.copy(pos);
+
+							var cursorPos = jumpStart.world.worldToLocal(jumpStart.cursorRay.origin.clone());
+							if( cursorPos.distanceTo(pos) < 40.0 )
+								farEnoughAway = false;
+						}
+
+						if( (!insideOfEnclosure || !farEnoughAway) && !!!this.userData.hidden )
+						{
+							this.userData.hidden = true;
+							this.scale.set(0.0001, 0.0001, 0.0001);
+						}
+						else if( insideOfEnclosure && farEnoughAway && !!this.userData.hidden )
+						{
+							this.userData.hidden = false;
+							this.scale.set(1, 1, 1);
+						}
+					}
+					else if( !!!this.userData.hidden )
+					{
+						this.userData.hidden = true;
+						this.scale.set(0.0001, 0.0001, 0.0001);
 					}
 				});
+
+				// Spawn an invisible block placeholder
+				g_placeholder = jumpStart.spawnInstance("models/placeholder");
+				g_placeholder.blocksLOS = true;
+				g_placeholder.userData.isBlock = true;
+				g_placeholder.addEventListener("cursorup", createBlock);
+				jumpStart.makeMaterialsInvisible(g_placeholder);
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.run)
 				return true;
 			});
+
+			function createSampleBlock(modelFile)
+			{
+				var cage = jumpStart.scene.getObjectByName("cage");
+
+				var sampleBlock = jumpStart.spawnInstance(modelFile, {"parent": cage});
+				sampleBlock.userData.maxScale = 0.8;
+				sampleBlock.userData.minScale = 0.5;
+				sampleBlock.userData.scaleDirection = 1.0;
+				sampleBlock.scale.set(sampleBlock.userData.minScale, sampleBlock.userData.minScale, sampleBlock.userData.minScale);
+
+				// Local listener
+				sampleBlock.addEventListener("tick", function()
+				{
+					var amount = this.scale.x + (0.3 * g_deltaTime) * this.userData.scaleDirection;
+					if( amount < this.userData.minScale )
+					{
+						amount = this.userData.minScale;
+						this.userData.scaleDirection *= -1.0;
+					}
+					else if( amount > this.userData.maxScale )
+					{
+						amount = this.userData.maxScale;
+						this.userData.scaleDirection *= -1.0;
+					}
+
+					this.scale.set(amount, amount, amount);
+				});
+
+				return sampleBlock;
+			}
+
+			jumpStart.addEventListener("keydown", function(e)
+			{
+				if( e.keyCode == 0 || e.keyCode == 32 )
+					deleteBlock();
+				else if( e.keyCode == 88 )
+					cycleBlock(1);
+				else if( e.keyCode == 90 )
+					cycleBlock(-1);
+			}, false);
+
+			function cycleBlock(direction)
+			{
+				var cage = jumpStart.scene.getObjectByName("cage");
+				var sampleBlock = cage.userData.sampleBlock;
+
+				var index = blockModels.indexOf(sampleBlock.modelFile) + direction;
+				if( index >= blockModels.length )
+					index = 0;
+				else if( index < 0 )
+					index = blockModels.length - 1;
+
+				var scale = sampleBlock.scale.clone();
+				var scaleDirection = sampleBlock.userData.scaleDirection;
+				jumpStart.removeInstance(sampleBlock);
+
+				sampleBlock = createSampleBlock(blockModels[index]);
+				sampleBlock.scale.copy(scale);
+				sampleBlock.userData.scaleDirection = scaleDirection;
+
+				cage.userData.sampleBlock = sampleBlock;
+			}
+
+			function deleteBlock()
+			{
+				if( jumpStart.localUser.cursorHit )
+				{
+					var block = jumpStart.localUser.cursorHit.object;
+
+					if( block.userData.isBlock )
+						jumpStart.removeInstance(block);
+				}
+			}
 		</script>
 	</head>
 

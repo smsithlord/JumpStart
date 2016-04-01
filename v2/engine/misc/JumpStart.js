@@ -79,6 +79,7 @@ function JumpStart(options)
 		"gamepadsEnabled",
 		"activeGamepad",
 		"boundFadeObjects",
+		"invisibleMaterial",
 		"models",
 		"objects",
 		"cursorPlanes",
@@ -87,6 +88,7 @@ function JumpStart(options)
 		"syncedObjects",
 		"pendingUpdates",
 		"firebase",
+		"pendingEvents",
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
 		"debug"	// Helper class
@@ -143,6 +145,7 @@ function JumpStart(options)
 	this.raycastArray = [];
 	this.freshObjects = [];
 	this.cursorPlanes = {};
+	this.pendingEvents ={};
 	this.enclosureBoundaries = 
 	{
 		"floor": null,
@@ -159,12 +162,17 @@ function JumpStart(options)
 		"tick": {},
 		"cursordown": {},
 		"cursorup": {},
-		"cursormove": {}
+		"cursormove": {},
+		"keypress": {},
+		"keydown": {}
 	};
 
 	// Attach default window-level event listeners
 	if( !this.isAltspace )
 		window.addEventListener( 'resize', function() { jumpStart.onWindowResize(); }, false );
+
+	window.addEventListener("keypress", function(e) { this.onKeyEvent.call(this, e); }.bind(this));
+	window.addEventListener("keydown", function(e) { this.onKeyEvent.call(this, e); }.bind(this));
 
 	// FIX ME: Add & debug GearVR gesture events!
 	//altspace.addEventListener("touchpadgesture", onTouchpadGesture);
@@ -182,6 +190,8 @@ function JumpStart(options)
 	// ASYNC 1: Load all CSS / JavaScript files sequentially
 	loadHeadFiles.call(this).then(function()
 	{
+		this.invisibleMaterial = new THREE.MeshBasicMaterial( { color: "#ffffff", transparent: true, opacity: 0.5, visible: false});
+
 		// Startup the debug stuff, if needed
 		if( this.options.debug.enabled )
 			this.debugUtil = new JumpStartDebug();
@@ -476,6 +486,15 @@ function JumpStart(options)
 	}
 }
 
+JumpStart.prototype.onKeyEvent = function(e)
+{
+	if( !this.pendingEvents.hasOwnProperty(e.type) )
+		this.pendingEvents[e.type] = {};
+
+	var code = (e.type === "keypress") ? e.charCode : e.keyCode;
+	this.pendingEvents[e.type][code] = e;
+};
+
 JumpStart.prototype.onRoomStateChange = function(snapshot)
 {
 	if( !snapshot.exists() )
@@ -566,6 +585,7 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 				{
 					this.pendingUpdates[key] = {};
 					this.pendingUpdates[key].needsSpawn = true;
+					this.pendingUpdates[key].isInitialSync = true;
 
 					if( !this.pendingUpdates.hasOwnProperty(key) )
 						this.pendingUpdates[key] = {};
@@ -738,11 +758,8 @@ JumpStart.prototype.spawnCursorPlane = function(options)
 		return color;
 	}
 
-	var depth = 0;
-	var cursorPlane;
-
-	cursorPlane = new THREE.Mesh(
-		new THREE.BoxGeometry(options.width, options.height, depth),
+	var cursorPlane = new THREE.Mesh(
+		new THREE.BoxGeometry(options.width, options.height, 0),
 		new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: this.options.debug["showCursorPlanes"] })
 	);
 
@@ -839,8 +856,6 @@ JumpStart.prototype.onReadyToReady = function()
 {
 	this.isReady = true;
 
-	//this.doPendingUpdates();
-
 	// Check for ready listeners
 	var asyncRequested = false;
 	var listenerName, result;
@@ -873,6 +888,7 @@ JumpStart.prototype.run = function()
 	else
 	{
 		this.isRunning = true;
+
 		this.onTick();
 		console.log("JumpStart: Simulation started.");
 	}
@@ -921,7 +937,7 @@ JumpStart.prototype.doPendingUpdates = function()
 		data = this.pendingUpdates[x];
 
 		if( !!data.needsSpawn )
-			instance = this.spawnInstance(null, {"networkData": data, "syncKey": x});
+			instance = this.spawnInstance(null, {"networkData": data, "syncKey": x, "isInitialSync": !!data.isInitialSync});
 		else
 			instance = this.syncedObjects[x];
 
@@ -943,13 +959,6 @@ JumpStart.prototype.doPendingUpdates = function()
 			this.extractData.call(this, data.syncData, instance, 1);
 		}
 
-		if( !!data.needsSpawn )
-		{
-			var listenerName;
-			for( listenerName in instance.listeners.spawn )
-				instance.listeners.spawn[listenerName].call(instance);
-		}
-
 		delete this.pendingUpdates[x];
 	}
 };
@@ -959,7 +968,25 @@ JumpStart.prototype.onTick = function()
 	if( !this.isInitialized )
 		return;
 
+	function doPendingListeners()
+	{
+		// Do some more event listeners
+		var x, y, z, eventCategory;
+		for( x in this.pendingEvents )
+		{
+			eventCategory = this.pendingEvents[x];
+			for( y in eventCategory )
+			{
+				for( z in this.listeners[x] )
+					this.listeners[x][z].call(this, eventCategory[y]);
+			}
+
+			this.pendingEvents[x] = {};
+		}
+	};
+
 	this.doPendingUpdates();
+	doPendingListeners.call(this);
 
 	var count = 0;
 	var y;
@@ -1000,13 +1027,16 @@ JumpStart.prototype.onTick = function()
 	this.raycastArray.length = count;
 
 	// Check for spawn listeners on fresh objects
-	var i, freshObject, listenerName;
+	var i, freshObject, listenerName, isInitialSync;
 	for( i in this.freshObjects )
 	{
 		freshObject = this.freshObjects[i];
 
+		isInitialSync = (!!freshObject.__isInitialSync) ? freshObject.__isInitialSync : false;
+		delete freshObject["__isInitialSync"];
+
 		for( listenerName in freshObject.listeners.spawn )
-			freshObject.listeners.spawn[listenerName].call(freshObject);
+			freshObject.listeners.spawn[listenerName].call(freshObject, isInitialSync);
 	}
 	this.freshObjects.length = 0;
 
@@ -1032,9 +1062,18 @@ JumpStart.prototype.makeMaterialsInvisible = function(object)
 	object.traverse(function(child)
 	{
 		if( child.material && child.material instanceof THREE.MeshPhongMaterial )
-		{
 			child.material.visible = false;
-		}
+	}.bind(this));
+};
+
+JumpStart.prototype.applyInvisibleMaterial = function(object)
+{
+	var model = this.findModel(object.modelFile);
+	
+	model.object.traverse(function(child)
+	{
+		if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+			child.material = this.invisibleMaterial;
 	}.bind(this));
 };
 
@@ -1134,6 +1173,53 @@ JumpStart.prototype.processCursorMove = function()
 	*/
 
 	// FIX ME: Might want to raycast against collision boxes of all objects, then another raycast against the faces of intersected objects.
+/*
+	this.raycastArray.sort(function(a, b)
+	{
+		var worldPosA = new THREE.Vector3().setFromMatrixPosition(a.matrixWorld);
+		var worldPosB = this.localUser.cursorRayOrigin;//this.cursorRay.origin;//new THREE.Vector3().setFromMatrixPosition(b.matrixWorld);
+		return worldPosA.distanceTo(worldPosB) * -1.0;
+	}.bind(this));
+
+	var i, object, intersection;
+	for( i in this.raycastArray )
+	{
+		intersection = this.raycaster.intersectObject(this.raycastArray[i], true);
+
+		if( intersection.length === 0 )
+			continue;
+		else
+			intersection = intersection[0];
+
+		object = intersection.object;
+		while( !object.hasOwnProperty("blocksLOS") )
+			object = object.parent;
+
+		// If there already is a hovered object, unhover it.
+		if( this.hoveredObject && this.hoveredObject !== object )
+			unhover.call(this, this.hoveredObject);
+
+		if( !this.hoveredObject )
+		{
+			this.hoveredObject = object;
+
+			// Check for cursorenter listeners
+			// FIX ME: Add support for event bubbling
+			var listenerName;
+			for( listenerName in object.listeners.cursorenter )
+				object.listeners.cursorenter[listenerName].call(object);
+		}
+
+		this.localUser.cursorHit = intersection;
+		this.localUser.cursorHit.scaledPoint = intersection.point.clone().multiplyScalar(1 / this.options.sceneScale).sub(this.world.position);
+
+		this.localUser.cursorHit.mesh = intersection.object;
+		this.localUser.cursorHit.object = object;
+
+		hasIntersection = true;
+		break;
+	}
+*/
 	var intersects = this.raycaster.intersectObjects(this.raycastArray, true);	// FIX ME: Wish there was a way to quit after 1st "hit".
 
 	// Hover events
@@ -1190,6 +1276,18 @@ JumpStart.prototype.processCursorMove = function()
 		for( listenerName in oldObject.listeners.cursorexit )
 			oldObject.listeners.cursorexit[listenerName].call(oldObject);
 	}
+};
+
+JumpStart.prototype.isWorldPosInsideOfEnclosure = function(worldPos)
+{
+	var x;
+	for( x in worldPos )
+	{
+		if( worldPos[x] > this.enclosure.scaledWidth/2.0 || worldPos[x] < -this.enclosure.scaledWidth/2.0 )
+			return false;
+	}
+
+	return true;
 };
 
 JumpStart.prototype.onCursorDown = function(e)
@@ -1314,7 +1412,8 @@ JumpStart.prototype.removeInstance = function(instance)
 	if( !instance || !this.objects.hasOwnProperty(instance.uuid) )
 		return;
 
-	object = this.objects[instance.uuid];	// FIX ME: Don't search through the objects array twice! Combine this with the if statement above.
+	var uuid = instance.uuid;
+	object = this.objects[uuid];	// FIX ME: Don't search through the objects array twice! Combine this with the if statement above.
 
 	// Unhover this object, but ignore listeners
 	if( this.hoveredObject === object )
@@ -1339,7 +1438,9 @@ JumpStart.prototype.removeInstance = function(instance)
 		this.firebase.roomRef.child("objects").child(object.syncKey).remove();
 	}
 
-	delete this.objects[x];
+	delete this.objects[uuid];
+
+	console.log("JumpStart: Removed an object.");
 };
 
 JumpStart.prototype.enclosureBoundary = function(boundaryID)
@@ -1361,6 +1462,29 @@ JumpStart.prototype.enclosureBoundary = function(boundaryID)
 				boundary.rotateX(Math.PI / 2.0);
 				boundary.position.copy(this.worldOffset);
 				break;
+
+			case "ceiling":
+				boundary.rotateX(Math.PI / 2.0);
+				boundary.position.set(0, -this.worldOffset.y, 0);
+				break;
+
+			case "north":
+				boundary.position.set(0, 0, -this.worldOffset.y);
+				break;
+
+			case "south":
+				boundary.position.set(0, 0, this.worldOffset.y);
+				break;
+
+			case "west":
+				boundary.rotateY(Math.PI / 2.0);
+				boundary.position.set(this.worldOffset.y, 0, 0);
+				break;
+
+			case "east":
+				boundary.rotateY(Math.PI / 2.0);
+				boundary.position.set(-this.worldOffset.y, 0, 0);
+				break;
 		}
 
 		this.enclosureBoundaries[boundaryID] = boundary;
@@ -1375,7 +1499,8 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		"object": null,
 		"parent": this.world,
 		"networkData": null,
-		"syncKey": null
+		"syncKey": null,
+		"isInitialSync": false
 	};
 
 	// Merg options with defaultOptions
@@ -1426,7 +1551,11 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	options.parent.add(instance);
 
 	// We will need to check for spawn listeners on this object before the next tick
-	this.freshObjects.push(instance);
+	if( options.isInitialSync )
+		instance.__isInitialSync = true;
+
+//	if( !options.isInitialSync )
+		this.freshObjects.push(instance);
 
 	// Compute a collision radius based on a bounding sphere for a child mesh that contains geometry
 	var computedBoundingSphere = null;
@@ -1653,14 +1782,14 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 				return;
 			}
 
-			if( jumpStart.listeners.hasOwnProperty(eventType) )
+			if( this.listeners.hasOwnProperty(eventType) )
 			{
 				var x;
-				for( x in jumpStart.listeners[eventType] )
+				for( x in this.listeners[eventType] )
 				{
-					if( jumpStart.listeners[eventType][x] === listener )
+					if( this.listeners[eventType][x] === listener )
 					{
-						delete jumpStart.listeners[eventType][x];
+						delete this.listeners[eventType][x];
 						return;
 					}
 				}
