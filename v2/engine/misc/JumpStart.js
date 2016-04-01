@@ -921,7 +921,12 @@ JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDe
 			childDataType = typeof childData;
 
 			if( childDataType === "object" && currentDepth < maxDepth )
-				extractData.call(childData, targetData[x], maxDepth, currentDepth++);
+			{
+				if( !!!targetData[x] )
+					targetData[x] = {};
+
+				this.extractData.call(this, childData, targetData[x], maxDepth, currentDepth+1);
+			}
 			else if( childDataType === "number" || childDataType === "string" || childDataType === "boolean" )
 				targetData[x] = childData;
 		}
@@ -955,9 +960,7 @@ JumpStart.prototype.doPendingUpdates = function()
 		}
 
 		if( data.hasOwnProperty("syncData") )
-		{
 			this.extractData.call(this, data.syncData, instance, 1);
-		}
 
 		delete this.pendingUpdates[x];
 	}
@@ -987,6 +990,19 @@ JumpStart.prototype.onTick = function()
 
 	this.doPendingUpdates();
 	doPendingListeners.call(this);
+
+	var i, freshObject, listenerName, isInitialSync;
+	for( i in this.freshObjects )
+	{
+		freshObject = this.freshObjects[i];
+
+		isInitialSync = (!!freshObject.__isInitialSync) ? freshObject.__isInitialSync : false;
+		delete freshObject["__isInitialSync"];
+
+		for( listenerName in freshObject.listeners.spawn )
+			freshObject.listeners.spawn[listenerName].call(freshObject, isInitialSync);
+	}
+	this.freshObjects.length = 0;
 
 	var count = 0;
 	var y;
@@ -1027,6 +1043,7 @@ JumpStart.prototype.onTick = function()
 	this.raycastArray.length = count;
 
 	// Check for spawn listeners on fresh objects
+	/*
 	var i, freshObject, listenerName, isInitialSync;
 	for( i in this.freshObjects )
 	{
@@ -1038,7 +1055,8 @@ JumpStart.prototype.onTick = function()
 		for( listenerName in freshObject.listeners.spawn )
 			freshObject.listeners.spawn[listenerName].call(freshObject, isInitialSync);
 	}
-	this.freshObjects.length = 0;
+	*/
+	//this.freshObjects.length = 0;
 
 	// Check for tick listeners
 	var listenerName;
@@ -1283,7 +1301,7 @@ JumpStart.prototype.isWorldPosInsideOfEnclosure = function(worldPos)
 	var x;
 	for( x in worldPos )
 	{
-		if( worldPos[x] > this.enclosure.scaledWidth/2.0 || worldPos[x] < -this.enclosure.scaledWidth/2.0 )
+		if( worldPos[x] + this.world.position[x] > this.enclosure.scaledWidth/2.0 || worldPos[x] + this.world.position[x] < -this.enclosure.scaledWidth/2.0 )
 			return false;
 	}
 
@@ -1706,6 +1724,8 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 					if( error )
 						console.log("JumpStart: " + error);
 				});
+
+				console.log("JumpStart: Syncing object with key " + this.syncKey + ".");
 			}
 			else
 			{
