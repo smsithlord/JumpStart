@@ -296,18 +296,18 @@ function JumpStart(options)
 		"cursorup": {},
 		"cursormove": {},
 		"keypress": {},
-		"keydown": {}
+		"keydown": {},
+		"touchpadgesture": {}
 	};
 
 	// Attach default window-level event listeners
 	if( !this.isAltspace )
 		window.addEventListener( 'resize', function() { jumpStart.onWindowResize(); }, false );
+	else
+		altspace.addEventListener("touchpadgesture", function(e) { this.onTouchPadGesture.call(this, e); }.bind(this));
 
 	window.addEventListener("keypress", function(e) { this.onKeyEvent.call(this, e); }.bind(this));
 	window.addEventListener("keydown", function(e) { this.onKeyEvent.call(this, e); }.bind(this));
-
-	// FIX ME: Add & debug GearVR gesture events!
-	//altspace.addEventListener("touchpadgesture", onTouchpadGesture);
 
 	// Merg app options
 	if( !!options )
@@ -625,6 +625,15 @@ JumpStart.prototype.onKeyEvent = function(e)
 
 	var code = (e.type === "keypress") ? e.charCode : e.keyCode;
 	this.pendingEvents[e.type][code] = e;
+};
+
+JumpStart.prototype.onTouchPadGesture = function(e)
+{
+	if( !this.pendingEvents.hasOwnProperty("touchpadgesture") )
+		this.pendingEvents["touchpadgesture"] = {};
+
+	var code = e.gesture;
+	this.pendingEvents["touchpadgesture"][code] = e;
 };
 
 JumpStart.prototype.onRoomStateChange = function(snapshot)

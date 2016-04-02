@@ -36,7 +36,7 @@
 
 				block.scale.copy(cage.userData.sampleBlock.scale);
 
-				jumpStart.playSound("sounds/spawn");
+				jumpStart.playSound("sounds/spawn", 0.5);
 			}
 
 			function blockRemove()
@@ -109,7 +109,7 @@
 					count++;
 				}
 
-				jumpStart.playSound("sounds/remove");
+				jumpStart.playSound("sounds/remove", 0.5);
 			}
 
 			function blockSpawn(isInitialSync)
@@ -317,6 +317,54 @@
 					cycleBlock(-1);
 			}, false);
 
+			var gearCreateMode = true;
+			jumpStart.addEventListener("touchpadgesture", function(e)
+			{
+				if (e.gesture === 'tap')
+				{
+					if (gearCreateMode)
+						createBlock();
+					else
+						deleteBlock();
+				}
+				else if (e.gesture === 'left')
+				{
+					if (!gearCreateMode)
+						return;
+
+					cycleBlock(-1);
+				}
+				else if (e.gesture === 'right')
+				{
+					if (!gearCreateMode)
+						return;
+
+					cycleBlock(1);
+				}
+				else if (e.gesture === 'up' || e.gesture === 'down')
+				{
+					gearCreateMode = !gearCreateMode;
+
+					// hide the cage (and sample block)
+					var cage = jumpStart.scene.getObjectByName("cage");
+					if( !!!cage.userData.hidden )
+					{
+						cage.userData.hidden = true;
+						cage.scale.set(0.0001, 0.0001, 0.0001);
+					}
+
+					// show the targetCrosshair
+					/* FIX ME: Make the model for the target crosshair
+					var targetCrosshair = jumpStart.scene.getObjectByName("targetCrosshair");
+					if( !!targetCrosshair.userData.hidden )
+					{
+						targetCrosshair.userData.hidden = false;
+						targetCrosshair.scale.set(1, 1, 1);
+					}
+					*/
+				}
+			});
+
 			function cycleBlock(direction)
 			{
 				var cage = jumpStart.scene.getObjectByName("cage");
@@ -339,7 +387,7 @@
 				cage.userData.sampleBlock = sampleBlock;
 
 				if( direction > 0 )
-					jumpStart.playSound("sounds/cycleRight");
+					jumpStart.playSound("sounds/cycleRight", 0.5);
 				else
 					jumpStart.playSound("sounds/cycleLeft");
 			}
