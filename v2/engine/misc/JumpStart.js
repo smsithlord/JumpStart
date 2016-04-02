@@ -82,6 +82,7 @@ function JumpStart(options)
 		"invisibleMaterial",
 		"models",
 		"objects",
+		"sounds",
 		"cursorPlanes",
 		"enclosureBoundaries",
 		"behaviors",
@@ -91,6 +92,7 @@ function JumpStart(options)
 		"firebase",
 		"pendingEvents",
 		"selfSyncingObject",	// Used to avoid syncing to updates that we locally send
+		"audioContext",	// For precaching sounds, etc.
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
 		"debug"	// Helper class
@@ -142,12 +144,15 @@ function JumpStart(options)
 	};
 	this.models = [];
 	this.objects = {};
+	this.sounds = {};
 	this.syncedObjects = {};
 	this.pendingUpdates = {};
 	this.raycastArray = [];
 	this.freshObjects = [];
 	this.cursorPlanes = {};
-	this.pendingEvents ={};
+	this.pendingEvents = {};
+	this.selfSyncingObject = false;
+	this.audioContext = new (window.webkitAudioContext || window.AudioContext)();
 	this.enclosureBoundaries = 
 	{
 		"floor": null,
@@ -999,12 +1004,58 @@ JumpStart.prototype.doneCaching = function()
 		this.onReadyToReady();
 };
 
+JumpStart.prototype.precacheSound = function(fileName)
+{
+	if( !!this.sounds[fileName] )
+		return;
+
+	longFileName = "assets/" + this.options.appID + "/" + fileName + ".ogg";
+
+	var req = new XMLHttpRequest();
+	req.open("GET", longFileName);
+	req.responseType = "arraybuffer";
+	req.onload = function()
+	{
+		this.audioContext.decodeAudioData(req.response, function(buffer)
+		{
+			this.sounds[fileName] = buffer;
+		}.bind(this));
+	}.bind(this);
+	req.send();
+};
+
+JumpStart.prototype.playSound = function(fileName, volumeScale, loop)
+{
+	if( !!!this.sounds[fileName] )
+	{
+		console.log("The sound " + fileName + " is not yet cached!");
+		this.precacheSound(fileName);
+		return;
+	}
+
+	var volumeScale = (!!volumeScale) ? volumeScale : 1.0;
+
+	var sound = this.sounds[fileName];
+	var source = this.audioContext.createBufferSource();
+	source.buffer = sound;
+	source.loop = !!loop;
+
+	var gainNode = this.audioContext.createGain();
+	gainNode.gain.value = 1.0 * volumeScale;
+	source.connect(gainNode);
+	gainNode.connect(this.audioContext.destination);
+
+	source.start(0);
+
+	return {source: source, gainNode: gainNode};
+};
+
 JumpStart.prototype.onReadyToReady = function()
 {
 	this.isReady = true;
 
-console.log("ready to ready");
-this.doPendingUpdates();
+	this.doPendingUpdates();
+
 	// Check for ready listeners
 	var asyncRequested = false;
 	var listenerName, result;

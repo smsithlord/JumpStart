@@ -35,6 +35,8 @@
 				block.sync();
 
 				block.scale.copy(cage.userData.sampleBlock.scale);
+
+				jumpStart.playSound("sounds/spawn");
 			}
 
 			function blockRemove()
@@ -106,6 +108,8 @@
 
 					count++;
 				}
+
+				jumpStart.playSound("sounds/remove");
 			}
 
 			function blockSpawn(isInitialSync)
@@ -164,6 +168,17 @@
 			// Precache our models
 			jumpStart.addEventListener("precache", function()
 			{
+				var sounds = [
+					"sounds/spawn",
+					"sounds/remove",
+					"sounds/cycleLeft",
+					"sounds/cycleRight"
+				];
+
+				var i;
+				for( i in sounds)
+					jumpStart.precacheSound(sounds[i]);
+
 				var models = [
 					"models/bricks",
 					"models/cube",
@@ -322,6 +337,11 @@
 				sampleBlock.userData.scaleDirection = scaleDirection;
 
 				cage.userData.sampleBlock = sampleBlock;
+
+				if( direction > 0 )
+					jumpStart.playSound("sounds/cycleRight");
+				else
+					jumpStart.playSound("sounds/cycleLeft");
 			}
 
 			function deleteBlock()
