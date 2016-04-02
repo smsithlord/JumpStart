@@ -8,11 +8,12 @@
 			// Setup JumpStart
 			var options = {
 				"appID": "BuildingBlocks",
+				"multiuserOnly": true,
 				"scaleWithEnclosure": true,
 				"sceneScale": 2.0,
 				"debug":
 				{
-					"showCursorPlanes": false
+					"showCursorPlanes": true
 				}
 			};
 			loadJumpStart(options);
@@ -21,7 +22,7 @@
 			jumpStart.addEventListener("precache", function()
 			{
 				// Add the appropriate controls image to the body.
-				jumpStart.util.DOMReady().then(function()
+				jumpStart.DOMReady().then(function()
 				{
 					var elem = document.createElement("img");
 					elem.id = "controlsImage";
@@ -73,6 +74,8 @@
 
 				var cage = jumpStart.spawnInstance("models/cube_cage");
 				cage.name = "cage";
+				cage.userData.hidden = true;
+				cage.scale.set(0.0001, 0.0001, 0.0001);
 				cage.addEventListener("spawn", function()
 				{
 					this.userData.sampleBlock = createSampleBlock(blockModels[0]);
@@ -110,18 +113,18 @@
 								farEnoughAway = false;
 						}
 
-						if( (!insideOfEnclosure || !farEnoughAway) && !!!this.userData.hidden && !gearCreateMode )
+						if( (!insideOfEnclosure || !farEnoughAway) && !this.userData.hidden )
 						{
 							this.userData.hidden = true;
 							this.scale.set(0.0001, 0.0001, 0.0001);
 						}
-						else if( insideOfEnclosure && farEnoughAway && !!this.userData.hidden && gearCreateMode )
+						else if( insideOfEnclosure && farEnoughAway && this.userData.hidden && gearCreateMode )
 						{
 							this.userData.hidden = false;
 							this.scale.set(1, 1, 1);
 						}
 					}
-					else if( !!!this.userData.hidden && !gearCreateMode )
+					else if( !this.userData.hidden )
 					{
 						this.userData.hidden = true;
 						this.scale.set(0.0001, 0.0001, 0.0001);
@@ -162,6 +165,9 @@
 			function createBlock()
 			{
 				var cage = jumpStart.scene.getObjectByName("cage");
+				if( cage.userData.hidden )
+					return;
+
 				var sampleBlock = cage.userData.sampleBlock;
 
 				var block = jumpStart.spawnInstance(sampleBlock.modelFile);
@@ -423,22 +429,11 @@
 			var gamepadActive = false;
 			jumpStart.addEventListener("gamepadbutton", function(e)
 			{
-				if( !gamepadActive )
-				{
-					keyboardActive = false;
-					gamepadActive = true;
-					var elem = document.getElementById("controlsImage");
-					elem.src = "assets/BuildingBlocks/misc/gamepadControls.png";
-				}
-
 				if( e.buttonCode === 0 )
 				{
 					// A BUTTON
-					if( e.value === 0 )
-					{
-						if( !jumpStart.isAltspace )
+					if( e.value === 0 && gamepadActive )
 						createBlock();
-					}
 				}
 				else if( e.buttonCode === 2 )
 				{
@@ -457,6 +452,24 @@
 					// L BUTTON
 					if( e.value === 0 )
 						cycleBlock(-1);
+				}
+
+				if( !gamepadActive )
+				{
+					var preventButtons = [];
+					preventButtons[0] = true;
+					preventButtons[2] = true;
+					preventButtons[4] = true;
+					preventButtons[5] = true;
+
+					var gamepad = jumpStart.gamepads[jumpStart.activeGamepadIndex];
+					if( typeof gamepad.preventDefault === "function" )
+						gamepad.preventDefault([], preventButtons);
+
+					keyboardActive = false;
+					gamepadActive = true;
+					var elem = document.getElementById("controlsImage");
+					elem.src = "assets/BuildingBlocks/misc/gamepadControls.png";
 				}
 			});
 
@@ -502,6 +515,6 @@
 	</head>
 
 	<body>
-		<img id="titleImage" src="assets/BuildingBlocks/misc/title.png" style="position: fixed; top: 0; left: 0; right: 0; margin-left: auto; margin-right: auto;" />
+		<img id="titleImage" src="assets/BuildingBlocks/misc/title.png" style="position: fixed; top: 0; right: 0;" />
 	</body>
 </html>

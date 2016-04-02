@@ -32,7 +32,6 @@ function JumpStart(options)
 
 	// List all PUBLIC member variables
 	var publicVariables = [
-		"util",	// Helper class.
 		"roomID",	// Given in the URI query as "room". null if none.
 		"isAltspace",	// Altspace or web mode
 		"isGear",
@@ -86,6 +85,7 @@ function JumpStart(options)
 		"firebase",
 		"pendingEvents",
 		"selfSyncingObject",	// Used to avoid syncing to updates that we locally send
+		"doneCaching",
 		"audioContext",	// For precaching sounds, etc.
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
@@ -98,9 +98,7 @@ function JumpStart(options)
 		this[privateVariables[i]] = null;
 
 	// Set as many synchronous non-null PUBLIC member variables as possible
-	this.util = new JumpStartUtil(this);
-
-	this.roomID = this.util.getQueryVariable("room");
+	this.roomID = this.getQueryVariable("room");
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
 	this.isGear = navigator.userAgent.match(/mobile/i);
 	this.isInitialized = false;
@@ -116,7 +114,7 @@ function JumpStart(options)
 	this.options =
 	{
 		"appID": "example",
-		"multiuserOnly": true,
+		"multiuserOnly": false,
 		"enclosureOnly": true,
 		"sceneScale": 1.0,	// relative scale
 		"scaleWithEnclosure": true,	// false means consistent size, regardless of enclosure size
@@ -124,7 +122,6 @@ function JumpStart(options)
 		"webControls": true,
 		"debug":
 		{
-			"enabled": true,
 			"showCursorPlanes": false
 		},
 		"camera":
@@ -306,9 +303,22 @@ function JumpStart(options)
 	window.addEventListener("keypress", function(e) { this.onKeyEvent.call(this, e); }.bind(this));
 	window.addEventListener("keydown", function(e) { this.onKeyEvent.call(this, e); }.bind(this));
 
-	// Merg app options
+	// Merg app options with defaultOptions (up to 2 lvls deep)
+	// FIX ME: Make this recursive
 	if( !!options )
-		this.setOptions(options);
+	{
+		var x, y;
+		for( x in this.options )
+		{
+			if( typeof this.options[x] !== "object" )
+				this.options[x] = (options.hasOwnProperty(x)) ? options[x] : this.options[x];
+			else if( options.hasOwnProperty(x) )
+			{
+				for( y in this.options[x] )
+					this.options[x][y] = (options[x].hasOwnProperty(y)) ? options[x][y] : this.options[x][y];
+			}
+		}
+	}
 
 
 
@@ -319,91 +329,50 @@ function JumpStart(options)
 	// ASYNC 1: Load all CSS / JavaScript files sequentially
 	loadHeadFiles.call(this).then(function()
 	{
-		this.invisibleMaterial = new THREE.MeshBasicMaterial( { color: "#ffffff", transparent: true, opacity: 0.5, visible: false});
+		// THREE & Firebase are now loaded.
 
-		// Startup the debug stuff, if needed
-		if( this.options.debug.enabled )
-			this.debugUtil = new JumpStartDebug();
-
-		// ASYNC 2: Wait for the BODY element (so the app has time to setOptions)
-		this.util.DOMReady.call(this).then(function()
+		resolveEnvironment.call(this).then(function()
 		{
-			// Make sure the options.camera.position has been turned into vector (only happens IF setOptions gets called)
-			if( !(this.options.camera.position instanceof THREE.Vector3) )
-				this.options.camera.position = new THREE.Vector3(this.options.camera.position.x, this.options.camera.position.y, this.options.camera.position.z);
-
-			// ASYNC 3: Resolve environment variables (enclosures, offsets, & scales)
-			resolveEnvironment.call(this).then(function()
+			// Abort if app is enclosureOnly but not in an enclosure
+			if( this.isAltspace && this.options.enclosureOnly && !this.isEnclosure )
 			{
-				// Note that a unique (but not exact) pixelsPerMeter value is used to identify the personal browser.
-				this.isEnclosure = (this.isAltspace && Math.abs(this.enclosure.pixelsPerMeter - 521) > 1) ? true : false;
-
-				// Attach body-level event listeners for web mode
-				if( !this.isAltspace && this.options.webControls )
+				// ABORT
+				this.DOMReady.then(function()
 				{
-					// FIX ME: Make sure that these useCapture and preventDefaults are properly setup for web mode in these listeners
-					window.addEventListener( 'mousemove', function(e) { jumpStart.onMouseMove(e); }, false);
-					window.addEventListener( 'mousedown', function(e) { jumpStart.onMouseDown(e); e.preventDefault(); return false; }, false);
-					window.addEventListener( 'mouseup', function(e) { jumpStart.onMouseUp(e); e.preventDefault(); return false; }, false);
+					this.displayInfoPanel("beamMe");
 
-					document.body.addEventListener("contextmenu", function(e) { e.preventDefault(); return false; }, true);
-					document.body.addEventListener("keydown", function(keydownEvent)
-					{
-						switch(keydownEvent.keyCode )
-						{
-							case 83:
-								jumpStart.camera.translateZ(20 * jumpStart.options.sceneScale);
-								break;
+					// Must call render once for Altspace to know we want a 3D enclosure
+					this.renderer = altspace.getThreeJSRenderer();
+					this.renderer.render(null, null);
+				}.bind(this));
+			}
+			else
+			{
+				precacheApp.call(this).then(function()
+				{
+					onDonePrecaching.call(this);
+				}.bind(this));
+			}
 
-							case 87:
-								jumpStart.camera.translateZ(-20 * jumpStart.options.sceneScale);
-								break;
+			function onDonePrecaching()
+			{
+				createScene.call(this);
 
-							case 65:
-								jumpStart.camera.translateX(-20 * jumpStart.options.sceneScale);
-								break;
+				if( !this.options.multiuserOnly )
+				{
+					// If we are not multiuser, then the world hasn't been created yet.
+					this.world = this.spawnInstance(null, {"parent": this.scene});
+					this.world.name = "jumpStartWorld";
+					this.world.position.add(this.worldOffset);
 
-							case 68:
-								jumpStart.camera.translateX(20 * jumpStart.options.sceneScale);
-								break;
-						}
-					}, true);
+					this.onReadyToReady();
 				}
-
-				// FIX ME: A global onLoadedInPersonalBrowser callback might be useful
-				if( this.isAltspace && this.options.enclosureOnly && !this.isEnclosure )
+				else
 				{
-					// We are going to abort, but if we are an online app and don't have a room yet, we need to grab one NOW.
-
-					if( this.options.multiuserOnly )
-					{
-						// 1. connect to firebase
-						// 2. create a new room
-						// 3. set it as the room ID in the URL
-						// 4. continue to abort. This way when the user beams it, it is the correct URL.
-
-						// Display the "Beam Me" panel and abort.
-						this.util.displayInfoPanel("beamMe");
-
-						// Must call render once for Altspace to know we want a 3D enclosure
-						this.renderer = altspace.getThreeJSRenderer();
-						this.renderer.render(null, null);
-					}
-					else
-					{
-						// Display the "Beam Me" panel and abort.
-						this.util.displayInfoPanel("beamMe");
-
-						// Must call render once for Altspace to know we want a 3D enclosure
-						this.renderer = altspace.getThreeJSRenderer();
-						this.renderer.render(null, null);
-					}
-				}
-				else if( this.options.multiuserOnly )
-				{
+					// Connect to firebase
 					var root = "https://jumpstart-2.firebaseio.com/apps/" + this.options.appID;
 					this.firebase.rootRef = new Firebase(root);
-
+					
 					// Check if this app exists
 					this.firebase.rootRef.child("appData").child("createdAt").once("value", function(snapshot)
 					{
@@ -416,6 +385,7 @@ function JumpStart(options)
 					function createApp()
 					{
 						console.warn("JumpStart: AppID \"" + this.options.appID + "\" does not exist on the server, so it will be created.");
+
 						// FIX ME:  Add some type of app ID validity check
 						this.firebase.rootRef.child("appData").update({"createdAt": Firebase.ServerValue.TIMESTAMP}, function(error)
 						{
@@ -434,7 +404,7 @@ function JumpStart(options)
 						else
 						{
 							// Make sure this is a valid room ID AND subscribe to the state variable for future state change detection
-							this.firebase.rootRef.child("rooms").child(this.roomID).child("state").on("value", this.onRoomStateChange.bind(this));
+							this.firebase.rootRef.child("rooms").child(this.roomID).child("state").on("value", onRoomStateChange.bind(this));
 						}
 					}
 
@@ -458,24 +428,329 @@ function JumpStart(options)
 
 						// ASYNC, continues in jumpStart.onRoomStateChange when isLocallyInitializing is TRUE && isFirstCheck
 						this.firebase.isLocallyInitializing = true;
-						this.firebase.rootRef.child("rooms").child(this.roomID).child("state").on("value", this.onRoomStateChange.bind(this));
+						this.firebase.rootRef.child("rooms").child(this.roomID).child("state").on("value", onRoomStateChange.bind(this));
 					}
 
-					//console.log(ref);
-					// If this is a multiuser app and no room ID was given in the URI, then...
-					// 1. connect to firebase
-					// 2. create a new room
-					// 3. set it as the room ID in the URL
-					// 4. connect to the room and continue to startup (without reloading on the current client or ANY client if possible).
+					function onRoomStateChange(snapshot)
+					{
+						if( !snapshot.exists() )
+							console.error("JumpStart: Invalid room ID \"" + this.roomID + "\" specified.");
+						else
+						{
+							this.firebase.state = snapshot.val();
 
-					// FIX ME: do it.
+							if( this.firebase.isLocallyInitializing )
+							{
+								if( this.firebase.state === "initializing" )
+								{
+									console.log("JumpStart: Initializing game room.");
+
+									this.world = this.spawnInstance(null, {"parent": this.scene});
+									this.world.name = "jumpStartWorld";
+									this.world.position.add(this.worldOffset);
+									this.world.sync();
+
+									// Check for initialize listeners
+									var listenerName;
+									for( listenerName in this.listeners.initialize )
+										this.listeners.initialize[listenerName]();
+
+									// ASYNC will continue in onRoomStateChange
+									this.firebase.roomRef.update({"state": "ready"}, function(error)
+									{
+										if( error )
+											console.log(error);
+									}.bind(this));
+								}
+								else if( this.firebase.state === "ready" )
+									onStateReady.call(this);
+							}
+							else
+							{
+								if( this.firebase.state === "ready" )
+								{
+									this.firebase.roomRef = this.firebase.rootRef.child("rooms").child(this.roomID);
+									onStateReady.call(this);
+								}
+							}
+
+							function onStateReady()
+							{
+								var initialKeys = {};
+
+								// Spawn all of the initial objects
+								this.firebase.roomRef.child("objects").once("value", function(parentSnapshot)
+								{
+									if( !parentSnapshot.exists() || parentSnapshot.numChildren() === 0 )
+									{
+										onInitialObjectsReady.call(this);
+									}
+									else
+									{
+										var parentData = parentSnapshot.val();
+
+										var x;
+										for( x in parentData )
+										{
+											initialKeys[x] = true;
+											mergData.call(this, parentData[x], x);
+										}
+
+										console.log("JumpStart: Finished syncing initial state.")
+										onInitialObjectsReady.call(this);
+									}
+								}.bind(this));
+
+								function onInitialObjectsReady()
+								{
+									this.onReadyToReady();
+
+									// Listen for objects being added
+									this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
+									{
+										var key = snapshot.key();
+
+										// Don't doulbe-sync objects during initilization
+										if( initialKeys.hasOwnProperty(key) )
+										{
+											delete initialKeys[key];
+											return;
+										}
+
+										var data = snapshot.val();
+										mergData.call(this, data, key);
+									}.bind(this));
+								}
+
+								function mergData(data, key)
+								{
+									this.pendingUpdates[key] = {};
+
+									var isInitialSync = initialKeys.hasOwnProperty(key);
+									if( isInitialSync )
+									{
+										this.pendingUpdates[key].needsSpawn = true;
+										this.pendingUpdates[key].isInitialSync = isInitialSync;
+
+										this.pendingUpdates[key].transform = data.transform;
+										this.pendingUpdates[key].vitalData = data.vitalData;
+										this.pendingUpdates[key].syncData = data.syncData;
+
+										if( this.isLocallyInitializing )
+											return;
+									}
+									else if( data.vitalData.ownerID === this.localUser.userID )
+									{
+										if( !jumpStart.selfSyncingObject )
+											this.pendingUpdates[key].needsSpawn = true;
+									}
+									else
+										this.pendingUpdates[key].needsSpawn = true;
+
+									console.log("JumpStart: New synced object detected!");
+
+									// Spawn the object
+									this.firebase.roomRef.child("objects").child(key).child("transform").on("value", function(snapshot)
+									{
+										if( initialKeys.hasOwnProperty(key) || jumpStart.selfSyncingObject )
+											return;
+
+										if( !snapshot.exists() )
+										{
+											// The object has been removed.
+											objectRemoved.call(this, key);
+											return;
+										}
+										
+										if( !this.pendingUpdates.hasOwnProperty(key) )
+											this.pendingUpdates[key] = {};
+
+										this.pendingUpdates[key].transform = snapshot.val();
+									}.bind(this));
+
+									this.firebase.roomRef.child("objects").child(key).child("vitalData").on("value", function(snapshot)
+									{
+										if( initialKeys.hasOwnProperty(key) || jumpStart.selfSyncingObject )
+											return;
+
+										if( !snapshot.exists() )
+										{
+											// The object has been removed.
+											objectRemoved.call(this, key);
+											return;
+										}
+
+										if( !this.pendingUpdates.hasOwnProperty(key) )
+											this.pendingUpdates[key] = {};
+
+										this.pendingUpdates[key].vitalData = snapshot.val();
+									}.bind(this));
+
+									this.firebase.roomRef.child("objects").child(key).child("syncData").on("value", function(snapshot)
+									{
+										if( initialKeys.hasOwnProperty(key) || jumpStart.selfSyncingObject )
+											return;
+
+										if( !snapshot.exists() )
+										{
+											// The object has been removed.
+											objectRemoved.call(this, key);
+											return;
+										}
+
+										if( !this.pendingUpdates.hasOwnProperty(key) )
+											this.pendingUpdates[key] = {};
+
+										this.pendingUpdates[key].syncData = snapshot.val();
+									}.bind(this));
+
+									function objectRemoved(key)
+									{
+										var object = this.syncedObjects[key];
+										if( !!!object )
+											return;
+
+										delete this.syncedObjects[key];
+										this.removeInstance(object);
+									}
+								};
+							}
+						}
+					}
+				}
+			}
+
+			function precacheApp()
+			{
+				return {
+					"then": function(callback)
+					{
+						// Get stuff ready that we might use during precache
+						this.objectLoader = new THREE.OBJMTLLoader();
+
+						if( !this.isAltspace )
+							onGetSkeleton.call(this, null);
+						else
+						{
+							// Async
+							altspace.getThreeJSTrackingSkeleton().then(function(skeleton)
+							{
+								onGetSkeleton.call(this, skeleton);
+							}.bind(this));
+						}
+
+						function onGetSkeleton(skeleton)
+						{
+							this.localUser.skeleton = skeleton;
+
+							// We are now initialized
+							this.isInitialized = true;
+
+							// Check for precache listeners
+							var asyncRequested = false;
+							var listenerName, result;
+							for( listenerName in this.listeners.precache )
+							{
+								result = this.listeners.precache[listenerName]() || false;
+								if( !result )
+									asyncRequested = true;
+							}
+
+							// We are only done caching if async was NOT requested
+							if( !asyncRequested )
+								callback.call(this);
+							else
+							{
+								console.warn("JumpStart: Asynchronous precaching initiated by a listener.");
+								this.doneCaching = callback.bind(this);
+							}
+						}
+					}.bind(this)
+				}
+			}
+
+			function createScene()
+			{
+				// Attach body-level event listeners for web mode
+				if( !this.isAltspace && this.options.webControls )
+				{
+					// FIX ME: Make sure that these useCapture and preventDefaults are properly setup for web mode in these listeners
+					document.body.addEventListener("contextmenu", function(e) { e.preventDefault(); return false; }, true);
+					window.addEventListener( 'mousemove', this.onMouseMove.bind(this), false);
+					window.addEventListener( 'mousedown', function(e) { this.onMouseDown(e); e.preventDefault(); return false; }.bind(this), false);
+					window.addEventListener( 'mouseup', function(e) { this.onMouseUp(e); e.preventDefault(); return false; }.bind(this), false);
+					this.addEventListener("keydown", function(keydownEvent)
+					{
+						switch(keydownEvent.keyCode )
+						{
+							case 83:
+								this.camera.translateZ(20 * this.options.sceneScale);
+								break;
+
+							case 87:
+								this.camera.translateZ(-20 * this.options.sceneScale);
+								break;
+
+							case 65:
+								this.camera.translateX(-20 * this.options.sceneScale);
+								break;
+
+							case 68:
+								this.camera.translateX(20 * this.options.sceneScale);
+								break;
+						}
+					}.bind(this), true);
+				}
+
+				// Convert the camera position from a generic object to a THREE.Vector3 (now that THREE.js is loaded.)
+				this.options.camera.position = new THREE.Vector3(this.options.camera.position.x, this.options.camera.position.y, this.options.camera.position.z);
+
+				// Create an invisible material
+				this.invisibleMaterial = new THREE.MeshBasicMaterial( { color: "#ffffff", transparent: true, opacity: 0.5, visible: false});
+
+				this.worldOffset = new THREE.Vector3(0.0, -this.enclosure.scaledHeight / 2.0, 0.0);
+
+				this.scene = new THREE.Scene();
+				this.scene.scale.multiplyScalar(this.options.sceneScale);
+				this.scene.addEventListener( "cursormove", this.onCursorMove);
+				this.scene.addEventListener("cursordown", this.onCursorDown);
+				this.scene.addEventListener("cursorup", this.onCursorUp);
+
+				this.clock = new THREE.Clock();
+				this.raycaster = new THREE.Raycaster();
+
+				// FIX ME: Why is this a spoofed ray?  We should have THREE.js loaded by now to make a real one.
+				this.cursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
+				this.futureCursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
+
+				if ( !this.isAltspace )
+				{
+					this.renderer = new THREE.WebGLRenderer({ alpha: true });
+					this.renderer.setClearColor( 0x00ff00, 0.3 );
+					this.renderer.setSize( window.innerWidth, window.innerHeight );
+
+					this.DOMReady().then(function() { document.body.appendChild( this.renderer.domElement ); }.bind(this));
+
+					var aspect = window.innerWidth / window.innerHeight;
+					this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 4000 * this.options.sceneScale );
+
+					var pos = this.options.camera.position.clone().add(this.worldOffset.clone().multiplyScalar(this.options.sceneScale));
+					this.camera.position.copy(pos);
+
+					var lookAtSpot = this.worldOffset.clone().multiplyScalar(this.options.sceneScale);
+					lookAtSpot.y += 50;
+
+					this.camera.lookAt(lookAtSpot);
+
+					this.localUser.cursorRayOrigin.copy(this.camera.position);
+
+					// OBJMTLLoader always uses PhongMaterial, so we need light in scene.
+					var ambient = new THREE.AmbientLight( 0xffffff );
+					this.scene.add( ambient );
 				}
 				else
-				{
-					// Non-synced app is ready to rock 'n roll
-					this.onReadyToPrecache();
-				}
-			}.bind(this));
+					this.renderer = altspace.getThreeJSRenderer();
+			}
 		}.bind(this));
 	}.bind(this));
 
@@ -488,12 +763,8 @@ function JumpStart(options)
 					// Define the list of CSS files
 					var baseStyles = ["engine/misc/JumpStartStyle.css"];
 
-					// Load extra stuff if we are in debug mode
-					if( this.options.debug.enabled )
-						baseStyles.push("engine/misc/JumpStartStyleDebug.css");
-
 					// Load all the CSS files
-					this.util.loadStylesheets(baseStyles).then(function()
+					this.loadStylesheets(baseStyles).then(function()
 					{
 						console.log("JumpStart: Loaded " + baseStyles.length + " stylesheet(s).");
 
@@ -507,12 +778,8 @@ function JumpStart(options)
 							//"engine/misc/threeoctree.js"	// Octree disabled for now
 						];
 
-						// Load extra stuff if we are in debug mode
-						if( this.options.debug.enabled )
-							baseScripts.push("engine/misc/JumpStartDebug.js");
-
 						// Load all the JavaScript files
-						this.util.loadJavaScripts(baseScripts).then(function(result)
+						this.loadJavaScripts(baseScripts).then(function(result)
 							{
 								console.log("JumpStart: Loaded " + baseScripts.length + " JavaScript(s).");
 								loadHeadFilesCallback();
@@ -653,6 +920,7 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 			else if( this.firebase.state === "ready" )
 			{
 				this.firebase.roomRef = this.firebase.rootRef.child("rooms").child(this.roomID);
+				//this.onReadyToPrecache();
 				onStateReady.call(this);
 			}
 		}
@@ -668,6 +936,9 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 		function onStateReady()
 		{
 			var initialKeys = {};
+			console.log("onstateready");
+			//this.onReadyToPrecache();
+			//return;
 
 			// Spawn all of the initial objects
 			this.firebase.roomRef.child("objects").once("value", function(parentSnapshot)
@@ -693,7 +964,7 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 					if( this.firebase.isLocallyInitializing )
 					{
 						this.firebase.isLocallyInitializing = false;
-						this.onReadyToPrecache();
+						this.onReadyToPrecache().then();
 					}
 				}
 			}.bind(this));
@@ -701,7 +972,10 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 			function onInitialObjectsReady()
 			{
 				if( !this.firebase.isLocallyInitializing )
+				{
 					this.onReadyToReady();
+					return;
+				}
 
 				// Listen for objects being added
 				this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
@@ -813,69 +1087,55 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 				}
 			};
 
-			this.onReadyToPrecache();
+//			this.onReadyToPrecache();
 		}
 	}
 }
 
 JumpStart.prototype.onReadyToPrecache = function()
 {
-	// Get stuff ready that we might use during precache
-	this.objectLoader = new THREE.OBJMTLLoader();
-
-	if( !this.isAltspace )
-		onGetSkeleton.call(this, null);
-	else
-	{
-		// Async
-		altspace.getThreeJSTrackingSkeleton().then(function(skeleton)
+	return {
+		"then": function(callback)
 		{
-			onGetSkeleton.call(this, skeleton);
-		}.bind(this));
-	}
+			// Get stuff ready that we might use during precache
+			this.objectLoader = new THREE.OBJMTLLoader();
 
-	function onGetSkeleton(skeleton)
-	{
-		this.localUser.skeleton = skeleton;
-
-		// We are now initialized
-		this.isInitialized = true;
-
-		// Check for precache listeners
-		var asyncRequested = false;
-		var listenerName, result;
-		for( listenerName in this.listeners.precache )
-		{
-			result = this.listeners.precache[listenerName]() || false;
-			if( !result )
-				asyncRequested = true;
-		}
-
-		// We are only done caching if async was NOT requested
-		if( !asyncRequested )
-			this.doneCaching();
-		else
-			console.warn("JumpStart: Asynchronous precaching initiated by a listener.");
-	}
-};
-
-JumpStart.prototype.setOptions = function(options)
-{
-	// Merg options with defaultOptions (up to 2 lvls deep)
-	if( !!options )
-	{
-		var x, y;
-		for( x in this.options )
-		{
-			if( typeof this.options[x] !== "object" )
-				this.options[x] = (options.hasOwnProperty(x)) ? options[x] : this.options[x];
-			else if( options.hasOwnProperty(x) )
+			if( !this.isAltspace )
+				onGetSkeleton.call(this, null);
+			else
 			{
-				for( y in this.options[x] )
-					this.options[x][y] = (options[x].hasOwnProperty(y)) ? options[x][y] : this.options[x][y];
+				// Async
+				altspace.getThreeJSTrackingSkeleton().then(function(skeleton)
+				{
+					onGetSkeleton.call(this, skeleton);
+				}.bind(this));
 			}
-		}
-	}
+
+			function onGetSkeleton(skeleton)
+			{
+				this.localUser.skeleton = skeleton;
+
+				// We are now initialized
+				this.isInitialized = true;
+
+				// Check for precache listeners
+				var asyncRequested = false;
+				var listenerName, result;
+				for( listenerName in this.listeners.precache )
+				{
+					result = this.listeners.precache[listenerName]() || false;
+					if( !result )
+						asyncRequested = true;
+				}
+
+				// We are only done caching if async was NOT requested
+				if( !asyncRequested )
+					this.doneCaching();
+				else
+					console.warn("JumpStart: Asynchronous precaching initiated by a listener.");
+			}
+		}.bind(this)
+	};
 };
 
 JumpStart.prototype.spawnCursorPlane = function(options)
@@ -924,90 +1184,6 @@ JumpStart.prototype.onCursorMove = function(e)
 		this.futureCursorRay = e.ray;
 	else
 		this.futureCursorRay = e.cursorRay;	// Only needed until 0.1 is completely depreciated
-};
-
-JumpStart.prototype.doneCaching = function()
-{
-	// Now it's time to initiate the THREE.js scene...
-	this.worldOffset = new THREE.Vector3(0.0, -this.enclosure.scaledHeight / 2.0, 0.0);
-
-	this.scene = new THREE.Scene();
-	this.scene.scale.multiplyScalar(this.options.sceneScale);
-	this.scene.addEventListener( "cursormove", function(e) { jumpStart.onCursorMove(e); });
-	this.scene.addEventListener("cursordown", function(e) { jumpStart.onCursorDown(e); });
-	this.scene.addEventListener("cursorup", function(e) { jumpStart.onCursorUp(e); });
-
-	/*
-	this.world = new THREE.Group();
-	this.world.position.add(this.worldOffset);
-	this.scene.add(this.world);
-	*/
-
-	this.clock = new THREE.Clock();
-	this.raycaster = new THREE.Raycaster();
-
-	// FIXME: Why is this a spoofed ray?  We should have THREE.js loaded by now to make a real one.
-	this.cursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
-	this.futureCursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
-
-	// Create the octree (disabled for now)
-	//this.octree = new THREE.Octree({"undeferred": false, "depthMax": Infinity, "objectsThreshold": 8, "overlapPct": 0.15});
-
-	if ( !this.isAltspace )
-	{
-		this.renderer = new THREE.WebGLRenderer({ alpha: true });
-		this.renderer.setClearColor( 0x00ff00, 0.3 );
-		this.renderer.setSize( window.innerWidth, window.innerHeight );
-		document.body.appendChild( this.renderer.domElement );
-
-		var aspect = window.innerWidth / window.innerHeight;
-		this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 4000 * this.options.sceneScale );
-
-		var pos = this.options.camera.position.clone().add(this.worldOffset.clone().multiplyScalar(this.options.sceneScale));
-		this.camera.position.copy(pos);
-
-		var lookAtSpot = this.worldOffset.clone().multiplyScalar(this.options.sceneScale);
-		lookAtSpot.y += 50;
-
-		this.camera.lookAt(lookAtSpot);
-
-		this.localUser.cursorRayOrigin.copy(this.camera.position);
-
-		// OBJMTLLoader always uses PhongMaterial, so we need light in scene.
-		var ambient = new THREE.AmbientLight( 0xffffff );
-		this.scene.add( ambient );
-	}
-	else
-		this.renderer = altspace.getThreeJSRenderer();
-
-	// Copy JumpStart's values to the globals for easy access.
-	window.g_camera = this.camera;
-
-	if( this.options.multiuserOnly && this.firebase.isLocallyInitializing )
-	{
-		this.world = this.spawnInstance(null, {"parent": this.scene});
-		this.world.name = "jumpStartWorld";
-		this.world.position.add(this.worldOffset);
-		this.world.sync();
-
-		// Check for initialize listeners
-		var asyncRequested = false;
-		var listenerName, result;
-		for( listenerName in this.listeners.initialize )
-		{
-			result = this.listeners.initialize[listenerName]() || true;
-			if( !result )
-				asyncRequested = true;
-		}
-
-		// We are only done caching if async was NOT requested
-		if( !asyncRequested )
-			this.onReadyToReady();
-		else
-			console.warn("JumpStart: Asynchronous initializing initiated by a listener.");
-	}
-	else if( !this.options.multiuserOnly )
-		this.onReadyToReady();
 };
 
 JumpStart.prototype.precacheSound = function(fileName)
@@ -1081,23 +1257,10 @@ JumpStart.prototype.onReadyToReady = function()
 
 JumpStart.prototype.run = function()
 {
-	if( this.options.multiuserOnly && this.firebase.isLocallyInitializing )
-	{
-		// ASYNC will continue in onRoomStateChange
-		this.firebase.roomRef.update({"state": "ready"}, function(error)
-		{
-			this.isRunning = true;
-			this.onTick();
-			console.log("JumpStart: Simulation started.");		
-		}.bind(this));
-	}
-	else
-	{
-		this.isRunning = true;
+	this.isRunning = true;
 
-		this.onTick();
-		console.log("JumpStart: Simulation started.");
-	}
+	this.onTick();
+	console.log("JumpStart: Simulation started.");
 };
 
 JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDepth)
@@ -1958,6 +2121,9 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		},
 		"sync": function(options)
 		{
+			if( !jumpStart.options.multiuserOnly )
+				return;
+
 			var defaultOptions = {
 				"transform": false,
 				"vitalData": false,
@@ -2300,13 +2466,7 @@ JumpStart.prototype.removeEventListener = function(eventType, listener)
 };
 
 
-// Class: util
-// Purpose: do some useful stuff
-function JumpStartUtil()
-{
-}
-
-JumpStartUtil.prototype.displayInfoPanel = function(panelName, data)
+JumpStart.prototype.displayInfoPanel = function(panelName, data)
 {
 	switch(panelName)
 	{
@@ -2342,7 +2502,7 @@ JumpStartUtil.prototype.displayInfoPanel = function(panelName, data)
 	}
 };
 
-JumpStartUtil.prototype.throbScaleDOM = function(elem, interval, scale)
+JumpStart.prototype.throbScaleDOM = function(elem, interval, scale)
 {
 	// Immediately set it's transform
 	elem.style.webkitTransform = "scale(" + (1.0 - (scale - 1.0)) + ")";
@@ -2375,7 +2535,7 @@ JumpStartUtil.prototype.throbScaleDOM = function(elem, interval, scale)
 	}.bind(elem));
 };
 
-JumpStartUtil.prototype.rockDOM = function(elem, interval, degrees)
+JumpStart.prototype.rockDOM = function(elem, interval, degrees)
 {
 	// Immediately set it's transform
 	elem.style.webkitTransform = "rotate(" + degrees + "deg)";
@@ -2408,7 +2568,7 @@ JumpStartUtil.prototype.rockDOM = function(elem, interval, degrees)
 	}.bind(elem));
 };
 
-JumpStartUtil.prototype.throbHeightDOM = function(elem, interval)
+JumpStart.prototype.throbHeightDOM = function(elem, interval)
 {
 	// Immediately set it's size to min-height
 	elem.style.height = elem.style.minHeight;
@@ -2441,10 +2601,9 @@ JumpStartUtil.prototype.throbHeightDOM = function(elem, interval)
 	}.bind(elem));
 };
 
-JumpStartUtil.prototype.loadStylesheets = function(fileNames)
+JumpStart.prototype.loadStylesheets = function(fileNames)
 {
 	// Decalre some important variables
-	var util = this;
 	var filesLoaded = 0;
 
 	// Async
@@ -2478,10 +2637,9 @@ JumpStartUtil.prototype.loadStylesheets = function(fileNames)
 	}
 };
 
-JumpStartUtil.prototype.loadJavaScripts = function(fileNames)
+JumpStart.prototype.loadJavaScripts = function(fileNames)
 {
 	// Decalre some important variables
-	var util = this;
 	var filesLoaded = 0;
 
 	// Async
@@ -2515,10 +2673,9 @@ JumpStartUtil.prototype.loadJavaScripts = function(fileNames)
 	}
 };
 
-JumpStartUtil.prototype.loadImages = function(fileNames)
+JumpStart.prototype.loadImages = function(fileNames)
 {
 	// Decalre some important variables
-	var util = this;
 	var filesLoaded = 0;
 
 	// Async
@@ -2560,7 +2717,7 @@ JumpStartUtil.prototype.loadImages = function(fileNames)
 
 // Figure out if we are passed a roomID in our URL
 // Based on the function at: https://css-tricks.com/snippets/javascript/get-url-variables/
-JumpStartUtil.prototype.getQueryVariable = function(name)
+JumpStart.prototype.getQueryVariable = function(name)
 {
 	var query = window.location.search.substring(1);
 	var vars = query.split("&");
@@ -2575,7 +2732,7 @@ JumpStartUtil.prototype.getQueryVariable = function(name)
 	return null;
 };
 
-JumpStartUtil.prototype.DOMReady = function()
+JumpStart.prototype.DOMReady = function()
 {
 	// Async
 	return {
@@ -2596,7 +2753,7 @@ JumpStartUtil.prototype.DOMReady = function()
 		};
 }
 
-JumpStartUtil.prototype.DOMLoaded = function()
+JumpStart.prototype.DOMLoaded = function()
 {
 	// Async
 	return {
