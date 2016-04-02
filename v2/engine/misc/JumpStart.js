@@ -689,6 +689,9 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 			function onInitialObjectsReady()
 			{
+				if( !this.firebase.isLocallyInitializing )
+					this.onReadyToReady();
+
 				// Listen for objects being added
 				this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
 				{
@@ -923,9 +926,11 @@ JumpStart.prototype.doneCaching = function()
 	this.scene.addEventListener("cursordown", function(e) { jumpStart.onCursorDown(e); });
 	this.scene.addEventListener("cursorup", function(e) { jumpStart.onCursorUp(e); });
 
+	/*
 	this.world = new THREE.Group();
 	this.world.position.add(this.worldOffset);
 	this.scene.add(this.world);
+	*/
 
 	this.clock = new THREE.Clock();
 	this.raycaster = new THREE.Raycaster();
@@ -969,6 +974,11 @@ JumpStart.prototype.doneCaching = function()
 
 	if( this.options.multiuserOnly && this.firebase.isLocallyInitializing )
 	{
+		this.world = this.spawnInstance(null, {"parent": this.scene});
+		this.world.name = "jumpStartWorld";
+		this.world.position.add(this.worldOffset);
+		this.world.sync();
+
 		// Check for initialize listeners
 		var asyncRequested = false;
 		var listenerName, result;
@@ -985,7 +995,7 @@ JumpStart.prototype.doneCaching = function()
 		else
 			console.warn("JumpStart: Asynchronous initializing initiated by a listener.");
 	}
-	else
+	else if( !this.options.multiuserOnly )
 		this.onReadyToReady();
 };
 
@@ -993,6 +1003,8 @@ JumpStart.prototype.onReadyToReady = function()
 {
 	this.isReady = true;
 
+console.log("ready to ready");
+this.doPendingUpdates();
 	// Check for ready listeners
 	var asyncRequested = false;
 	var listenerName, result;
@@ -1713,7 +1725,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			instance = existingModel.object.clone();
 	}
 	else
-		instance = new THREE.Object3D();
+		instance = new THREE.Group();
 
 	//instance.position.set(0, this.worldOffset.y, 0);
 
@@ -1729,7 +1741,13 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	}
 	*/
 	
-	options.parent.add(instance);
+	if( !!options.networkData && options.networkData.transform.name === "jumpStartWorld" )
+	{
+		this.scene.add(instance);
+		this.world = instance;
+	}
+	else
+		options.parent.add(instance);
 
 	// We will need to check for spawn listeners on this object before the next tick
 	if( options.isInitialSync )

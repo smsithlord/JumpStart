@@ -185,7 +185,6 @@
 			// Spawn local objects
 			jumpStart.addEventListener("ready", function()
 			{
-				jumpStart.world.position.x += 200.0;
 				// So that we can raycast against the floor of the enclosure.
 				var floorBoundary = jumpStart.enclosureBoundary("floor");
 				floorBoundary.addEventListener("cursorup", function() { createBlock(); });
