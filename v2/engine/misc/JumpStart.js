@@ -1,8 +1,3 @@
-/*	
-	CURRENT DEV STATUS:
-		Runs with very limited functionality in both Altspace & Chrome.
-*/
-
 // Global objects
 window.g_deltaTime = null;
 
@@ -58,7 +53,8 @@ function JumpStart(options)
 		"deltaTime",
 		"crosshair",
 		"gamepads",
-		"activeGamepad"
+		"activeGamepadIndex",
+		"previousGamepadStates"
 	];
 
 	// Declare them all as null
@@ -76,8 +72,6 @@ function JumpStart(options)
 		"webLook",
 		"webLookPrev",
 		"webMouse",
-		"gamepadsEnabled",
-		"activeGamepad",
 		"boundFadeObjects",
 		"invisibleMaterial",
 		"models",
@@ -113,6 +107,8 @@ function JumpStart(options)
 	this.isReady = false;
 	this.isRunning = false;
 	this.gamepads = (this.isAltspace) ? altspace.getGamepads() : navigator.getGamepads();
+	this.activeGamepadIndex = -1;
+	this.previousGamepadStates = [];
 	this.hoveredObject = null;
 	this.clickedObject = null;
 
@@ -297,7 +293,8 @@ function JumpStart(options)
 		"cursormove": {},
 		"keypress": {},
 		"keydown": {},
-		"touchpadgesture": {}
+		"touchpadgesture": {},
+		"gamepadbutton": {}
 	};
 
 	// Attach default window-level event listeners
@@ -1201,10 +1198,84 @@ JumpStart.prototype.doPendingUpdates = function()
 	}
 };
 
+JumpStart.prototype.onGamepadButtonEvent = function(e)
+{
+	if( !this.pendingEvents.hasOwnProperty(e.type) )
+		this.pendingEvents[e.type] = {};
+
+	this.pendingEvents[e.type][e.buttonCode] = e;
+};
+
 JumpStart.prototype.onTick = function()
 {
 	if( !this.isInitialized )
 		return;
+
+	// do gamepad input
+	if( this.isAltspace )
+		this.gamepads = altspace.getGamepads();
+	else
+		this.gamepads = (!!navigator.getGamepads) ? navigator.getGamepads() : this.gamepads = navigator.webkitGetGamepads();
+	
+	// Detect a gamepad
+	if( this.activeGamepadIndex === -1 )
+	{
+		var gamepadIndex, gamepad, previousGamepadState, buttonIndex;
+		for( gamepadIndex in this.gamepads )
+		{
+			gamepad = this.gamepads[gamepadIndex];
+
+			if( typeof this.previousGamepadStates[gamepadIndex] === "undefined" )
+				this.previousGamepadStates[gamepadIndex] = {"buttons": []};
+
+			previousGamepadState = this.previousGamepadStates[gamepadIndex];
+
+			if( !!gamepad && !!gamepad.buttons && gamepad.buttons.length > 0 )
+			{
+				for( buttonIndex in gamepad.buttons )
+				{
+					if( typeof previousGamepadState.buttons[buttonIndex] === "undefined" )
+					{
+						previousGamepadState.buttons[buttonIndex] = {};
+					}
+					else if( previousGamepadState.buttons[buttonIndex].value !== gamepad.buttons[buttonIndex].value )
+					{
+						if( this.activeGamepadIndex === -1 )
+							this.activeGamepadIndex = gamepadIndex;
+					}
+
+					previousGamepadState.buttons[buttonIndex].value = gamepad.buttons[buttonIndex].value;
+				}
+			}
+		}
+	}
+
+	if( this.activeGamepadIndex !== -1 )
+	{
+		// Poll the active gamepad
+		var gamepad = this.gamepads[this.activeGamepadIndex];
+		var previousGamepadState = this.previousGamepadStates[this.activeGamepadIndex];
+
+		if( !!gamepad.buttons && gamepad.buttons.length > 0 )
+		{
+			var buttonIndex;
+			for( buttonIndex in gamepad.buttons )
+			{
+				if( gamepad.buttons[buttonIndex].value !== previousGamepadState.buttons[buttonIndex].value )
+				{
+					// Button value has changed
+					var fakeEvent = {
+						"type": "gamepadbutton",
+						"buttonCode": parseInt(buttonIndex),
+						"value": gamepad.buttons[buttonIndex].value
+					};
+
+					this.onGamepadButtonEvent(fakeEvent);
+					previousGamepadState.buttons[buttonIndex].value = gamepad.buttons[buttonIndex].value;
+				}
+			}
+		}
+	}
 
 	function doPendingListeners()
 	{

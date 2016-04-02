@@ -17,157 +17,20 @@
 			};
 			loadJumpStart(options);
 
-			// Global variables that BuildingBlocks will use
-			var blockModels = ["models/bricks", "models/cube", "models/dirt", "models/grass", "models/jewel"];
-			var g_placeholder = null;
-
-			function createBlock()
-			{
-				var cage = jumpStart.scene.getObjectByName("cage");
-				var sampleBlock = cage.userData.sampleBlock;
-
-				var block = jumpStart.spawnInstance(sampleBlock.modelFile);
-				block.position.copy(cage.position);
-				block.blocksLOS = true;
-				block.addEventListener("cursorup", createBlock);
-				block.addEventListener("spawn", blockSpawn);
-				block.addEventListener("remove", blockRemove);
-				block.sync();
-
-				block.scale.copy(cage.userData.sampleBlock.scale);
-
-				jumpStart.playSound("sounds/spawn", 0.5);
-			}
-
-			function blockRemove()
-			{
-				function spawnDebris(parent, translation)
-				{
-					var force = new THREE.Vector3();
-					var rotation = new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random());
-
-					var debris = jumpStart.spawnInstance(parent.modelFile);
-					debris.scale.multiplyScalar(0.3);
-					debris.position.copy(parent.position);
-					debris.translateX(translation.x);
-					debris.translateZ(translation.y);
-					debris.translateY(translation.z);
-					force.copy(debris.position).sub(parent.position).y += 12.0;
-
-					// Aiming error
-					var maxError = 2.0;
-					var axis = ["x", "z"];
-					var x;
-					for( x in axis )
-					{
-						force[axis[x]] += Math.random() * maxError;
-
-						if( Math.random() > 0.5 )
-							force[axis[x]] *= -1.0;
-					}
-
-					scalar = 0.8 * Math.random();
-					if( scalar > maxScalar )
-						scalar = maxScalar;
-					else if( scalar > minScalar )
-						scalar = minScalar;
-
-					force.multiplyScalar(scalar);
-
-					// Now apply the behaviors, which are now built-in behaviors
-					debris.applyBehavior("physics", {"force": force, "rotation": rotation});
-					debris.applyBehavior("shrinkRemove", {"delay": 1.0, "speed": 1.0});
-				}
-
-				var maxScalar = 0.5;
-				var minScalar = 0.3;
-				var radius = this.boundingSphere.radius;
-				var count = 0;
-				var i, debrisQ1, debrisQ2, debrisQ3, debrisQ4, scalar, yScalar;
-				for( i = 0; i < 2; i++, count++ )
-				{
-					yScalar = (i > 0) ? 1.0 : -1.0;
-
-					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
-						spawnDebris(this, new THREE.Vector3(radius / 5.0, -radius / 5.0, radius / 5.0 * yScalar));
-
-					count++;
-
-					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
-						spawnDebris(this, new THREE.Vector3(-radius / 5.0, -radius / 5.0, radius / 5.0 * yScalar));
-
-					count++;
-
-					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
-						spawnDebris(this, new THREE.Vector3(-radius / 5.0, radius / 5.0, radius / 5.0 * yScalar));
-
-					count++;
-
-					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
-						spawnDebris(this, new THREE.Vector3(radius / 5.0, radius / 5.0, radius / 5.0 * yScalar));
-
-					count++;
-				}
-
-				jumpStart.playSound("sounds/remove", 0.5);
-			}
-
-			function blockSpawn(isInitialSync)
-			{
-				this.userData.isBlock = true;
-
-				if( isInitialSync )
-					return;
-
-				g_placeholder.scale.set(1, 1, 1);
-				g_placeholder.position.copy(this.position);
-
-				// Continue spawning "this" block
-				this.userData.maxScale = 1.0;
-				this.userData.minScale = 0.8;
-				this.userData.scaleDirection = 0;
-
-				if( this.ownerID !== jumpStart.localUser.userID )
-					this.scale.set(0.0001, 0.0001, 0.0001);
-
-				// Local listener
-				this.addEventListener("tick", function()
-				{
-					var amount;
-					if( !this.userData.scaleDirection )
-					{
-						amount = this.scale.x + (2.0 * g_deltaTime);
-						if( amount >= this.userData.maxScale )
-						{
-							amount = this.userData.maxScale;
-							this.removeEventListener("tick", arguments.callee);
-
-							// Hide the placeholder
-							g_placeholder.scale.set(0.0001, 0.0001, 0.0001);
-						}
-					}
-					else
-					{
-						amount = this.scale.x + (1.0 * g_deltaTime) * this.userData.scaleDirection;
-						if( amount < this.userData.minScale )
-						{
-							amount = this.userData.minScale;
-							this.userData.scaleDirection *= -1.0;
-						}
-						else if( amount > this.userData.maxScale )
-						{
-							amount = this.userData.maxScale;
-							this.userData.scaleDirection *= -1.0;
-						}
-					}
-
-					this.scale.set(amount, amount, amount);
-				});
-			}
-
 			// Precache our models
 			jumpStart.addEventListener("precache", function()
 			{
+				// Add the appropriate controls image to the body.
+				jumpStart.util.DOMReady().then(function()
+				{
+					var elem = document.createElement("img");
+					elem.id = "controlsImage";
+					elem.src = (jumpStart.isGear) ? "assets/BuildingBlocks/misc/gearControls.png" : "assets/BuildingBlocks/misc/desktopControls.png";
+					elem.style.cssText = "position: fixed; left: 0;";
+
+					document.body.appendChild(elem);
+				});
+
 				var sounds = [
 					"sounds/spawn",
 					"sounds/remove",
@@ -277,16 +140,168 @@
 				});
 
 				// Spawn an invisible block placeholder
-				g_placeholder = jumpStart.spawnInstance("models/placeholder");
-				g_placeholder.blocksLOS = true;
-				g_placeholder.userData.isBlock = true;
-				g_placeholder.addEventListener("cursorup", createBlock);
-				jumpStart.makeMaterialsInvisible(g_placeholder);
+				placeholder = jumpStart.spawnInstance("models/placeholder");
+				placeholder.blocksLOS = true;
+				placeholder.userData.isBlock = true;
+				placeholder.addEventListener("cursorup", createBlock);
+				jumpStart.makeMaterialsInvisible(placeholder);
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.run)
 				return true;
 			});
+
+		</script>
+
+		<script>
+
+			// Global variables that BuildingBlocks will use
+			var blockModels = ["models/bricks", "models/cube", "models/dirt", "models/grass", "models/jewel"];
+			var placeholder = null;
+
+			function createBlock()
+			{
+				var cage = jumpStart.scene.getObjectByName("cage");
+				var sampleBlock = cage.userData.sampleBlock;
+
+				var block = jumpStart.spawnInstance(sampleBlock.modelFile);
+				block.position.copy(cage.position);
+				block.blocksLOS = true;
+				block.addEventListener("cursorup", createBlock);
+				block.addEventListener("spawn", blockSpawn);
+				block.addEventListener("remove", blockRemove);
+				block.sync();
+
+				block.scale.copy(cage.userData.sampleBlock.scale);
+
+				jumpStart.playSound("sounds/spawn", 0.5);
+			}
+
+			function blockRemove()
+			{
+				function spawnDebris(parent, translation)
+				{
+					var force = new THREE.Vector3();
+					var rotation = new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random());
+
+					var debris = jumpStart.spawnInstance(parent.modelFile);
+					debris.scale.multiplyScalar(0.3);
+					debris.position.copy(parent.position);
+					debris.translateX(translation.x);
+					debris.translateZ(translation.y);
+					debris.translateY(translation.z);
+					force.copy(debris.position).sub(parent.position).y += 12.0;
+
+					// Aiming error
+					var maxError = 2.0;
+					var axis = ["x", "z"];
+					var x;
+					for( x in axis )
+					{
+						force[axis[x]] += Math.random() * maxError;
+
+						if( Math.random() > 0.5 )
+							force[axis[x]] *= -1.0;
+					}
+
+					scalar = 0.8 * Math.random();
+					if( scalar > maxScalar )
+						scalar = maxScalar;
+					else if( scalar > minScalar )
+						scalar = minScalar;
+
+					force.multiplyScalar(scalar);
+
+					// Now apply the behaviors, which are now built-in behaviors
+					debris.applyBehavior("physics", {"force": force, "rotation": rotation});
+					debris.applyBehavior("shrinkRemove", {"delay": 1.0, "speed": 1.0});
+				}
+
+				var maxScalar = 0.5;
+				var minScalar = 0.3;
+				var radius = this.boundingSphere.radius;
+				var count = 0;
+				var i, debrisQ1, debrisQ2, debrisQ3, debrisQ4, scalar, yScalar;
+				for( i = 0; i < 2; i++, count++ )
+				{
+					yScalar = (i > 0) ? 1.0 : -1.0;
+
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(radius / 5.0, -radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
+
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(-radius / 5.0, -radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
+
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(-radius / 5.0, radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
+
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(radius / 5.0, radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
+				}
+
+				jumpStart.playSound("sounds/remove", 0.5);
+			}
+
+			function blockSpawn(isInitialSync)
+			{
+				this.userData.isBlock = true;
+
+				if( isInitialSync )
+					return;
+
+				placeholder.scale.set(1, 1, 1);
+				placeholder.position.copy(this.position);
+
+				// Continue spawning "this" block
+				this.userData.maxScale = 1.0;
+				this.userData.minScale = 0.8;
+				this.userData.scaleDirection = 0;
+
+				if( this.ownerID !== jumpStart.localUser.userID )
+					this.scale.set(0.0001, 0.0001, 0.0001);
+
+				// Local listener
+				this.addEventListener("tick", function()
+				{
+					var amount;
+					if( !this.userData.scaleDirection )
+					{
+						amount = this.scale.x + (2.0 * g_deltaTime);
+						if( amount >= this.userData.maxScale )
+						{
+							amount = this.userData.maxScale;
+							this.removeEventListener("tick", arguments.callee);
+
+							// Hide the placeholder
+							placeholder.scale.set(0.0001, 0.0001, 0.0001);
+						}
+					}
+					else
+					{
+						amount = this.scale.x + (1.0 * g_deltaTime) * this.userData.scaleDirection;
+						if( amount < this.userData.minScale )
+						{
+							amount = this.userData.minScale;
+							this.userData.scaleDirection *= -1.0;
+						}
+						else if( amount > this.userData.maxScale )
+						{
+							amount = this.userData.maxScale;
+							this.userData.scaleDirection *= -1.0;
+						}
+					}
+
+					this.scale.set(amount, amount, amount);
+				});
+			}
 
 			function createSampleBlock(modelFile)
 			{
@@ -319,17 +334,28 @@
 				return sampleBlock;
 			}
 
+			// Desktop controls
+			var keyboardActive = true;
 			jumpStart.addEventListener("keydown", function(e)
 			{
+				if( !keyboardActive )
+				{
+					gamepadActive = false;
+					keyboardActive = true;
+
+					var elem = document.getElementById("controlsImage");
+					elem.src = "assets/BuildingBlocks/misc/desktopControls.png";
+				}
+
 				if( e.keyCode == 0 || e.keyCode == 32 )
 					deleteBlock();
 				else if( e.keyCode == 88 )
 					cycleBlock(1);
 				else if( e.keyCode == 90 )
-					toggleGearCreateMode();
-					//cycleBlock(-1);
+					cycleBlock(-1);
 			}, false);
 
+			// GearVR controls
 			var gearCreateMode = true;
 			jumpStart.addEventListener("touchpadgesture", function(e)
 			{
@@ -393,6 +419,47 @@
 				}
 			});
 
+			// Gamepad controls
+			var gamepadActive = false;
+			jumpStart.addEventListener("gamepadbutton", function(e)
+			{
+				if( !gamepadActive )
+				{
+					keyboardActive = false;
+					gamepadActive = true;
+					var elem = document.getElementById("controlsImage");
+					elem.src = "assets/BuildingBlocks/misc/gamepadControls.png";
+				}
+
+				if( e.buttonCode === 0 )
+				{
+					// A BUTTON
+					if( e.value === 0 )
+					{
+						if( !jumpStart.isAltspace )
+						createBlock();
+					}
+				}
+				else if( e.buttonCode === 2 )
+				{
+					// X BUTTON
+					if( e.value === 0 )
+						deleteBlock();
+				}
+				else if( e.buttonCode === 4 )
+				{
+					// L BUTTON
+					if( e.value === 0 )
+						cycleBlock(1);
+				}
+				else if( e.buttonCode === 5 )
+				{
+					// L BUTTON
+					if( e.value === 0 )
+						cycleBlock(-1);
+				}
+			});
+
 			function cycleBlock(direction)
 			{
 				var cage = jumpStart.scene.getObjectByName("cage");
@@ -430,9 +497,11 @@
 						jumpStart.removeInstance(block);
 				}
 			}
+
 		</script>
 	</head>
 
 	<body>
+		<img id="titleImage" src="assets/BuildingBlocks/misc/title.png" style="position: fixed; top: 0; left: 0; right: 0; margin-left: auto; margin-right: auto;" />
 	</body>
 </html>
