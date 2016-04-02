@@ -1,6 +1,4 @@
 // Global objects
-window.g_deltaTime = null;
-
 function JumpStart(options)
 {
 	this.version = "0.2.0";
@@ -227,7 +225,7 @@ function JumpStart(options)
 			},
 			"tickBehavior": function()
 			{
-				this.userData.physics.velocity.y -= 9.8 * g_deltaTime;
+				this.userData.physics.velocity.y -= 9.8 * jumpStart.deltaTime;
 
 				// Terminal velocity because we have no air drag
 				var termVel = 50.0;
@@ -236,9 +234,9 @@ function JumpStart(options)
 					this.userData.physics.velocity.multiplyScalar(0.9);
 
 				// Update the rotation
-				this.rotateX((this.syncData.physics.rotation.x * 5.0) * g_deltaTime);
-				this.rotateY((this.syncData.physics.rotation.y * 5.0) * g_deltaTime);
-				this.rotateZ((this.syncData.physics.rotation.z * 5.0) * g_deltaTime);
+				this.rotateX((this.syncData.physics.rotation.x * 5.0) * jumpStart.deltaTime);
+				this.rotateY((this.syncData.physics.rotation.y * 5.0) * jumpStart.deltaTime);
+				this.rotateZ((this.syncData.physics.rotation.z * 5.0) * jumpStart.deltaTime);
 
 				// Bounce us off of walls
 				var maximums = {
@@ -249,7 +247,7 @@ function JumpStart(options)
 
 				this.updateMatrixWorld();
 				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
-				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(g_deltaTime * 100.0)
+				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(jumpStart.deltaTime * 100.0)
 				pos.add(deltaPos);
 
 				var x, max;
@@ -712,9 +710,9 @@ function JumpStart(options)
 
 				this.scene = new THREE.Scene();
 				this.scene.scale.multiplyScalar(this.options.sceneScale);
-				this.scene.addEventListener( "cursormove", this.onCursorMove);
-				this.scene.addEventListener("cursordown", this.onCursorDown);
-				this.scene.addEventListener("cursorup", this.onCursorUp);
+				this.scene.addEventListener( "cursormove", this.onCursorMove.bind(this));
+				this.scene.addEventListener("cursordown", this.onCursorDown.bind(this));
+				this.scene.addEventListener("cursorup", this.onCursorUp.bind(this));
 
 				this.clock = new THREE.Clock();
 				this.raycaster = new THREE.Raycaster();
@@ -844,6 +842,7 @@ function JumpStart(options)
 					function onGetEnclosure(enclosure)
 					{
 						this.enclosure = enclosure;
+						this.isEnclosure = (this.isAltspace && Math.abs(this.enclosure.pixelsPerMeter - 521) > 1) ? true : false;
 
 						// Either get the user or spoof it then call onGetUser
 						if( !this.isAltspace )
@@ -1537,9 +1536,6 @@ JumpStart.prototype.onTick = function()
 
 	this.deltaTime = this.clock.getDelta();
 	this.deltaTime *= this.options.timeScale;
-
-	// FIX ME: Need better management of globals
-	window.g_deltaTime = this.deltaTime;
 
 	this.processCursorMove();
 };

@@ -13,7 +13,7 @@
 				"sceneScale": 2.0,
 				"debug":
 				{
-					"showCursorPlanes": true
+					"showCursorPlanes": false
 				}
 			};
 			loadJumpStart(options);
@@ -280,7 +280,7 @@
 					var amount;
 					if( !this.userData.scaleDirection )
 					{
-						amount = this.scale.x + (2.0 * g_deltaTime);
+						amount = this.scale.x + (2.0 * jumpStart.deltaTime);
 						if( amount >= this.userData.maxScale )
 						{
 							amount = this.userData.maxScale;
@@ -292,7 +292,7 @@
 					}
 					else
 					{
-						amount = this.scale.x + (1.0 * g_deltaTime) * this.userData.scaleDirection;
+						amount = this.scale.x + (1.0 * jumpStart.deltaTime) * this.userData.scaleDirection;
 						if( amount < this.userData.minScale )
 						{
 							amount = this.userData.minScale;
@@ -322,7 +322,7 @@
 				// Local listener
 				sampleBlock.addEventListener("tick", function()
 				{
-					var amount = this.scale.x + (0.3 * g_deltaTime) * this.userData.scaleDirection;
+					var amount = this.scale.x + (0.3 * jumpStart.deltaTime) * this.userData.scaleDirection;
 					if( amount < this.userData.minScale )
 					{
 						amount = this.userData.minScale;
