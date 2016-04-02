@@ -33,6 +33,7 @@
 				block.addEventListener("spawn", blockSpawn);
 				block.addEventListener("remove", blockRemove);
 				block.sync();
+
 				block.scale.copy(cage.userData.sampleBlock.scale);
 			}
 
@@ -40,8 +41,8 @@
 			{
 				function spawnDebris(parent, translation)
 				{
-					var direction = new THREE.Vector3();
-					var rotation = new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random());;
+					var force = new THREE.Vector3();
+					var rotation = new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random());
 
 					var debris = jumpStart.spawnInstance(parent.modelFile);
 					debris.scale.multiplyScalar(0.3);
@@ -49,18 +50,18 @@
 					debris.translateX(translation.x);
 					debris.translateZ(translation.y);
 					debris.translateY(translation.z);
-					direction.copy(debris.position).sub(parent.position).y += 12.0;
+					force.copy(debris.position).sub(parent.position).y += 12.0;
 
 					// Aiming error
-					var maxError = 100.0;
-					var axis = ["x", "y", "z"];
+					var maxError = 2.0;
+					var axis = ["x", "z"];
 					var x;
 					for( x in axis )
 					{
-						direction[x] += Math.random() * maxError;
+						force[axis[x]] += Math.random() * maxError;
 
 						if( Math.random() > 0.5 )
-							direction[x] *= -1.0;
+							force[axis[x]] *= -1.0;
 					}
 
 					scalar = 0.8 * Math.random();
@@ -69,42 +70,41 @@
 					else if( scalar > minScalar )
 						scalar = minScalar;
 
-					direction.multiplyScalar(scalar);
-					applyForce(debris, direction, rotation);
+					force.multiplyScalar(scalar);
 
-					debris.userData.life = 1.0;
-					debris.addEventListener("tick", function()
-					{
-						if( this.userData.life > 0 )
-							this.userData.life -= g_deltaTime;
-						else
-						{
-							this.scale.x -= 1.0 * g_deltaTime;
-							this.scale.y -= 1.0 * g_deltaTime;
-							this.scale.z -= 1.0 * g_deltaTime;
-
-							if( this.scale.x <= 0.0001 )
-								jumpStart.removeInstance(this);
-						}
-					});
+					// Now apply the behaviors, which are now built-in behaviors
+					debris.applyBehavior("physics", {"force": force, "rotation": rotation});
+					debris.applyBehavior("shrinkRemove", {"delay": 1.0, "speed": 1.0});
 				}
 
-				//var direction = new THREE.Vector3();//(0, 5.0, 0);
-
-				var maxScalar = 0.6;
+				var maxScalar = 0.5;
 				var minScalar = 0.3;
 				var radius = this.boundingSphere.radius;
 				var count = 0;
-				var i, debrisQ1, debrisQ2, debrisQ3, debrisQ4, scalar;
+				var i, debrisQ1, debrisQ2, debrisQ3, debrisQ4, scalar, yScalar;
 				for( i = 0; i < 2; i++, count++ )
 				{
-					if( count % 2 )
-						continue;
+					yScalar = (i > 0) ? 1.0 : -1.0;
 
-					spawnDebris(this, new THREE.Vector3(radius / 5.0, -radius / 5.0, radius / 5.0 * (i) ? 1.0 : -1.0));
-					spawnDebris(this, new THREE.Vector3(-radius / 5.0, -radius / 5.0, radius / 5.0 * (i * -1.0)));
-					spawnDebris(this, new THREE.Vector3(-radius / 5.0, radius / 5.0, radius / 5.0 * (i * -1.0)));
-					spawnDebris(this, new THREE.Vector3(radius / 5.0, radius / 5.0, radius / 5.0 * (i * -1.0)));
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(radius / 5.0, -radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
+
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(-radius / 5.0, -radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
+
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(-radius / 5.0, radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
+
+					if( (i < 1 && count % 2 < 1) || (i > 0 && count % 2 < 1) )
+						spawnDebris(this, new THREE.Vector3(radius / 5.0, radius / 5.0, radius / 5.0 * yScalar));
+
+					count++;
 				}
 			}
 
@@ -334,96 +334,6 @@
 					if( block.userData.isBlock )
 						jumpStart.removeInstance(block);
 				}
-			}
-
-			function applyForce(block, force, rotation)
-			{
-				if( !!!block.userData.physics )
-					makePhysics(block);
-
-				block.syncData.physics.force.copy(force);
-				block.syncData.physics.rotation.copy(rotation);
-				block.userData.physics.velocity.copy(block.syncData.physics.force);
-			}
-
-			function makePhysics(block, doSync)
-			{
-				block.syncData.physics = {
-					"force": new THREE.Vector3(),
-					"rotation": new THREE.Vector3()
-				};
-
-				block.userData.physics = {
-					"velocity": new THREE.Vector3()
-				};
-
-				block.addEventListener("tick", physicsTick);
-				block.addEventListener("spawn", physicsSpawn);
-			}
-
-			function physicsSpawn()
-			{
-				this.userData.physics = {
-					"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z)
-				};
-			}
-
-			function physicsTick()
-			{
-				this.userData.physics.velocity.y -= 9.8 * g_deltaTime;
-
-				// Terminal velocity because we have no air drag
-				var termVel = 50.0;
-				var velLen = this.userData.physics.velocity.length();
-				if( velLen > termVel )
-					this.userData.physics.velocity.multiplyScalar(0.9);
-
-				// Update the rotation
-				this.rotateX((this.syncData.physics.rotation.x * 5.0) * g_deltaTime);
-				this.rotateY((this.syncData.physics.rotation.y * 5.0) * g_deltaTime);
-				this.rotateZ((this.syncData.physics.rotation.z * 5.0) * g_deltaTime);
-
-				// Bounce us off of walls
-				var maximums = {
-					"x": jumpStart.enclosure.innerWidth / 2.0,
-					"y": (jumpStart.enclosure.innerHeight / 2.0),
-					"z": jumpStart.enclosure.innerDepth / 2.0
-				};
-
-				this.updateMatrixWorld();
-				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
-				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(g_deltaTime * 100.0)
-				pos.add(deltaPos);
-
-				var x, max;
-				for( x in maximums )
-				{
-					if( pos[x] > maximums[x] )
-					{
-						pos[x] = maximums[x];
-						this.userData.physics.velocity[x] *= -1.0;
-					}
-					else if( pos[x] < -maximums[x] )
-					{
-						pos[x] = -maximums[x];
-						this.userData.physics.velocity[x] *= -1.0;
-					}
-				}
-
-				pos.multiplyScalar(1 / jumpStart.options.sceneScale);
-				pos.sub(jumpStart.world.position);
-
-				this.position.copy(pos);
-				/*
-				if( !(state & 0x4) )
-					sceneObject.position.add(deltaPos);
-				else
-				{
-					sceneObject.translateX(deltaPos.x);
-					sceneObject.translateY(deltaPos.y);
-					sceneObject.translateZ(deltaPos.z);
-				}
-				*/
 			}
 		</script>
 	</head>

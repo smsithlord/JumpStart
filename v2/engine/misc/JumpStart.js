@@ -84,11 +84,13 @@ function JumpStart(options)
 		"objects",
 		"cursorPlanes",
 		"enclosureBoundaries",
+		"behaviors",
 		"listeners",
 		"syncedObjects",
 		"pendingUpdates",
 		"firebase",
 		"pendingEvents",
+		"selfSyncingObject",	// Used to avoid syncing to updates that we locally send
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
 		"debug"	// Helper class
@@ -154,6 +156,131 @@ function JumpStart(options)
 		"east": null,
 		"south": null,
 		"west": null
+	};
+	this.behaviors = {
+		"shrinkRemove":
+		{
+			"applyBehavior": function(options)
+			{
+				this.userData.shrinkRemove = {};
+				this.userData.shrinkRemove.speed = (!!options.speed) ? options.speed : 1.0;
+				this.userData.shrinkRemove.delay = (!!options.delay) ? options.delay : 0.0;
+				this.addEventListener("tick", jumpStart.behaviors.shrinkRemove.tickBehavior);
+				return true;
+			},
+			"tickBehavior": function()
+			{
+				this.userData.shrinkRemove.delay -= jumpStart.deltaTime;
+
+				if( this.userData.shrinkRemove.delay <= 0 )
+				{
+					this.scale.x -= this.userData.shrinkRemove.speed * jumpStart.deltaTime;
+					this.scale.y -= this.userData.shrinkRemove.speed * jumpStart.deltaTime;
+					this.scale.z -= this.userData.shrinkRemove.speed * jumpStart.deltaTime;
+
+					if( this.scale.x <= 0.0001 )
+						jumpStart.removeInstance(this);
+				}
+			}
+		},
+		"physics": {
+			"applyBehavior": function(options)
+			{
+				if( !!!this.behaviors.physics )
+				{
+					// This is our 1st time applying ourselves
+					this.syncData.physics = {
+						"force": (!!options.force) ? options.force.clone() : new THREE.Vector3(),
+						"rotation": (!!options.rotation) ? options.rotation.clone() : new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random())
+					};
+
+					this.userData.physics = {
+						"velcoity": this.syncData.physics.force.clone()
+					};
+
+					this.addEventListener("tick", jumpStart.behaviors.physics.tickBehavior);
+					this.addEventListener("spawn", jumpStart.behaviors.physics.spawnBehavior);
+				}
+				else
+				{
+					// We are updating an exiting physics behavior with a new force & rotation
+					if( !!options.force )
+						this.syncData.physics.force.copy(options.force);
+					else
+						this.syncData.physics.force.set(0, 0, 0);
+
+					if( !!options.rotation )
+						this.syncData.physics.rotation.copy(options.rotation);
+					else
+						this.syncData.physics.rotation.set(0, 0, 0);
+
+					this.userData.physics.velocity.copy(this.syncData.physics.force);
+				}
+
+				return true;
+			},
+			"unapplyBehavior": function()
+			{
+				delete this.syncData["physics"];
+				delete this.userData["physics"];
+				this.removeEventListener("tick", jumpStart.behaviors.physics.tickBehavior);
+				this.removeEventListener("spawn", jumpStart.behaviors.physics.spawnBehavior);
+				return true;
+			},
+			"tickBehavior": function()
+			{
+				this.userData.physics.velocity.y -= 9.8 * g_deltaTime;
+
+				// Terminal velocity because we have no air drag
+				var termVel = 50.0;
+				var velLen = this.userData.physics.velocity.length();
+				if( velLen > termVel )
+					this.userData.physics.velocity.multiplyScalar(0.9);
+
+				// Update the rotation
+				this.rotateX((this.syncData.physics.rotation.x * 5.0) * g_deltaTime);
+				this.rotateY((this.syncData.physics.rotation.y * 5.0) * g_deltaTime);
+				this.rotateZ((this.syncData.physics.rotation.z * 5.0) * g_deltaTime);
+
+				// Bounce us off of walls
+				var maximums = {
+					"x": jumpStart.enclosure.innerWidth / 2.0,
+					"y": (jumpStart.enclosure.innerHeight / 2.0),
+					"z": jumpStart.enclosure.innerDepth / 2.0
+				};
+
+				this.updateMatrixWorld();
+				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(g_deltaTime * 100.0)
+				pos.add(deltaPos);
+
+				var x, max;
+				for( x in maximums )
+				{
+					if( pos[x] > maximums[x] )
+					{
+						pos[x] = maximums[x];
+						this.userData.physics.velocity[x] *= -1.0;
+					}
+					else if( pos[x] < -maximums[x] )
+					{
+						pos[x] = -maximums[x];
+						this.userData.physics.velocity[x] *= -1.0;
+					}
+				}
+
+				pos.multiplyScalar(1 / jumpStart.options.sceneScale);
+				pos.sub(jumpStart.world.position);
+
+				this.position.copy(pos);
+			},
+			"spawnBehavior": function(isInitialSync)
+			{
+				this.userData.physics = {
+					"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z)
+				};
+			}
+		}
 	};
 	this.listeners = {
 		"precache": {},
@@ -529,14 +656,14 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 		function onStateReady()
 		{
+			var initialKeys = {};
+
 			// Spawn all of the initial objects
 			this.firebase.roomRef.child("objects").once("value", function(parentSnapshot)
 			{
-				var initialKeys = {};
-
 				if( !parentSnapshot.exists() || parentSnapshot.numChildren() === 0 )
 				{
-					onInitialObjectsReady.call(this, initialKeys);
+					onInitialObjectsReady.call(this);
 				}
 				else
 				{
@@ -546,11 +673,11 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 					for( x in parentData )
 					{
 						initialKeys[x] = true;
-						mergData.call(this, parentData[x], x, initialKeys);
+						mergData.call(this, parentData[x], x);
 					}
 
 					console.log("JumpStart: Finished syncing initial state.")
-					onInitialObjectsReady.call(this, initialKeys);
+					onInitialObjectsReady.call(this);
 
 					if( this.firebase.isLocallyInitializing )
 					{
@@ -560,7 +687,7 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 				}
 			}.bind(this));
 
-			function onInitialObjectsReady(initialKeys)
+			function onInitialObjectsReady()
 			{
 				// Listen for objects being added
 				this.firebase.roomRef.child("objects").on("child_added", function(snapshot)
@@ -575,39 +702,43 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 					}
 
 					var data = snapshot.val();
-					mergData.call(this, data, key, initialKeys);
+					mergData.call(this, data, key);
 				}.bind(this));
 			}
 
-			function mergData(data, key, initialKeys)
+			function mergData(data, key)
 			{
-				if( initialKeys.hasOwnProperty(key) )
-				{
-					this.pendingUpdates[key] = {};
-					this.pendingUpdates[key].needsSpawn = true;
-					this.pendingUpdates[key].isInitialSync = true;
+				this.pendingUpdates[key] = {};
 
-					if( !this.pendingUpdates.hasOwnProperty(key) )
-						this.pendingUpdates[key] = {};
+				var isInitialSync = initialKeys.hasOwnProperty(key);
+				if( isInitialSync )
+				{
+					this.pendingUpdates[key].needsSpawn = true;
+					this.pendingUpdates[key].isInitialSync = isInitialSync;
 
 					this.pendingUpdates[key].transform = data.transform;
 					this.pendingUpdates[key].vitalData = data.vitalData;
 					this.pendingUpdates[key].syncData = data.syncData;
-					return;
+
+					if( this.isLocallyInitializing )
+						return;
 				}
 				else if( data.vitalData.ownerID === this.localUser.userID )
-					return;
+				{
+					if( !jumpStart.selfSyncingObject )
+						this.pendingUpdates[key].needsSpawn = true;
+				}
+				else
+					this.pendingUpdates[key].needsSpawn = true;
 
-				this.pendingUpdates[key] = {};
-				this.pendingUpdates[key].needsSpawn = true;
 				console.log("JumpStart: New synced object detected!");
 
 				// Spawn the object
-				//var data = snapshot.val();
-				//var key = snapshot.key();
-
 				this.firebase.roomRef.child("objects").child(key).child("transform").on("value", function(snapshot)
 				{
+					if( initialKeys.hasOwnProperty(key) || jumpStart.selfSyncingObject )
+						return;
+
 					if( !snapshot.exists() )
 					{
 						// The object has been removed.
@@ -623,6 +754,9 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 				this.firebase.roomRef.child("objects").child(key).child("vitalData").on("value", function(snapshot)
 				{
+					if( initialKeys.hasOwnProperty(key) || jumpStart.selfSyncingObject )
+						return;
+
 					if( !snapshot.exists() )
 					{
 						// The object has been removed.
@@ -638,6 +772,9 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 				this.firebase.roomRef.child("objects").child(key).child("syncData").on("value", function(snapshot)
 				{
+					if( initialKeys.hasOwnProperty(key) || jumpStart.selfSyncingObject )
+						return;
+
 					if( !snapshot.exists() )
 					{
 						// The object has been removed.
@@ -653,10 +790,10 @@ JumpStart.prototype.onRoomStateChange = function(snapshot)
 
 				function objectRemoved(key)
 				{
-					if( !this.syncedObjects.hasOwnProperty(key) )	// FIX ME: This might be getting called 3 times per- removal.
+					var object = this.syncedObjects[key];
+					if( !!!object )
 						return;
 
-					var object = this.syncedObjects[key];
 					delete this.syncedObjects[key];
 					this.removeInstance(object);
 				}
@@ -897,14 +1034,12 @@ JumpStart.prototype.run = function()
 JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDepth)
 {
 	if( arguments.length < 3 )
-		maxDepth = 0;
-
-	maxDepth = Infinity;
+		maxDepth = Infinity;
 
 	if( arguments.length < 4 )
 		currentDepth = 0;
 
-	var x, childData, childDataType, listenerName, funcName;
+	var x, childData, childDataType, listenerName, funcName, handler, dotIndex, behaviorName, eventName, behaviorHandler;
 	for( x in data)
 	{
 		if( x === "listeners" )
@@ -912,7 +1047,32 @@ JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDe
 			for( listenerName in data[x] )
 			{
 				for( funcName in data[x][listenerName] )
-					targetData.listeners[listenerName][funcName] = window[funcName];
+				{
+					handler = targetData.listeners[listenerName][funcName];
+					handler = window[funcName];
+
+					if( !!!handler )
+					{
+						dotIndex = funcName.indexOf(".");
+						if( dotIndex > 0 )
+						{
+							behaviorName = funcName.split(0, dotIndex);
+							eventName = funcName.split(dotIndex + 1);
+
+							if( !!this.behaviors[behaviorName] )
+							{
+								behaviorHandler = this.behaviors[behaviorName][eventName];
+								if( !!behaviorHandler )
+								{
+									console.log("FOUND ONE");
+									handler = behaviorHandler;
+								}
+							}
+						}
+					}
+
+					targetData.listeners[listenerName][funcName] = handler;
+				}
 			}
 		}
 		else
@@ -945,6 +1105,9 @@ JumpStart.prototype.doPendingUpdates = function()
 			instance = this.spawnInstance(null, {"networkData": data, "syncKey": x, "isInitialSync": !!data.isInitialSync});
 		else
 			instance = this.syncedObjects[x];
+
+		if( !instance )
+			continue;
 
 		if( data.hasOwnProperty("transform") )
 		{
@@ -1601,7 +1764,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	var originalAddEventListener = window.addEventListener;
 	var originalRemoveEventListener = window.removeEventListener;
 
-	var vitalDataNames = ["ownerID", "modelFile", "blocksLOS", "listeners"];	// These get synced
+	var vitalDataNames = ["ownerID", "modelFile", "blocksLOS", "listeners", "behaviors"];	// These get synced
 	var jumpStartData = {
 		"ownerID": this.localUser.userID,
 		"blocksLOS": false,
@@ -1611,6 +1774,39 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		"syncData": {},
 		"spoofVisible": true,	// because Altspace does not respect object.visible values directly
 		"syncKey": options.syncKey,
+		"behaviors": {},
+		"applyBehavior": function(behaviorName, options)
+		{
+			if( !!!options )
+				options = {};
+
+			var behavior = jumpStart.behaviors[behaviorName];
+			if( !!behavior )
+			{
+				if( behavior.applyBehavior.call(this, options) )
+					this.behaviors[behaviorName] = true;
+				else
+					console.warn("Behavior \"" + behaviorName + "\" failed to apply.");
+			}
+			else
+				console.warn("Behavior \"" + behaviorName + "\" does not exist.");
+		},
+		"unapplyBehavior": function(behaviorName, options)
+		{
+			if( !!!options )
+				options = {};
+
+			var behavior = jumpStart.behaviors[behaviorName];
+			if( !!behavior )
+			{
+				if( behavior.unapplyBehavior.call(this, options) )
+					this.behaviors[behaviorName] = false;
+				else
+					console.warn("Behavior \"" + behaviorName + "\" failed to unapply.");
+			}
+			else
+				console.warn("Behavior \"" + behaviorName + "\" does not exist.");
+		},
 		"sync": function(options)
 		{
 			var defaultOptions = {
@@ -1719,21 +1915,25 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			// FIX ME: Only non-default values should need to be stored on the firebase.
 			if( this.syncKey )
 			{
+				jumpStart.selfSyncingObject = true;
 				jumpStart.firebase.roomRef.child("objects").child(this.syncKey).update(data, function(error)
 				{
 					if( error )
 						console.log("JumpStart: " + error);
 				});
+				jumpStart.selfSyncingObject = false;
 
 				console.log("JumpStart: Syncing object with key " + this.syncKey + ".");
 			}
 			else
 			{
+				jumpStart.selfSyncingObject = true;
 				var ref = jumpStart.firebase.roomRef.child("objects").push(data, function(error)
 				{
 					if( error )
 						console.log("JumpStart:" + error);
 				});
+				jumpStart.selfSyncingObject = false;
 
 				this.syncKey = ref.key();
 				jumpStart.syncedObjects[ref.key()] = this;
@@ -1756,11 +1956,36 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 				this.listeners[eventType] = {};
 
 			// Determine if this is a global named function that can be used as a synced listener
-			var isLocalListener, listenerName;
-			if( listener.name === "" )
+			var listenerName = listener.name;
+			var isLocalListener;
+			if( listenerName === "" )
 				isLocalListener = true;
 			else
-				isLocalListener = (typeof window[listener.name] !== "function");
+				isLocalListener = (typeof window[listenerName] !== "function");
+
+			if( isLocalListener )
+			{
+				// Check for behavior listeners too
+				var x, y, behavior, handler, doBreak;
+				for( x in jumpStart.behaviors )
+				{
+					behavior = jumpStart.behaviors[x];
+					for( y in behavior )
+					{
+						handler = behavior[y];
+						if( handler === listener )
+						{
+							listenerName = x + "." + y;
+							isLocalListener = false;
+							doBreak = true;
+							break;
+						}
+					}
+
+					if( doBreak )
+						break;
+				}
+			}
 
 			if( isLocalListener )
 			{
@@ -1783,8 +2008,6 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 
 				listenerName = "_local" + (highestLocal + 1);
 			}
-			else
-				listenerName = listener.name;
 
 			// Assign the listener
 			this.listeners[eventType][listenerName] = listener;
@@ -1824,10 +2047,10 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	if( options.networkData )
 	{
 		// vitalData
-		this.extractData.call(this, options.networkData.vitalData, jumpStartData, 1);
+		this.extractData.call(this, options.networkData.vitalData, jumpStartData);
 
 		// syncData
-		this.extractData.call(this, options.networkData.syncData, jumpStartData.syncData, 1);
+		this.extractData.call(this, options.networkData.syncData, jumpStartData.syncData);
 
 		this.syncedObjects[options.syncKey] = instance;
 	}
