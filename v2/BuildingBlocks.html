@@ -186,7 +186,8 @@
 					"models/dirt",
 					"models/grass",
 					"models/jewel",
-					"models/placeholder"
+					"models/placeholder",
+					"models/target"
 				];
 
 				jumpStart.loadModels(models).then( function()
@@ -246,22 +247,33 @@
 								farEnoughAway = false;
 						}
 
-						if( (!insideOfEnclosure || !farEnoughAway) && !!!this.userData.hidden )
+						if( (!insideOfEnclosure || !farEnoughAway) && !!!this.userData.hidden && !gearCreateMode )
 						{
 							this.userData.hidden = true;
 							this.scale.set(0.0001, 0.0001, 0.0001);
 						}
-						else if( insideOfEnclosure && farEnoughAway && !!this.userData.hidden )
+						else if( insideOfEnclosure && farEnoughAway && !!this.userData.hidden && gearCreateMode )
 						{
 							this.userData.hidden = false;
 							this.scale.set(1, 1, 1);
 						}
 					}
-					else if( !!!this.userData.hidden )
+					else if( !!!this.userData.hidden && !gearCreateMode )
 					{
 						this.userData.hidden = true;
 						this.scale.set(0.0001, 0.0001, 0.0001);
 					}
+				});
+
+				targetCrosshair = jumpStart.spawnInstance("models/target");
+				targetCrosshair.userData.hidden = true;
+				targetCrosshair.scale.set(0.0001, 0.0001, 0.0001);
+				targetCrosshair.name = "targetCrosshair";
+				targetCrosshair.userData.cage = cage;
+				targetCrosshair.addEventListener("tick", function()
+				{
+					if( !!jumpStart.localUser.cursorHit && !!jumpStart.localUser.cursorHit.scaledPoint )
+						this.position.copy(jumpStart.localUser.cursorHit.scaledPoint);
 				});
 
 				// Spawn an invisible block placeholder
@@ -314,7 +326,8 @@
 				else if( e.keyCode == 88 )
 					cycleBlock(1);
 				else if( e.keyCode == 90 )
-					cycleBlock(-1);
+					toggleGearCreateMode();
+					//cycleBlock(-1);
 			}, false);
 
 			var gearCreateMode = true;
@@ -346,22 +359,37 @@
 					gearCreateMode = !gearCreateMode;
 
 					// hide the cage (and sample block)
-					var cage = jumpStart.scene.getObjectByName("cage");
-					if( !!!cage.userData.hidden )
-					{
-						cage.userData.hidden = true;
-						cage.scale.set(0.0001, 0.0001, 0.0001);
-					}
-
-					// show the targetCrosshair
-					/* FIX ME: Make the model for the target crosshair
 					var targetCrosshair = jumpStart.scene.getObjectByName("targetCrosshair");
-					if( !!targetCrosshair.userData.hidden )
+					var cage = targetCrosshair.userData.cage;
+
+					if( gearCreateMode )
 					{
-						targetCrosshair.userData.hidden = false;
-						targetCrosshair.scale.set(1, 1, 1);
+						if( !!cage.userData.hidden )
+						{
+							cage.userData.hidden = false;
+							cage.scale.set(1, 1, 1);
+						}
+
+						if( !!!targetCrosshair.userData.hidden )
+						{
+							targetCrosshair.userData.hidden = true;
+							targetCrosshair.scale.set(0.0001, 0.0001, 0.0001);
+						}
 					}
-					*/
+					else
+					{
+						if( !!!cage.userData.hidden )
+						{
+							cage.userData.hidden = true;
+							cage.scale.set(0.0001, 0.0001, 0.0001);
+						}
+
+						if( !!targetCrosshair.userData.hidden )
+						{
+							targetCrosshair.userData.hidden = false;
+							targetCrosshair.scale.set(0.3, 0.3, 0.3);
+						}
+					}
 				}
 			});
 
