@@ -5,11 +5,14 @@
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
-			loadJumpStart({"debug": {"showCursorPlanes": true}});
+			loadJumpStart({
+				"multiuserOnly": true,
+				"debug": {"showCursorPlanes": true}
+			});
 
 			function spin()
 			{
-				this.rotateY(1.0 * g_deltaTime);
+				this.rotateY(1.0 * jumpStart.deltaTime);
 			}
 
 			function extraRemove()
@@ -32,13 +35,19 @@
 
 			jumpStart.addEventListener("initialize", function()
 			{
+				console.log("initing");
+
 				// This listener only gets called when initializing the room of a multiuser app.
 				var extraBlock = jumpStart.spawnInstance("models/block");
 				extraBlock.name = "globalBlock";
-				extraBlock.translateY(200);
-				extraBlock.addEventListener("tick", spin);
-				extraBlock.addEventListener("remove", extraRemove);
-				extraBlock.syncData.myVar = "5150";
+				extraBlock.scale.set(2, 2, 2);
+				//extraBlock.position.y += 250.0;
+				//extraBlock.applyBehavior("physics");
+				//extraBlock.addEventListener("spawn", testerSpawn);
+//				extraBlock.translateY(200);
+//				extraBlock.addEventListener("tick", spin);
+//				extraBlock.addEventListener("remove", extraRemove);
+//				extraBlock.syncData.myVar = "5150";
 				extraBlock.sync();
 
 				// true	: SYNCHRONOUS
@@ -52,12 +61,8 @@
 				floorBoundary.addEventListener("cursordown", function()
 				{
 					var extraBlock = jumpStart.scene.getObjectByName("globalBlock");
-
-					if( extraBlock )
-					{
-						extraBlock.position.copy(jumpStart.localUser.cursorHit.scaledPoint);
-						extraBlock.sync();
-					}
+					extraBlock.applyBehavior("physics");
+					extraBlock.sync();
 				});
 
 				var cursor = jumpStart.spawnInstance("models/block");
@@ -78,7 +83,7 @@
 
 				myObject.addEventListener("tick", function()
 				{
-					this.rotateY(2.0 * g_deltaTime);
+					this.rotateY(2.0 * jumpStart.deltaTime);
 				});
 
 				myObject.addEventListener("cursorenter", function()
@@ -104,10 +109,9 @@
 				myObject.addEventListener("cursorup", function()
 				{
 					console.log("Object is being clicked up (then removing globalBlock)! " + this);
-					//jumpStart.removeInstance(this);
 
-					var extraBlock = jumpStart.scene.getObjectByName("globalBlock");
-					jumpStart.removeInstance(extraBlock);
+//					var extraBlock = jumpStart.scene.getObjectByName("globalBlock");
+//					jumpStart.removeInstance(extraBlock);
 				});
 
 				myObject.addEventListener("spawn", function()
