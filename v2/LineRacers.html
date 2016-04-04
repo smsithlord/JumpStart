@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Line Racers</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "LineRacers",
+				"multiuserOnly": true,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModels(["models/car"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			function spawnMyCar()
+			{
+				// Does this user already have a car?
+				var car = jumpStart.scene.getObjectByName("car" + jumpStart.localUser.userID);
+				if( !!car )
+					return;
+
+				car = jumpStart.spawnInstance("models/car");
+				car.name = "car" + jumpStart.localUser.userID;
+				car.userData.speed = 100.0;
+				car.addEventListener("tick", function()
+				{
+					if( !jumpStart.localUser.cursorHit )
+						return;
+
+					this.lookAt(jumpStart.localUser.cursorHit.scaledPoint);
+					this.translateZ(this.userData.speed * jumpStart.deltaTime);
+				});
+
+				car.applyBehavior("autoSync");
+				car.applyBehavior("lerpSync", {"speed": car.userData.speed});	// slower lerp speed to account for lag
+
+				// Sync it right now too
+				car.sync();
+			}
+
+			var maxPlayers = 3;
+			var players = [];
+			jumpStart.addEventListener("ready", function()
+			{
+				var floorBoundary = jumpStart.enclosureBoundary("floor");
+				floorBoundary.addEventListener("cursordown", spawnMyCar);
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>

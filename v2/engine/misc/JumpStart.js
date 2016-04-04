@@ -48,6 +48,7 @@ function JumpStart(options)
 		"world",
 		"worldOffset",
 		"deltaTime",
+		"elapsedTime",
 		"crosshair",
 		"gamepads",
 		"activeGamepadIndex",
@@ -154,6 +155,51 @@ function JumpStart(options)
 		"west": null
 	};
 	this.behaviors = {
+		"autoSync":
+		{
+			"applyBehavior": function(options)
+			{
+				this.userData.autoSync = {};
+				this.userData.autoSync.distanceTolerance = (!!options.distanceTolerance) ? options.distanceTolerance : 5.0;
+				this.userData.autoSync.minInterval = (!!options.minInterval) ? options.minInterval : 0.2;
+				this.addEventListener("tick", jumpStart.behaviors.autoSync.tickBehavior);
+				return true;
+			},
+			"unapplyBehavior": function()
+			{
+				delete this.syncData["autoSync"];
+				delete this.userData["autoSync"];
+				this.removeEventListener("tick", jumpStart.behaviors.autoSync.tickBehavior);
+				this.removeEventListener("spawn", jumpStart.behaviors.autoSync.spawnBehavior);
+				return true;
+			},
+			"tickBehavior": function()
+			{
+				if( !!!this.userData.autoSync )
+					this.userData.autoSync = {};
+
+				// Only auto-sync objects we own
+				if( this.ownerID !== jumpStart.localUser.userID )
+					return;
+
+				var shouldSync = false;
+				if( !!!this.userData.autoSync.previousPosition || !!!this.userData.autoSync.previousTime )
+					shouldSync = true;
+
+				if( !shouldSync && jumpStart.elapsedTime - this.userData.autoSync.previousTime > this.userData.autoSync.minInterval && this.position.distanceTo(this.userData.autoSync.previousPosition) > this.userData.autoSync.distanceTolerance )
+					shouldSync = true;
+
+				if( shouldSync )
+				{
+					if( !!!this.userData.autoSync.previousPosition )
+						this.userData.autoSync.previousPosition = new THREE.Vector3();
+
+					this.userData.autoSync.previousPosition.copy(this.position);
+					this.userData.autoSync.previousTime = jumpStart.elapsedTime;
+					this.sync();
+				}
+			}
+		},
 		"shrinkRemove":
 		{
 			"applyBehavior": function(options)
@@ -182,6 +228,9 @@ function JumpStart(options)
 		"physics": {
 			"applyBehavior": function(options)
 			{
+				if( !!!options )
+					options = {};
+
 				if( !!!this.behaviors.physics )
 				{
 					// This is our 1st time applying ourselves
@@ -275,6 +324,61 @@ function JumpStart(options)
 				this.userData.physics = {
 					"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z)
 				};
+			}
+		},
+		"lerpSync":
+		{
+			"syncPrep": function(options)
+			{
+				// The lerpSync behavior is special and always has the final word on object transform.
+				// We can't wait for our applyBehavior method to be called at the end of this jumpStart.onTick
+				// cycle because newly connecting users need lerpSync prepped before the tick cycle is even finished!!
+				// syncPrep does all the important stuff in a way that both newly connecting users & local users can utilize.
+
+				// This method gets called mid-tick from doPendingUpdates automatically by JumpStart if the object has a lerpSync behavior.
+
+				if( !!!options )
+					options = {};
+
+				this.userData.lerpSync = {};
+				this.userData.lerpSync.targetPosition = new THREE.Vector3();
+				this.userData.lerpSync.targetQuaternion = new THREE.Quaternion();
+				this.userData.lerpSync.originalPosition = new THREE.Vector3();
+				this.userData.lerpSync.originalQuaternion = new THREE.Quaternion();
+				this.userData.lerpSync.time = 1.0;
+				this.userData.lerpSync.amount = 1.0;
+
+				this.addEventListener("tick", jumpStart.behaviors.lerpSync.tickBehavior);
+			},
+			"applyBehavior": function(options)
+			{
+				this.syncData.lerpSync = {"speed": (!!options.speed) ? options.speed - 20 : 50.0};	// slower lerp speed to account for lag
+
+				if( !!!this.behaviors.lerpSync )
+					jumpStart.behaviors.lerpSync.syncPrep.call(this);
+
+				return true;
+			},
+			"tickBehavior": function()
+			{
+				if( this.userData.lerpSync.amount < 1.0 )
+				{
+					this.userData.lerpSync.amount += jumpStart.deltaTime / this.userData.lerpSync.time;
+
+					if( this.userData.lerpSync.amount >= 1.0 )
+					{
+						this.userData.lerpSync.amount = 1.0;
+						this.position.copy(this.userData.lerpSync.targetPosition);
+						this.quaternion.copy(this.userData.lerpSync.targetQuaternion)
+					}
+					else
+					{
+						this.position.lerpVectors(this.userData.lerpSync.originalPosition, this.userData.lerpSync.targetPosition, this.userData.lerpSync.amount);
+
+						var currentQuaternion = this.userData.lerpSync.originalQuaternion.clone().slerp(this.userData.lerpSync.targetQuaternion, this.userData.lerpSync.amount);
+						this.quaternion.copy(currentQuaternion);
+					}
+				}
 			}
 		}
 	};
@@ -1211,18 +1315,30 @@ JumpStart.prototype.doPendingUpdates = function()
 			{
 				for( x in instance.behaviors )
 				{
-					if( !!!data.vitalData || !!!data.vitalData.behaviors || !!!data.vitalData.behaviors[x] )
+					if( !!data.vitalData && (!!!data.vitalData.behaviors || !!!data.vitalData.behaviors[x]) )
 						instance.unapplyBehavior(x);
 				}
 			}
 		}
 
+		var deferredTransform = false;
 		if( data.hasOwnProperty("transform") )
 		{
 			instance.name = data.transform.name;
-			instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
-			instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
-			instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+
+			// There is only ONE case where transform updates would not be applied:
+			// Check if lerpSync behavior exists on this instance or in the data
+			if(
+				(!!data.vitalData && !!data.vitalData.behaviors && !!data.vitalData.behaviors.lerpSync) ||
+				(!!instance.behaviors.lerpSync && (!!!data.vitalData || !!data.vitalData.behaviors.lerpSync))
+			 )
+				deferredTransform = true;
+			else
+			{
+				instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+				instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
+				instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+			}
 		}
 
 		if( data.hasOwnProperty("vitalData") )
@@ -1232,6 +1348,38 @@ JumpStart.prototype.doPendingUpdates = function()
 
 		if( data.hasOwnProperty("syncData") )
 			this.extractData.call(this, data.syncData, instance, 1);
+
+		// Deferred transforms means a lerpSync behavior applied to this object
+		if( deferredTransform && !!instance.behaviors.lerpSync )
+		{
+			// pre-prep this instance for lerpSync if this is its 1st sync received
+			if( !!!instance.userData.lerpSync )
+				jumpStart.behaviors.lerpSync.syncPrep.call(instance);
+
+			if( !!!data.isInitialSync )
+			{
+				instance.userData.lerpSync.targetPosition.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+				instance.userData.lerpSync.targetQuaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
+
+				var distance = instance.position.distanceTo(instance.userData.lerpSync.targetPosition);
+				var autoSpeed = instance.syncData.lerpSync.speed + (0.9 * distance);
+				instance.userData.lerpSync.time = distance / autoSpeed;
+				instance.userData.lerpSync.amount = 0.0;
+				instance.userData.lerpSync.originalPosition.copy(instance.position);
+				instance.userData.lerpSync.originalQuaternion.copy(instance.quaternion);
+
+				// FIX ME: Only position is being lerped so far, but the qauternion and scale need to be lerped too.
+//				instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
+				instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+			}
+			else
+			{
+				// If this is the initial sysnc, just copy the transform in immediately
+				instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+				instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
+				instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+			}
+		}
 
 		delete this.pendingUpdates[x];
 	}
@@ -1411,6 +1559,7 @@ JumpStart.prototype.onTick = function()
 	requestAnimationFrame( function(){ jumpStart.onTick(); } );
 	this.renderer.render( this.scene, this.camera );
 
+	this.elapsedTime = this.clock.elapsedTime;
 	this.deltaTime = this.clock.getDelta();
 	this.deltaTime *= this.options.timeScale;
 
@@ -2117,7 +2266,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 				});
 				jumpStart.selfSyncingObject = false;
 
-				console.log("JumpStart: Syncing object with key " + this.syncKey + ".");
+				//console.log("JumpStart: Syncing object with key " + this.syncKey + ".");
 			}
 			else
 			{
@@ -2658,3 +2807,43 @@ window.loadJumpStart = function(options)
 {
 	window.jumpStart = new JumpStart(options);
 };
+
+				/* LERP MOVE BEHAVIOR PROTOTYPE (needs refinement)
+				car.addEventListener("spawn", function(isInitialSync)
+				{
+					// car.applyBehavior("lerpMove");
+					var distance = jumpStart.localUser.cursorHit.scaledPoint.distanceTo(this.position);
+					//var speed = 100.0;
+					var autoSpeed = 50 + (0.9 * distance);
+
+					this.syncData.lerpMove = {};
+					this.syncData.lerpMove.target = jumpStart.localUser.cursorHit.scaledPoint.clone();
+					this.syncData.lerpMove.time =  distance / autoSpeed;
+
+					this.userData.lerpMove = {};
+					this.userData.lerpMove.original = this.position.clone();
+					this.userData.lerpMove.amount = 0.0;
+
+					this.addEventListener("tick", function()
+					{
+						if( this.userData.lerpMove.amount < 1.0 )
+						{
+							this.userData.lerpMove.amount += jumpStart.deltaTime / this.syncData.lerpMove.time;
+
+							var justFinished = false;
+							if( this.userData.lerpMove.amount >= 1.0 )
+							{
+								this.userData.lerpMove.amount = 1.0;
+								justFinished = true;
+							}
+
+							this.position.lerpVectors(this.userData.lerpMove.original, this.syncData.lerpMove.target, this.userData.lerpMove.amount);
+
+							if( justFinished )
+							{
+								console.log("Animation finished!");
+							}
+						}
+					});
+				});
+				*/
