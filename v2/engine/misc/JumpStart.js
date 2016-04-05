@@ -549,7 +549,8 @@ function JumpStart(options)
 					// If we are not multiuser, then the world hasn't been created yet.
 					this.world = this.spawnInstance(null, {"parent": this.scene});
 					this.world.name = "jumpStartWorld";
-					this.world.position.add(this.worldOffset);
+					//this.world.position.add(this.worldOffset);
+					this.world.position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
 
 					this.onReadyToReady();
 				}
@@ -633,7 +634,7 @@ function JumpStart(options)
 
 									this.world = this.spawnInstance(null, {"parent": this.scene});
 									this.world.name = "jumpStartWorld";
-									this.world.position.add(this.worldOffset);
+									this.world.position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
 									this.world.sync();
 
 									// Check for initialize listeners

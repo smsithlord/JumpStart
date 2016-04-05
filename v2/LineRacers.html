@@ -7,14 +7,16 @@
 		<script>
 			loadJumpStart({
 				"appID": "LineRacers",
+				"sceneScale": 1.5,
 				"multiuserOnly": true,
-				"debug": {"showCursorPlanes": true}
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": false}
 			});
 
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModels(["models/car", "models/pixel"]).then( function()
+				jumpStart.loadModels(["models/car", "models/pixel", "models/explosion", "models/pillar"]).then( function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -54,6 +56,13 @@
 					trail.quaternion.copy(this.quaternion);
 					trail.translateZ(-20.0);
 					trail.translateY(5.0);
+
+					this.userData.particleDelay += jumpStart.deltaTime;
+					if( this.userData.particleDelay >= this.userData.particleDelay )
+					{
+						spawnParticle(trail.position, trail.quaternion);
+						this.userData.particleDelay = 0;
+					}
 				}
 
 				trail.lookAt(this.userData.previousTrailPosition);
@@ -101,6 +110,11 @@
 							// collision
 							jumpStart.removeInstance(myCar);
 						}
+					});
+
+					nextTrail.addEventListener("remove", function()
+					{
+						spawnParticle(this.position, this.quaternion);
 					});
 					
 					// update the car trail
@@ -156,8 +170,10 @@
 					this.translateZ(this.userData.speed * jumpStart.deltaTime);
 				});
 				myCar.userData.previousTrailPosition = myCar.position.clone();
+				myCar.userData.particleDelay = 0;
+				myCar.userData.particleDelayMax = 0.1;
 				myCar.addEventListener("tick", carTrailTick);
-				//myCar.addEventListener("remove", carRemoved);
+				myCar.addEventListener("remove", carRemoved);
 
 				myCar.applyBehavior("autoSync");
 				myCar.applyBehavior("lerpSync", {"speed": myCar.userData.speed});	// slower lerp speed to account for lag
@@ -167,11 +183,136 @@
 				myCar.sync();
 			}
 
+			function carRemoved()
+			{
+				spawnExplosion(this.position, 1.0);
+			}
+
+			var pillars = {};
+			var boundingLasers = {};
 			var myCar;
 			jumpStart.addEventListener("ready", function()
 			{
+				function spawnBeam(startPillarName, endPillarName, sideName)
+				{
+					var beam = jumpStart.spawnInstance("models/pixel");
+					beam.position.copy(pillars[startPillarName].position);
+					beam.lookAt(pillars[endPillarName].position);
+					beam.translateZ(5.0);
+					beam.scale.z = (beam.position.distanceTo(pillars[endPillarName].position) - 5) * 2.0;
+					beam.userData.throbMax = 1.5;
+					beam.userData.throbMin = 0.3;
+					beam.userData.throbAmount = 1.0;
+					beam.userData.throbDirection = 1.0;
+					beam.addEventListener("tick", function()
+					{
+						var amount = this.userData.throbAmount + (2.0 * this.userData.throbDirection) * jumpStart.deltaTime;
+						if( amount > this.userData.throbMax )
+						{
+							amount = this.userData.throbMax;
+							this.userData.throbDirection *= -1.0;
+						}
+						else if( amount < this.userData.throbMin )
+						{
+							amount = this.userData.throbMin;
+							this.userData.throbDirection *= -1.0;
+						}
+
+						this.scale.x += amount - this.userData.throbAmount;
+						this.scale.y += amount - this.userData.throbAmount;
+
+						this.userData.throbAmount = amount;
+						this.rotateZ(20.0 * jumpStart.deltaTime);
+
+						// Random fire a particle streak (very low chance)
+						if( Math.random() < 0.01 )
+						{
+							var particle = jumpStart.spawnInstance("models/pixel");
+							particle.position.copy(this.position);
+							particle.quaternion.copy(this.quaternion);
+							particle.scale.set(3.0, 3.0, 3.0);
+							particle.userData.originalPosition = particle.position.clone();
+							particle.userData.maxDist = this.scale.z / 2.0;
+							particle.addEventListener("tick", function()
+							{
+								this.translateZ(100.0 * jumpStart.deltaTime);
+								if( this.position.distanceTo(this.userData.originalPosition) >= this.userData.maxDist )
+									jumpStart.removeInstance(this);
+							});
+						}
+					});
+
+					boundingLasers[sideName].beams.push(beam);
+					return beam;
+				}
+
+				function spawnBeams(startPillarName, endPillarName)
+				{
+					var sideName;
+					if( startPillarName.charAt(6) === endPillarName.charAt(6) )
+					{
+						if( startPillarName.charAt(6) === "N")
+							sideName = "north";
+						else
+							sideName = "south";
+					}
+					else
+					{
+						if( startPillarName.charAt(7) === "W" )
+							sideName = "west";
+						else
+							sideName = "east";
+					}
+
+					boundingLasers[sideName] = {"beams": []};
+
+					var beam;
+					beam = spawnBeam(startPillarName, endPillarName, sideName);
+					beam.position.y = 25.0;
+
+					beam = spawnBeam(startPillarName, endPillarName, sideName);
+					beam.position.y = 7.0;
+
+					beam = spawnBeam(startPillarName, endPillarName, sideName);
+					beam.position.y = 16.0;
+				}
+
+				var pillar;
+				pillar = jumpStart.spawnInstance("models/pillar");
+				pillar.rotation.y += Math.PI / 2.0;
+				pillar.position.set(-jumpStart.worldOffset.y - 8.0, 0, -jumpStart.worldOffset.y - 8.0);
+				pillar.name = "pillarNE";
+				pillars[pillar.name] = pillar;
+
+				pillar = jumpStart.spawnInstance("models/pillar");
+				pillar.rotation.y -= Math.PI / 2.0;
+				pillar.position.set(jumpStart.worldOffset.y + 8.0, 0, -jumpStart.worldOffset.y - 8.0);
+				pillar.name = "pillarNW";
+				pillars[pillar.name] = pillar;
+
+				pillar = jumpStart.spawnInstance("models/pillar");
+				pillar.rotation.y += Math.PI / 2.0;
+				pillar.position.set(-jumpStart.worldOffset.y - 8.0, 0, jumpStart.worldOffset.y + 8.0);
+				pillar.name = "pillarSE";
+				pillars[pillar.name] = pillar;
+
+				pillar = jumpStart.spawnInstance("models/pillar");
+				pillar.rotation.y += Math.PI / 2.0;
+				pillar.position.set(jumpStart.worldOffset.y + 8.0, 0, jumpStart.worldOffset.y + 8.0);
+				pillar.name = "pillarSW";
+				pillars[pillar.name] = pillar;
+
+				// Spawn all the bounding laser beams.
+				spawnBeams("pillarNE", "pillarNW");
+				spawnBeams("pillarSW", "pillarSE");
+				spawnBeams("pillarSE", "pillarNE");
+				spawnBeams("pillarNW", "pillarSW");
+
 				var floorBoundary = jumpStart.enclosureBoundary("floor");
 				floorBoundary.addEventListener("cursordown", spawnMyCar);
+
+				// Make the floor 40% larger to avoid Altspace from thinking mouse clicks are not captured along the edges
+				floorBoundary.scale.multiplyScalar(1.4);
 
 				myCar = jumpStart.scene.getObjectByName("car" + jumpStart.localUser.userID);
 				if( !!myCar )
@@ -181,6 +322,119 @@
 				// false: ASYNCHRONOUS (must call JumpStart.run)
 				return true;
 			});
+
+			function spawnExplosion(position, scale)
+			{
+				var explosion = jumpStart.spawnInstance("models/explosion");
+				explosion.position.copy(position);
+
+				explosion.userData.scaleSize = 0.001;
+				explosion.userData.scaleDirection = 1;
+				explosion.userData.maxScale = scale;
+
+				explosion.addEventListener("tick", function()
+				{
+					if( this.userData.scaleDirection === 1 )
+					{
+						this.userData.scaleSize += 5.0 * jumpStart.deltaTime;
+
+						if( this.userData.scaleSize >= this.userData.maxScale )
+							this.userData.scaleDirection = -1;
+					}
+					else
+					{
+						this.userData.scaleSize -= 4.0 * jumpStart.deltaTime;
+
+						if( this.userData.scaleSize <= 0.001 )
+						{
+							jumpStart.removeInstance(this);
+							return;
+						}
+					}
+
+					this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+					this.rotateY(5.0 * jumpStart.deltaTime);
+					this.rotateX(10.0 * jumpStart.deltaTime);
+				});
+			}
+
+			function spawnParticle(position, quaternion)
+			{
+				particle = jumpStart.spawnInstance("models/pixel");
+				particle.position.copy(position);
+				particle.quaternion.copy(quaternion);
+
+//				particle.translateZ(-20.0);
+//				particle.translateY(5.0);
+
+				var scale = Math.random();
+				if( scale < 0.5 )
+					scale = 0.5;
+
+				particle.scale.multiplyScalar(scale);
+
+				var randoX = 3.0 * Math.random();
+				if( Math.random() > 0.5 )
+					randoX *= -1.0;
+
+				var randoY = 3.0 * Math.random();
+				if( Math.random() > 0.5 )
+					randoY *= -1.0;
+
+				var randoZ = 3.0 * Math.random();
+				if( Math.random() > 0.5 )
+					randoZ *= -1.0;
+
+				particle.translateX(randoX);
+				particle.translateY(randoY);
+				particle.translateZ(randoZ);
+
+				particle.userData.life = 0.3;
+				particle.scale.multiplyScalar(4.0);
+
+				particle.addEventListener("tick", function()
+				{
+					if( this.userData.hasOwnProperty("will") )
+						this.userData.will -= 1.0 * jumpStart.deltaTime;
+
+					if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+					{
+						var randoPitch = 1.0 * Math.random();
+						if( Math.random() > 0.5 )
+							randoPitch *= -1.0;
+
+						var randoYaw = 1.0 * Math.random();
+						if( Math.random() > 0.5 )
+							randoYaw *= -1.0;
+
+						var randoRoll = 1.0 * Math.random();
+						if( Math.random() > 0.5 )
+							randoRoll *= -1.0;
+
+						this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+						this.userData.will = 3.0 * Math.random();
+					}
+
+					this.userData.life -= jumpStart.deltaTime;
+					if( this.userData.life <= 0 )
+					{
+						this.scale.x -= 1.0 * jumpStart.deltaTime;
+						this.scale.y -= 1.0 * jumpStart.deltaTime;
+						this.scale.z -= 1.0 * jumpStart.deltaTime;
+					}
+
+					this.rotateX(this.userData.direction.x * jumpStart.deltaTime);
+					this.rotateY(this.userData.direction.y * jumpStart.deltaTime);
+					this.rotateZ(this.userData.direction.z * jumpStart.deltaTime);
+
+					this.translateZ(15.0 * jumpStart.deltaTime);
+					this.position.y += 10.0 * jumpStart.deltaTime;
+
+					if( this.scale.x <= 0.1 )
+						jumpStart.removeInstance(this);
+				});
+			}
+
 		</script>
 	</head>
 
