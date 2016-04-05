@@ -14,7 +14,7 @@
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModels(["models/car"]).then( function()
+				jumpStart.loadModels(["models/car", "models/pixel"]).then( function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -24,17 +24,130 @@
 				return false;
 			});
 
+			function carTrailTick()
+			{
+				var trail = this.userData.trail;
+				if( !!!trail )
+				{
+					trail = jumpStart.spawnInstance("models/pixel");
+					trail.addEventListener("tick", function()
+					{
+						if( !this.userData.car.parent )
+							jumpStart.removeInstance(this);
+					});
+					trail.userData.isFading = false;
+					trail.userData.ray = new THREE.Ray();
+					trail.userData.car = this;
+					trail.scale.y = 20.0;
+					trail.scale.x = 4.0;
+					trail.position.copy(this.position);
+					trail.quaternion.copy(this.quaternion);
+					trail.translateZ(-20.0);
+					trail.translateY(5.0);
+
+					this.userData.trail = trail;
+					this.userData.previousTrailPosition = trail.position.clone();
+				}
+				else
+				{
+					trail.position.copy(this.position);
+					trail.quaternion.copy(this.quaternion);
+					trail.translateZ(-20.0);
+					trail.translateY(5.0);
+				}
+
+				trail.lookAt(this.userData.previousTrailPosition);
+				trail.rotateZ(Math.PI);
+				trail.scale.z = trail.position.distanceTo(this.userData.previousTrailPosition) * 2.0;
+
+				var direction = this.userData.previousTrailPosition.clone().sub(trail.position).normalize();
+				//trail.userData.ray.set(trail.position, direction);	// Not sure if this clones or not??
+				trail.userData.ray.origin.copy(trail.position);
+				trail.userData.ray.direction.copy(direction);
+
+				if( trail.scale.z > 20.0 )
+				{
+					// Spawn the object
+					var nextTrail = jumpStart.spawnInstance("models/pixel");
+					nextTrail.userData.isFading = trail.userData.isFading;
+					nextTrail.userData.car = this;
+					nextTrail.scale.y = 20.0;
+					nextTrail.scale.x = 4.0;
+					nextTrail.position.copy(this.position);
+					nextTrail.quaternion.copy(this.quaternion);
+					nextTrail.translateZ(-20.0);
+					nextTrail.translateY(5.0);
+					nextTrail.userData.ray = new THREE.Ray();
+
+					// ray collision check behavior
+					nextTrail.addEventListener("tick", function()
+					{
+						if( !this.userData.car.parent )
+						{
+							jumpStart.removeInstance(this);
+							return;
+						}
+
+						if( !!!this.userData.nextTrail || !!!myCar )
+							return;
+						
+						var flattenedPosition = myCar.position.clone();
+						flattenedPosition.y = this.userData.ray.origin.y;
+
+						var closestPoint = this.userData.ray.closestPointToPoint(flattenedPosition);
+
+						if( closestPoint.distanceTo(flattenedPosition) < 5.0 && closestPoint.distanceTo(this.userData.ray.origin) < this.scale.z )
+						{
+							// collision
+							jumpStart.removeInstance(myCar);
+						}
+					});
+					
+					// update the car trail
+					trail.userData.nextTrail = nextTrail;
+					var oldTrail = this.userData.trail;
+					this.userData.trail = nextTrail;
+					this.userData.previousTrailPosition = new THREE.Vector3().copy(nextTrail.position);
+
+					if( !oldTrail.userData.isFading )
+					{
+						nextTrail.userData.isFading = true;
+						oldTrail.userData.isFading = true;
+						oldTrail.userData.fadeSpeed = 150.0;
+						oldTrail.addEventListener("tick", function()
+						{
+							// Fade the trail to oblivion
+							var zScale = this.scale.z - this.userData.fadeSpeed * jumpStart.deltaTime;
+
+							if( zScale <= 0.1 )
+							{
+								zScale = 0.1;
+
+								if( !!this.userData.nextTrail )
+								{
+									this.userData.nextTrail.userData.fadeSpeed = 150.0;
+									this.userData.nextTrail.addEventListener("tick", arguments.callee);
+									jumpStart.removeInstance(this);
+								}
+							}
+
+							this.scale.z = zScale;
+						});
+					}
+				}
+			}
+
 			function spawnMyCar()
 			{
 				// Does this user already have a car?
-				var car = jumpStart.scene.getObjectByName("car" + jumpStart.localUser.userID);
-				if( !!car )
+				myCar = jumpStart.scene.getObjectByName("car" + jumpStart.localUser.userID);
+				if( !!myCar )
 					return;
 
-				car = jumpStart.spawnInstance("models/car");
-				car.name = "car" + jumpStart.localUser.userID;
-				car.userData.speed = 100.0;
-				car.addEventListener("tick", function()
+				myCar = jumpStart.spawnInstance("models/car");
+				myCar.name = "car" + jumpStart.localUser.userID;
+				myCar.userData.speed = 100.0;
+				myCar.addEventListener("tick", function()
 				{
 					if( !jumpStart.localUser.cursorHit )
 						return;
@@ -42,20 +155,27 @@
 					this.lookAt(jumpStart.localUser.cursorHit.scaledPoint);
 					this.translateZ(this.userData.speed * jumpStart.deltaTime);
 				});
+				myCar.userData.previousTrailPosition = myCar.position.clone();
+				myCar.addEventListener("tick", carTrailTick);
+				//myCar.addEventListener("remove", carRemoved);
 
-				car.applyBehavior("autoSync");
-				car.applyBehavior("lerpSync", {"speed": car.userData.speed});	// slower lerp speed to account for lag
+				myCar.applyBehavior("autoSync");
+				myCar.applyBehavior("lerpSync", {"speed": myCar.userData.speed});	// slower lerp speed to account for lag
+				myCar.applyBehavior("autoRemoval");
 
 				// Sync it right now too
-				car.sync();
+				myCar.sync();
 			}
 
-			var maxPlayers = 3;
-			var players = [];
+			var myCar;
 			jumpStart.addEventListener("ready", function()
 			{
 				var floorBoundary = jumpStart.enclosureBoundary("floor");
 				floorBoundary.addEventListener("cursordown", spawnMyCar);
+
+				myCar = jumpStart.scene.getObjectByName("car" + jumpStart.localUser.userID);
+				if( !!myCar )
+					jumpStart.removeInstance(myCar);
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.run)

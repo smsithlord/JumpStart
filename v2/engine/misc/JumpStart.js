@@ -155,6 +155,83 @@ function JumpStart(options)
 		"west": null
 	};
 	this.behaviors = {
+		"autoRemoval":
+		{
+			"applyBehavior": function(options)
+			{
+				this.syncData.autoRemoval = {};
+				this.syncData.autoRemoval.heartbeats = 0;
+				this.syncData.autoRemoval.flatlineDelay = (!!options.flatlineDelay) ? options.flatlineDelay : 10.0;
+				this.syncData.autoRemoval.adopterID = 0;
+				this.addEventListener("tick", jumpStart.behaviors.autoRemoval.tickBehavior);
+				return true;
+			},
+			"unapplyBehavior": function()
+			{
+				delete this.syncData["autoRemoval"];
+				delete this.userData["autoRemoval"];
+				return true;
+			},
+			"tickBehavior": function()
+			{
+				var isOwner = (this.ownerID === jumpStart.localUser.userID);
+				if( !!!this.userData.autoRemoval )
+					this.userData.autoRemoval = {
+						"previousHeartbeats": this.syncData.autoRemoval.heartbeat,
+						"time": (isOwner) ? 0 : jumpStart.elapsedTime
+					};
+
+				if( isOwner )
+				{
+					// As the owner, we just increase the heartbeats value according to the rate & do a shallow sync each time.
+					this.userData.autoRemoval.time += jumpStart.deltaTime;
+					if( this.userData.autoRemoval.time >= this.syncData.autoRemoval.flatlineDelay / 2.0 )
+					{
+						this.userData.autoRemoval.time = 0;
+						this.syncData.autoRemoval.heartbeats++;
+						this.sync({"vitalData": true, "syncData": true});
+					}
+				}
+				else
+				{
+					// As a client, we monitor the time since the last heartbeats change and remove this object if it needs to be.
+					if( this.syncData.autoRemoval.heartbeats !== this.userData.autoRemoval.previousHeartbeats )
+					{
+						this.userData.autoRemoval.previousHeartbeats = this.syncData.autoRemoval.heartbeats;
+						this.userData.autoRemoval.time = jumpStart.elapsedTime;
+					}
+					else if( jumpStart.elapsedTime - this.userData.autoRemoval.time >= this.syncData.autoRemoval.flatlineDelay )
+					{
+						// 1. Set the ownerID to 0.
+						// 2. Set us as the adopterID on the firebase.
+						// 3. Wait flatlineDelay/2.0 more seconds
+						// 4. If we are still the adopterID, take control of this item and remove it.
+
+						if( !this.syncData.autoRemoval.adopterID )
+						{
+							this.syncData.autoRemoval.adopterID = jumpStart.localUser.userID;
+							this.sync({"syncData": true});
+						}
+						else if( this.syncData.autoRemoval.adopterID === jumpStart.localUser.userID && jumpStart.elapsedTime - this.userData.autoRemoval.time >= this.syncData.autoRemoval.flatlineDelay * 1.5 )
+						{
+							// Take control
+							this.ownerID = jumpStart.localUser.userID;
+							this.syncData.autoRemoval.adopterID = 0;
+							this.syncData.autoRemoval.heartbeats++;
+							this.userData.autoRemoval.time = 0;
+
+							// Remove us the next tick cycle, to avoid immediate respawn issues.
+							this.addEventListener("tick", function()
+							{
+								jumpStart.removeInstance(this);
+							});
+
+							this.sync();
+						}
+					}
+				}
+			}
+		},
 		"autoSync":
 		{
 			"applyBehavior": function(options)
@@ -357,6 +434,13 @@ function JumpStart(options)
 				if( !!!this.behaviors.lerpSync )
 					jumpStart.behaviors.lerpSync.syncPrep.call(this);
 
+				return true;
+			},
+			"unapplyBehavior": function()
+			{
+				delete this.syncData["lerpSync"];
+				delete this.userData["lerpSync"];
+				this.removeEventListener("tick", jumpStart.behaviors.lerpSync.tickBehavior);
 				return true;
 			},
 			"tickBehavior": function()
@@ -1300,6 +1384,12 @@ JumpStart.prototype.doPendingUpdates = function()
 		{
 			instance = this.syncedObjects[x];
 
+			if( !instance )
+			{
+				delete this.pendingUpdates[x];
+				continue;
+			}
+
 			var x;
 			// Handle changed behaviors BEFORE merging in the rest of the networked data
 			if( !!data.vitalData && !!data.vitalData.behaviors )
@@ -1529,7 +1619,12 @@ JumpStart.prototype.onTick = function()
 
 			// Check for tick listeners on the object
 			for( y in object.listeners.tick )
+			{
+				if( !!!object.listeners.tick[y] )
+					continue;
+				
 				object.listeners.tick[y].call(object);
+			}
 		}
 	}
 
@@ -1949,7 +2044,7 @@ JumpStart.prototype.removeInstance = function(instance)
 
 	delete this.objects[uuid];
 
-	console.log("JumpStart: Removed an object.");
+	//console.log("JumpStart: Removed an object.");
 };
 
 JumpStart.prototype.enclosureBoundary = function(boundaryID)
@@ -2384,6 +2479,33 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 
 			// BaseClass::addEventListener
 			originalRemoveEventListener.apply(window, arguments);
+		}.bind(instance),
+		"hasEventListener": function(eventType, listener)
+		{
+			// Make sure this is a valid event type
+			if( validEvents.indexOf(eventType) < 0 )
+			{
+				console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified. Removing as non-JumpStart listener.");
+				originalRemoveEventListener.apply(window, arguments);
+				return;
+			}
+
+			if( this.listeners.hasOwnProperty(eventType) )
+			{
+				var x;
+				for( x in this.listeners[eventType] )
+				{
+					if( this.listeners[eventType][x] === listener )
+					{
+						return true;
+					}
+				}
+
+				return false;
+			}
+
+			// BaseClass::addEventListener
+			originalRemoveEventListener.apply(window, arguments);
 		}.bind(instance)
 	};
 	
@@ -2403,7 +2525,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	for( x in jumpStartData )
 	{
 		// Warn if we are overwriting anything (other than *EventListener methods, because we call BaseClass on those).
-		if( typeof instance[x] !== "undefined" && x !== "addEventListener" && x !== "removeEventListener" )
+		if( typeof instance[x] !== "undefined" && x !== "addEventListener" && x !== "removeEventListener" && x !== "hasEventListener" )
 			console.warn("JumpStart: Object already has property " + x + ".");
 		
 		instance[x] = jumpStartData[x];
@@ -2412,7 +2534,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	// JumpStart object bookkeeping.
 	this.objects[instance.uuid] = instance;
 
-	console.log("JumpStart: Spawned an object.");
+//	console.log("JumpStart: Spawned an object.");
 	return instance;
 };
 
