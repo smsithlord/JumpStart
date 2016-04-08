@@ -155,6 +155,76 @@ function JumpStart(options)
 		"west": null
 	};
 	this.behaviors = {
+		"footballPass":
+		{
+			"applyBehavior": function(options)
+			{
+				// REQUIRED: targetPosition, originalPosition
+				this.syncData.footballPass = 
+				{
+					"targetPosition": options.targetPosition,
+					"originalPosition": options.originalPosition,
+					"height": (!!options.height) ? options.height : 100.0,
+					"callbackFuncName": (!!options.callbackFuncName) ? options.callbackFuncName : "defaultCallback"
+				}
+
+				var distance = options.targetPosition.distanceTo(options.originalPosition);
+				var autoSpeed = 50 + (0.9 * distance);
+				this.syncData.footballPass.time = distance / autoSpeed;
+
+				this.addEventListener("tick", jumpStart.behaviors.footballPass.tickBehavior);
+				return true;
+			},
+			"defaultCallback": function()
+			{
+
+			},
+			"removeOnFinish": function()
+			{
+				jumpStart.removeInstance(this);
+			},
+			"tickBehavior": function()
+			{
+				if( !!!this.userData.footballPass )
+					this.userData.footballPass = {"amount": 0.0};
+
+				if( this.userData.footballPass.amount < 1.0 )
+				{
+					this.userData.footballPass.amount += jumpStart.deltaTime / this.syncData.footballPass.time;
+
+					var justFinished = false;
+					if( this.userData.footballPass.amount >= 1.0 )
+					{
+						this.userData.footballPass.amount = 1.0;
+						justFinished = true;
+					}
+
+					this.position.lerpVectors(this.syncData.footballPass.originalPosition, this.syncData.footballPass.targetPosition, this.userData.footballPass.amount);
+
+					var amount = this.userData.footballPass.amount;
+					amount *= 2.0;
+
+					if( amount <= 1 )
+					{
+						amount = 1 - amount;
+						amount *= amount;
+						this.position.y += this.syncData.footballPass.height - (amount * this.syncData.footballPass.height);
+					}
+					else
+					{
+						amount -= 1;
+						amount *= amount;
+						this.position.y += this.syncData.footballPass.height - (amount * this.syncData.footballPass.height);
+					}
+
+					if( justFinished )
+					{
+						jumpStart.behaviors.footballPass[this.syncData.footballPass.callbackFuncName].call(this);
+						//jumpStart.removeInstance(ball);
+					}
+				}
+			}
+		},
 		"autoRemoval":
 		{
 			"applyBehavior": function(options)
@@ -177,7 +247,7 @@ function JumpStart(options)
 				var isOwner = (this.ownerID === jumpStart.localUser.userID);
 				if( !!!this.userData.autoRemoval )
 					this.userData.autoRemoval = {
-						"previousHeartbeats": this.syncData.autoRemoval.heartbeat,
+						"previousHeartbeats": this.syncData.autoRemoval.heartbeats,
 						"time": (isOwner) ? 0 : jumpStart.elapsedTime
 					};
 
@@ -188,7 +258,7 @@ function JumpStart(options)
 					if( this.userData.autoRemoval.time >= this.syncData.autoRemoval.flatlineDelay / 2.0 )
 					{
 						this.userData.autoRemoval.time = 0;
-						this.syncData.autoRemoval.heartbeats++;
+						this.syncData.autoRemoval.heartbeats = this.syncData.autoRemoval.heartbeats + 1;
 						this.sync({"vitalData": true, "syncData": true});
 					}
 				}
@@ -217,7 +287,7 @@ function JumpStart(options)
 							// Take control
 							this.ownerID = jumpStart.localUser.userID;
 							this.syncData.autoRemoval.adopterID = 0;
-							this.syncData.autoRemoval.heartbeats++;
+							this.syncData.autoRemoval.heartbeats = this.syncData.autoRemoval.heartbeats + 1;
 							this.userData.autoRemoval.time = 0;
 
 							// Remove us the next tick cycle, to avoid immediate respawn issues.
@@ -1433,12 +1503,10 @@ JumpStart.prototype.doPendingUpdates = function()
 		}
 
 		if( data.hasOwnProperty("vitalData") )
-		{
-			this.extractData.call(this, data.vitalData, instance, 1);
-		}
+			this.extractData.call(this, data.vitalData, instance, Infinity);
 
 		if( data.hasOwnProperty("syncData") )
-			this.extractData.call(this, data.syncData, instance, 1);
+			this.extractData.call(this, data.syncData, instance.syncData, Infinity);
 
 		// Deferred transforms means a lerpSync behavior applied to this object
 		if( deferredTransform && !!instance.behaviors.lerpSync )

@@ -16,7 +16,7 @@
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModels(["models/car", "models/pixel", "models/explosion", "models/pillar"]).then( function()
+				jumpStart.loadModels(["models/car", "models/pixel", "models/explosion", "models/pillar", "models/ball"]).then( function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -97,7 +97,7 @@
 							return;
 						}
 
-						if( !!!this.userData.nextTrail || !!!myCar )
+						if( !!!this.userData.nextTrail || !myCar || this.userData.car !== myCar )
 							return;
 						
 						var flattenedPosition = myCar.position.clone();
@@ -131,7 +131,9 @@
 						oldTrail.addEventListener("tick", function()
 						{
 							// Fade the trail to oblivion
-							var zScale = this.scale.z - this.userData.fadeSpeed * jumpStart.deltaTime;
+							var speed = (myCar) ? this.userData.fadeSpeed : this.userData.fadeSpeed / 1.05;
+							//var speed = this.userData.fadeSpeed;
+							var zScale = this.scale.z - speed * jumpStart.deltaTime;
 
 							if( zScale <= 0.1 )
 							{
@@ -151,17 +153,81 @@
 				}
 			}
 
-			function spawnMyCar()
+			function ballSpawn(isInitialSync)
 			{
-				// Does this user already have a car?
-				myCar = jumpStart.scene.getObjectByName("car" + jumpStart.localUser.userID);
-				if( !!myCar )
+				var ballHalo = jumpStart.spawnInstance("models/explosion", {"parent": this});
+				ballHalo.scale.set(-0.3, -0.3, -0.3);
+				ballHalo.addEventListener("tick", function()
+				{
+					this.rotateX(20.0 * jumpStart.deltaTime);
+					this.rotateY(40.0 * jumpStart.deltaTime);
+				});
+
+				this.userData.slimeDelay = 0.1;
+				this.userData.halo = ballHalo;
+				spawnExplosion(this.position, 0.3, 4);
+			}
+
+			function ballRemove()
+			{
+				spawnExplosion(this.position, 1.0);
+			}
+
+			function ballTick()
+			{
+				if( !!!this.userData.halo )
 					return;
 
-				myCar = jumpStart.spawnInstance("models/car");
-				myCar.name = "car" + jumpStart.localUser.userID;
-				myCar.userData.speed = 100.0;
-				myCar.addEventListener("tick", function()
+				this.userData.slimeDelay -= jumpStart.deltaTime;
+
+				if( this.userData.slimeDelay <= 0 )
+				{
+					this.userData.slimeDelay = 0.1;
+
+					var halo = jumpStart.spawnInstance(this.userData.halo.modelFile);
+					halo.position.copy(this.position);
+					halo.scale.copy(this.userData.halo.scale);
+					halo.rotation.copy(this.userData.halo.rotation);
+
+					halo.addEventListener("tick", function()
+					{
+						var delta = 1.0 * jumpStart.deltaTime;
+						this.scale.set(this.scale.x + delta, this.scale.y + delta, this.scale.z + delta);
+
+						if( this.scale.x > -0.1 )
+							jumpStart.removeInstance(this);
+					});
+				}
+			}
+
+			function fireCannon()
+			{
+				var ball = jumpStart.spawnInstance("models/ball");
+				ball.position.copy(pillars["pillarNE"].position);
+				ball.position.y += 34.0;
+
+				// Explosive behavior
+				ball.addEventListener("remove", ballRemove);
+
+				// pink slime
+				ball.addEventListener("tick", ballTick);
+
+
+
+
+				ball.addEventListener("spawn", ballSpawn);
+
+				ball.applyBehavior("footballPass", {"targetPosition": jumpStart.localUser.cursorHit.scaledPoint.clone(), "originalPosition": ball.position.clone(), "callbackFuncName": "removeOnFinish"});
+
+				ball.sync();
+			}
+
+			function spawnPlayerCar()
+			{
+				var car = jumpStart.spawnInstance("models/car");
+				car.name = "playerCar";
+				car.userData.speed = 100.0;
+				car.addEventListener("tick", function()
 				{
 					if( !jumpStart.localUser.cursorHit )
 						return;
@@ -169,28 +235,43 @@
 					this.lookAt(jumpStart.localUser.cursorHit.scaledPoint);
 					this.translateZ(this.userData.speed * jumpStart.deltaTime);
 				});
-				myCar.userData.previousTrailPosition = myCar.position.clone();
-				myCar.userData.particleDelay = 0;
-				myCar.userData.particleDelayMax = 0.1;
-				myCar.addEventListener("tick", carTrailTick);
-				myCar.addEventListener("remove", carRemoved);
+				car.userData.previousTrailPosition = car.position.clone();
+				car.userData.particleDelay = 0;
+				car.userData.particleDelayMax = 0.1;
+				car.addEventListener("tick", carTrailTick);
+				car.addEventListener("remove", carRemoved);
 
-				myCar.applyBehavior("autoSync");
-				myCar.applyBehavior("lerpSync", {"speed": myCar.userData.speed});	// slower lerp speed to account for lag
-				myCar.applyBehavior("autoRemoval");
+				car.applyBehavior("autoSync");
+				car.applyBehavior("lerpSync", {"speed": car.userData.speed});	// slower lerp speed to account for lag
+				car.applyBehavior("autoRemoval");
 
 				// Sync it right now too
-				myCar.sync();
+				car.sync();
+
+				myCar = car;
+			}
+
+			function playerClick()
+			{
+				// Does this user already have a car?
+				var car = jumpStart.scene.getObjectByName("playerCar");
+				if( !!car )
+					fireCannon();
+				else
+					spawnPlayerCar();
 			}
 
 			function carRemoved()
 			{
 				spawnExplosion(this.position, 1.0);
+
+				if( myCar )
+					myCar = null;
 			}
 
 			var pillars = {};
 			var boundingLasers = {};
-			var myCar;
+			var myCar = null;
 			jumpStart.addEventListener("ready", function()
 			{
 				function spawnBeam(startPillarName, endPillarName, sideName)
@@ -309,26 +390,30 @@
 				spawnBeams("pillarNW", "pillarSW");
 
 				var floorBoundary = jumpStart.enclosureBoundary("floor");
-				floorBoundary.addEventListener("cursordown", spawnMyCar);
+				floorBoundary.addEventListener("cursordown", playerClick);
 
 				// Make the floor 40% larger to avoid Altspace from thinking mouse clicks are not captured along the edges
 				floorBoundary.scale.multiplyScalar(1.4);
 
-				myCar = jumpStart.scene.getObjectByName("car" + jumpStart.localUser.userID);
-				if( !!myCar )
-					jumpStart.removeInstance(myCar);
+				car = jumpStart.scene.getObjectByName("playerCar");
+				if( !!car && car.ownerID === jumpStart.localUser.userID )
+					jumpStart.removeInstance(car);
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.run)
 				return true;
 			});
 
-			function spawnExplosion(position, scale)
+			function spawnExplosion(position, scale, maxParticles)
 			{
+				if( !!!maxParticles )
+					maxParticles = 16.0;
+
 				var explosion = jumpStart.spawnInstance("models/explosion");
 				explosion.position.copy(position);
 
-				explosion.userData.scaleSize = 0.001;
+				explosion.userData.scaleSize = scale / 8.0;
+				explosion.scale.set(explosion.userData.scaleSize, explosion.userData.scaleSize, explosion.userData.scaleSize);
 				explosion.userData.scaleDirection = 1;
 				explosion.userData.maxScale = scale;
 
@@ -356,6 +441,108 @@
 					this.rotateY(5.0 * jumpStart.deltaTime);
 					this.rotateX(10.0 * jumpStart.deltaTime);
 				});
+
+				//var maxParticles = 16;
+				var i, particle;
+				for( i = 0; i < maxParticles; i++ )
+				{
+					particle = jumpStart.spawnInstance("models/pixel");
+					particle.position.copy(explosion.position);
+					particle.rotation.copy(explosion.rotation);
+
+					var scale = Math.random();
+					if( scale < 0.5 )
+						scale = 0.5;
+
+					particle.scale.multiplyScalar(scale);
+
+					var randoX = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoX *= -1.0;
+
+					var randoY = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoY *= -1.0;
+
+			//		if( randoY < 0 )
+			//			randoY = 0;
+
+					var randoZ = 3.0 * Math.random();
+					if( Math.random() > 0.5 )
+						randoZ *= -1.0;
+
+					particle.translateX(randoX);
+
+					if( randoY > 0 )
+						particle.translateY(randoY);
+
+					particle.translateZ(randoZ);
+
+					explosion.lookAt(particle.position);
+					particle.rotation.copy(explosion.rotation);
+
+					particle.userData.shock = 0.15;
+					particle.userData.life = 0.1;
+					particle.scale.multiplyScalar(10.0);
+
+					particle.addEventListener("tick", function()
+					{
+						this.userData.shock -= jumpStart.deltaTime;
+
+						if( this.userData.shock <= 0.0 )
+						{
+							if( this.userData.hasOwnProperty("will") )
+								this.userData.will -= 1.0 * jumpStart.deltaTime;
+
+							if( !this.userData.hasOwnProperty("direction") || this.userData.will <= 0)
+							{
+								var randoPitch = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoPitch *= -1.0;
+
+								var randoYaw = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoYaw *= -1.0;
+
+								var randoRoll = Math.PI * Math.random();
+								if( Math.random() > 0.5 )
+									randoRoll *= -1.0;
+
+								this.userData.direction = new THREE.Vector3(randoPitch, randoYaw, randoRoll);
+								this.userData.will = 3.0 * Math.random();
+							}
+
+							this.userData.life -= jumpStart.deltaTime;
+							if( this.userData.life <= 0 )
+							{
+								//g_scene.remove(this);
+			//					this.JumpStart.onTick = function()
+			//					{
+									this.scale.x -= 6.0 * jumpStart.deltaTime;
+									this.scale.y -= 6.0 * jumpStart.deltaTime;
+									this.scale.z -= 6.0 * jumpStart.deltaTime;
+
+			//					};
+
+			//					return;
+							}
+
+							this.rotateX(this.userData.direction.x * jumpStart.deltaTime);
+							this.rotateY(this.userData.direction.y * jumpStart.deltaTime);
+							this.rotateZ(this.userData.direction.z * jumpStart.deltaTime);
+
+							this.translateZ(15.0 * jumpStart.deltaTime);
+							this.position.y += 10.0 * jumpStart.deltaTime;
+
+							if( this.scale.x <= 0.1 )
+								jumpStart.removeInstance(this);
+						}
+						else
+						{
+							this.translateZ(200.0 * jumpStart.deltaTime);
+						}
+					});
+				}
 			}
 
 			function spawnParticle(position, quaternion)
@@ -363,9 +550,6 @@
 				particle = jumpStart.spawnInstance("models/pixel");
 				particle.position.copy(position);
 				particle.quaternion.copy(quaternion);
-
-//				particle.translateZ(-20.0);
-//				particle.translateY(5.0);
 
 				var scale = Math.random();
 				if( scale < 0.5 )
