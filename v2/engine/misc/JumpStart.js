@@ -181,7 +181,8 @@ function JumpStart(options)
 			},
 			"removeOnFinish": function()
 			{
-				jumpStart.removeInstance(this);
+				if( this.ownerID === jumpStart.localUser.userID )
+					jumpStart.removeInstance(this);
 			},
 			"tickBehavior": function()
 			{
@@ -1257,6 +1258,55 @@ JumpStart.prototype.onReadyToPrecache = function()
 	};
 };
 
+JumpStart.prototype.spawnTextPlane = function(options)
+{
+//	scoreboard.position.copy(this.position);
+//	scoreboard.rotation.copy(this.rotation);
+//	scoreboard.translateY(56.0);
+
+	var geometry = new THREE.BoxGeometry(60, 6.5, 0);
+	var material;
+
+	// create a canvas element
+	var scoreCanvas = document.createElement('canvas');
+	scoreCanvas.width = 550 * this.worldScale;
+	scoreContext = scoreCanvas.getContext('2d');
+	scoreContext.textAlign = "center";
+	scoreContext.textBaseline = "middle";
+	scoreContext.font = "Bold 100px Arial";
+	scoreContext.fillStyle = "rgba(255,0,0,0.95)";
+   	scoreContext.fillText('8888', scoreCanvas.width / 2.0, scoreCanvas.height / 2.0);
+
+	// canvas contents will be used for a texture
+	var scoreTexture = new THREE.Texture(scoreCanvas) 
+	scoreTexture.needsUpdate = true;
+
+	material = new THREE.MeshBasicMaterial({map: scoreTexture, visible: true});
+
+	var scoreboard = this.spawnInstance(null);
+//	scoreboard.userData.parentObject = this;
+
+	var scoreSlate = new THREE.Mesh(geometry, material);
+	scoreboard.add(scoreSlate);
+
+	scoreboard.addEventListener("tick", function()
+	{
+		if( !jumpStart.isAltspace )
+			eyePosition = jumpStart.camera.position.clone();
+		else
+		{
+			return;
+			var joint = this.localUser.skeleton.getJoint("Eye");
+			var scaledJointPosition = new THREE.Vector3().copy(joint.position).multiplyScalar(1/this.worldScale);
+			eyePosition = scaledJointPosition;
+		}
+
+		this.up.set(0, 1, 0);
+		this.lookAt(eyePosition);
+		this.rotateY(Math.PI);
+	});
+};
+
 JumpStart.prototype.spawnCursorPlane = function(options)
 {
 	var defaultOptions = {
@@ -2086,38 +2136,83 @@ JumpStart.prototype.removeInstance = function(instance)
 		return;
 
 	var uuid = instance.uuid;
-	object = this.objects[uuid];	// FIX ME: Don't search through the objects array twice! Combine this with the if statement above.
+	//object = this.objects[uuid];	// FIX ME: Don't search through the objects array twice! Combine this with the if statement above.
 
 	// Unhover this object, but ignore listeners
-	if( this.hoveredObject === object )
+	if( this.hoveredObject === instance )
 		this.hoveredObject = null;
 
 	// Unclick this object, but ignore listeners
-	if( this.clickedObject === object )
+	if( this.clickedObject === instance )
 		this.clickedObject = null;
 
 	// Now remove this object
-	for( listenerName in object.listeners.remove )
-		object.listeners.remove[listenerName].call(object);
+	for( listenerName in instance.listeners.remove )
+		instance.listeners.remove[listenerName].call(instance);
 
-	object.parent.remove(object);
+	instance.parent.remove(instance);
 
-	if( object.syncKey && this.syncedObjects.hasOwnProperty(object.syncKey))
+	if( instance.syncKey && this.syncedObjects.hasOwnProperty(instance.syncKey))
 	{
 		// Remove us from immediately from our local synced objects list
-		delete this.syncedObjects[object.syncKey];
+		delete this.syncedObjects[instance.syncKey];
 
 		// Remove us from the firebase
-		this.firebase.roomRef.child("objects").child(object.syncKey).remove();
+		this.firebase.roomRef.child("objects").child(instance.syncKey).remove();
 	}
 
 	delete this.objects[uuid];
 
-	//console.log("JumpStart: Removed an object.");
+	//console.log("JumpStart: Removed an instance.");
 };
 
 JumpStart.prototype.enclosureBoundary = function(boundaryID)
 {
+	function addTickListener(axis, direction)
+	{
+		if( !!!direction )
+			direction = 1.0;
+
+		this.addEventListener("tick", function()
+		{
+			if( jumpStart.cursorRay )
+			{
+				if( jumpStart.cursorRay.origin[axis] * (1 / jumpStart.options.sceneScale) > this.position[axis] )
+				{
+					if( direction > 0 )
+						hide.call(this);
+					else
+						show.call(this);
+				}
+				else if( jumpStart.cursorRay.origin[axis] * (1 / jumpStart.options.sceneScale) < this.position[axis] )
+				{
+					if( direction > 0 )
+						show.call(this);
+					else
+						hide.call(this);
+				}
+			}
+		});
+	}
+
+	function hide()
+	{
+		if( this.userData.isHidden )
+			return;
+
+		this.userData.isHidden = true;
+		this.scale.set(0.0001, 0.0001, 0.0001);
+	}
+
+	function show()
+	{
+		if( !this.userData.isHidden )
+			return;
+		
+		this.userData.isHidden = false;
+		this.scale.set(1, 1, 1);
+	}
+
 	var boundary;
 
 	if( !!this.enclosureBoundaries.boundaryID )
@@ -2143,20 +2238,24 @@ JumpStart.prototype.enclosureBoundary = function(boundaryID)
 
 			case "north":
 				boundary.position.set(0, 0, -this.worldOffset.y);
+				addTickListener.call(boundary, "z", 1.0);
 				break;
 
 			case "south":
 				boundary.position.set(0, 0, this.worldOffset.y);
+				addTickListener.call(boundary, "z", -1.0);
 				break;
 
 			case "west":
 				boundary.rotateY(Math.PI / 2.0);
 				boundary.position.set(this.worldOffset.y, 0, 0);
+				addTickListener.call(boundary, "x", -1.0);
 				break;
 
 			case "east":
 				boundary.rotateY(Math.PI / 2.0);
 				boundary.position.set(-this.worldOffset.y, 0, 0);
+				addTickListener.call(boundary, "x", 1.0);
 				break;
 		}
 
