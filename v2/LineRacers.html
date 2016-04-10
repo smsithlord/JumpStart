@@ -9,14 +9,15 @@
 				"appID": "LineRacers",
 				"sceneScale": 1.5,
 				"multiuserOnly": true,
+				"enclosureOnly": true,
 				"scaleWithEnclosure": false,
-				"debug": {"showCursorPlanes": true}
+				"debug": {"showCursorPlanes": false}
 			});
 
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModels(["models/car", "models/pixel", "models/gold", "models/explosion", "models/pillar", "models/ball", "models/coin"]).then( function()
+				jumpStart.loadModels(["models/car", "models/pixel", "models/gold", "models/explosion", "models/pillar", "models/ball", "models/coin", "models/xspot"]).then( function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -26,8 +27,48 @@
 				return false;
 			});
 
+			function scaleDown()
+			{
+				var amount = this.scale.x - (2.0 * jumpStart.deltaTime);
+
+				if( amount <= 0.0001 )
+				{
+					amount = 0.0001;
+					this.removeEventListener("tick", scaleDown);
+				}
+
+				this.scale.set(amount, amount, amount);
+			}
+
+			function scaleUp()
+			{
+				var amount = this.scale.x + (2.0 * jumpStart.deltaTime);
+
+				if( amount >= 1.0 )
+				{
+					amount = 1.0;
+					this.addEventListener("tick", scaleDown);
+					this.removeEventListener("tick", scaleUp);
+				}
+
+				this.scale.set(amount, amount, amount);
+			}
+
 			function carTrailTick()
 			{
+				if( this.syncData.score !== this.userData.oldScore )
+				{
+					jumpStart.updateTextPlane(this.userData.scoreCard, {"text": this.syncData.score, "color": "#ffff00", "background": "#000000"});
+
+					this.userData.scoreCard.removeEventListener("tick", scaleUp);
+					this.userData.scoreCard.removeEventListener("tick", scaleDown);
+					this.userData.scoreCard.addEventListener("tick", scaleUp);
+
+					// The car has scored!
+					this.userData.oldScore = this.syncData.score;
+				}
+
+
 				var trail = this.userData.trail;
 				if( !!!trail )
 				{
@@ -156,6 +197,15 @@
 
 			function ballSpawn(isInitialSync)
 			{
+				var xspot = jumpStart.spawnInstance("models/xspot");
+				xspot.userData.ball = this;
+				xspot.position.copy(this.syncData.footballPass.targetPosition);
+				xspot.addEventListener("tick", function()
+				{
+					if( !this.userData.ball.parent )
+						jumpStart.removeInstance(this);
+				});
+
 				var ballHalo = jumpStart.spawnInstance("models/explosion", {"parent": this});
 				ballHalo.scale.set(-0.3, -0.3, -0.3);
 				ballHalo.addEventListener("tick", function()
@@ -183,7 +233,7 @@
 					{
 						var coin = jumpStart.spawnInstance("models/coin");
 						coin.position.copy(this.position);
-						coin.position.y += 10;
+						coin.position.y += 12;
 						coin.scale.set(0.1, 0.1, 0.1);
 						coin.addEventListener("tick", coinTick);
 						coin.addEventListener("tick", growTick);
@@ -294,6 +344,8 @@
 
 			function collectCoin()
 			{
+				myCar.syncData.score++;
+				myCar.sync({"syncData": true});
 				jumpStart.removeInstance(this);
 			}
 
@@ -301,7 +353,7 @@
 			{
 				this.rotateY(2.0 * jumpStart.deltaTime);
 
-				if( myCar && this.ownerID === jumpStart.localUser.userID && myCar.position.distanceTo(this.position) < 25.0 )
+				if( myCar && this.ownerID === jumpStart.localUser.userID && myCar.position.distanceTo(this.position) < 30.0 )
 				{
 					collectCoin.call(this);
 				}
@@ -356,6 +408,11 @@
 
 			function fireCannon()
 			{
+				if( cannonPower < 1.0 )
+					return;
+
+				cannonPower -= 0.5;
+
 				var pillar;
 				var bestDistance = Infinity;
 				var testDistance;
@@ -384,11 +441,47 @@
 				ball.sync();
 			}
 
+			function carSpawn()
+			{
+				// spawn a score card
+				var scoreCard = jumpStart.spawnTextPlane({"text": "  ", "color": "#ffff00"});
+				scoreCard.scale.set(0.0001, 0.0001, 0.0001);
+				scoreCard.userData.car = this;
+				scoreCard.addEventListener("tick", function()
+				{
+					if( !this.userData.car.parent )
+					{
+						jumpStart.removeInstance(this);
+						return;
+					}
+
+					this.position.copy(this.userData.car.position);
+					this.translateY(30.0);
+				});
+				this.userData.scoreCard = scoreCard;
+
+				this.userData.oldScore = this.syncData.score;
+				var nameTag = jumpStart.spawnTextPlane({"text": this.syncData.ownerName});
+				nameTag.userData.car = this;
+				nameTag.addEventListener("tick", function()
+				{
+					if( !this.userData.car.parent )
+					{
+						jumpStart.removeInstance(this);
+						return;
+					}
+
+					this.position.copy(this.userData.car.position);
+					this.translateY(50.0);
+				});
+			}
+
 			function spawnPlayerCar()
 			{
 				var car = jumpStart.spawnInstance("models/car");
+				car.syncData.score = 0;
 				car.name = "playerCar";
-				car.userData.speed = 100.0;
+				car.syncData.ownerName = jumpStart.localUser.displayName;
 				lookPosition = new THREE.Vector3();
 				car.addEventListener("tick", function()
 				{
@@ -414,11 +507,12 @@
 				car.userData.previousTrailPosition = car.position.clone();
 				car.userData.particleDelay = 0;
 				car.userData.particleDelayMax = 0.1;
+				car.addEventListener("spawn", carSpawn);
 				car.addEventListener("tick", carTrailTick);
 				car.addEventListener("remove", carRemoved);
 
 				car.applyBehavior("autoSync");
-				car.applyBehavior("lerpSync", {"speed": car.userData.speed});	// slower lerp speed to account for lag
+				car.applyBehavior("lerpSync", {"speed": 100.0});
 				car.applyBehavior("autoRemoval");
 
 				// Sync it right now too
@@ -429,8 +523,6 @@
 
 			function playerClick()
 			{
-				//jumpStart.spawnTextPlane();
-				//return;
 				// Does this user already have a car?
 				var car = jumpStart.scene.getObjectByName("playerCar");
 				if( !!car )
@@ -453,6 +545,14 @@
 				}
 			}
 
+			jumpStart.addEventListener("tick", function()
+			{
+				cannonPower += (0.5 * jumpStart.deltaTime);
+				if( cannonPower > 2.0 )
+					cannonPower = 2.0;
+			});
+
+			var cannonPower = 2.0;
 			var pillars = {};
 			var boundingLasers = {};
 			var myCar = null;

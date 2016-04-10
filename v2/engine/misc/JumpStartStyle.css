@@ -36,3 +36,67 @@ body
 	background-color: rgba(0, 0, 0, 0.9);
 	z-index: 999999;
 }
+
+.JS_APPMENU
+{
+	position: fixed;
+	top: 0;
+	right: 0;
+	font-size: 40px;
+	font-weight: 900;
+	text-shadow: 1px 1px #000, -1px -1px #000, 1px -1px #000, -1px 1px #000, 1px 0px #000, -1px 0px #000;
+}
+
+.JS_APP_MENU_LOGO
+{
+	cursor: pointer;
+	vertical-align: bottom;
+	margin-top: 10px;
+	margin-left: 20px;
+	margin-right: 20px;
+	height: 50px;
+}
+
+.JS_MORE_APPS
+{
+	display: none;
+	position: fixed;
+	right: 0;
+	margin-right: 10px;
+	top: 70px;
+	background-color: rgba(92, 170, 218, 0.8);
+	border-radius: 15px;
+	border: 2px solid #000;
+	width: 200px;
+	font-family: Arial;
+	font-weight: bold;
+	font-style: italic;
+	padding: 6px;
+	text-shadow: 1px 1px #000;
+}
+
+.JS_MORE_APPS_CONTAINER
+{
+	max-height: 350px;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.JS_APP
+{
+	border-radius: 8px;
+	background-color: #000;
+	padding-left: 3px;
+	padding-right: 3px;
+	padding-top: 8px;
+	padding-bottom: 8px;
+	cursor: pointer;
+	border: 2px solid rgba(92, 170, 218, 1.0);
+}
+
+.JS_APP:hover
+{
+	border: 2px solid #fff;
+	text-decoration: underline;
+	/*color: rgba(92, 170, 218, 1.0);*/
+}

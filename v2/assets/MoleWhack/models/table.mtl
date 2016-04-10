@@ -1,0 +1,4 @@
+newmtl mokewhack
+Kd 1 1 1
+illum 0
+map_Kd mokewhack.jpg

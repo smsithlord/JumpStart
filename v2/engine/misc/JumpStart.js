@@ -118,6 +118,7 @@ function JumpStart(options)
 		"sceneScale": 1.0,	// relative scale
 		"scaleWithEnclosure": true,	// false means consistent size, regardless of enclosure size
 		"timeScale": 1.0,
+		"appMenu": true,
 		"webControls": true,
 		"debug":
 		{
@@ -232,7 +233,7 @@ function JumpStart(options)
 			{
 				this.syncData.autoRemoval = {};
 				this.syncData.autoRemoval.heartbeats = 0;
-				this.syncData.autoRemoval.flatlineDelay = (!!options.flatlineDelay) ? options.flatlineDelay : 10.0;
+				this.syncData.autoRemoval.flatlineDelay = (!!options.flatlineDelay) ? options.flatlineDelay : 6.0;
 				this.syncData.autoRemoval.adopterID = 0;
 				this.addEventListener("tick", jumpStart.behaviors.autoRemoval.tickBehavior);
 				return true;
@@ -265,25 +266,32 @@ function JumpStart(options)
 				}
 				else
 				{
+					var delayTime = this.syncData.autoRemoval.flatlineDelay;
+					if( this.syncData.autoRemoval.adopterID === jumpStart.localUser.userID )
+						delayTime *= 0.7;
+
 					// As a client, we monitor the time since the last heartbeats change and remove this object if it needs to be.
 					if( this.syncData.autoRemoval.heartbeats !== this.userData.autoRemoval.previousHeartbeats )
 					{
 						this.userData.autoRemoval.previousHeartbeats = this.syncData.autoRemoval.heartbeats;
 						this.userData.autoRemoval.time = jumpStart.elapsedTime;
 					}
-					else if( jumpStart.elapsedTime - this.userData.autoRemoval.time >= this.syncData.autoRemoval.flatlineDelay )
+					else if( jumpStart.elapsedTime - this.userData.autoRemoval.time >= delayTime )
 					{
 						// 1. Set the ownerID to 0.
 						// 2. Set us as the adopterID on the firebase.
 						// 3. Wait flatlineDelay/2.0 more seconds
 						// 4. If we are still the adopterID, take control of this item and remove it.
 
-						if( !this.syncData.autoRemoval.adopterID )
+						if( this.syncData.autoRemoval.adopterID !== jumpStart.localUser.userID )
 						{
 							this.syncData.autoRemoval.adopterID = jumpStart.localUser.userID;
+							this.syncData.autoRemoval.heartbeats = this.syncData.autoRemoval.heartbeats + 1;
+							this.userData.autoRemoval.time = jumpStart.elapsedTime;
+							this.userData.autoRemoval.previousHeartbeats = this.syncData.autoRemoval.heartbeats;
 							this.sync({"syncData": true});
 						}
-						else if( this.syncData.autoRemoval.adopterID === jumpStart.localUser.userID && jumpStart.elapsedTime - this.userData.autoRemoval.time >= this.syncData.autoRemoval.flatlineDelay * 1.5 )
+						else if( this.syncData.autoRemoval.adopterID === jumpStart.localUser.userID )
 						{
 							// Take control
 							this.ownerID = jumpStart.localUser.userID;
@@ -334,15 +342,33 @@ function JumpStart(options)
 				if( !!!this.userData.autoSync.previousPosition || !!!this.userData.autoSync.previousTime )
 					shouldSync = true;
 
-				if( !shouldSync && jumpStart.elapsedTime - this.userData.autoSync.previousTime > this.userData.autoSync.minInterval && this.position.distanceTo(this.userData.autoSync.previousPosition) > this.userData.autoSync.distanceTolerance )
-					shouldSync = true;
+				if( !shouldSync && jumpStart.elapsedTime - this.userData.autoSync.previousTime > this.userData.autoSync.minInterval )
+				{
+					if( this.position.distanceTo(this.userData.autoSync.previousPosition) > this.userData.autoSync.distanceTolerance )
+						shouldSync = true;
+					else
+					{
+						var vector1 = new THREE.Vector3(0,0,Math.PI);
+						vector1.applyQuaternion(this.quaternion);
+
+						var vector2 = new THREE.Vector3(0,0,Math.PI);
+						vector2.applyQuaternion(this.userData.autoSync.previousQuaternion);
+
+						if(vector1.distanceTo(vector2) > 1.0)
+							shouldSync = true;
+					}
+				}
 
 				if( shouldSync )
 				{
 					if( !!!this.userData.autoSync.previousPosition )
+					{
 						this.userData.autoSync.previousPosition = new THREE.Vector3();
+						this.userData.autoSync.previousQuaternion = new THREE.Quaternion();
+					}
 
 					this.userData.autoSync.previousPosition.copy(this.position);
+					this.userData.autoSync.previousQuaternion.copy(this.quaternion);
 					this.userData.autoSync.previousTime = jumpStart.elapsedTime;
 					this.sync();
 				}
@@ -530,7 +556,8 @@ function JumpStart(options)
 					{
 						this.position.lerpVectors(this.userData.lerpSync.originalPosition, this.userData.lerpSync.targetPosition, this.userData.lerpSync.amount);
 
-						var currentQuaternion = this.userData.lerpSync.originalQuaternion.clone().slerp(this.userData.lerpSync.targetQuaternion, this.userData.lerpSync.amount);
+						var currentQuaternion = this.userData.lerpSync.originalQuaternion.clone();
+						currentQuaternion.slerp(this.userData.lerpSync.targetQuaternion, this.userData.lerpSync.amount);
 						this.quaternion.copy(currentQuaternion);
 					}
 				}
@@ -1260,51 +1287,127 @@ JumpStart.prototype.onReadyToPrecache = function()
 
 JumpStart.prototype.spawnTextPlane = function(options)
 {
-//	scoreboard.position.copy(this.position);
-//	scoreboard.rotation.copy(this.rotation);
-//	scoreboard.translateY(56.0);
+	var defaultOptions = {
+		"width": "auto",
+		"height": 12,
+		"text": "88888888",
+		"fontSize": 12,
+		"color": "rgba(255,255,255,1.0)",
+		"background": "rgba(0,0,0,1.0)",
+		"backgroundImageElem": null
+	};
 
-	var geometry = new THREE.BoxGeometry(60, 6.5, 0);
-	var material;
+	if( !!options )
+	{
+		var x;
+		for( x in defaultOptions )
+			options[x] = (!!options[x]) ? options[x] : defaultOptions[x];
+	}
+	else
+		options = defaultOptions;
+
+	if( options.width === "auto" )
+		options.width = (options.fontSize / 1.5) * options.text.length;
+
+	var geometry = new THREE.BoxGeometry(options.width, options.height, 0);
 
 	// create a canvas element
 	var scoreCanvas = document.createElement('canvas');
-	scoreCanvas.width = 550 * this.worldScale;
+	scoreCanvas.width = options.width * 12.0;
+	scoreCanvas.height = options.height * 12.0;
 	scoreContext = scoreCanvas.getContext('2d');
+	if( options.backgroundImageElem )
+	{
+		var width = scoreCanvas.width;
+		var height = scoreCanvas.height;
+		scoreContext.drawImage(options.backgroundImageElem, 0, 0, width, height);	
+	}
+	else
+	{
+		scoreContext.fillStyle = options.background;
+		scoreContext.fillRect(0, 0, scoreCanvas.width, scoreCanvas.height);
+	}
 	scoreContext.textAlign = "center";
 	scoreContext.textBaseline = "middle";
-	scoreContext.font = "Bold 100px Arial";
-	scoreContext.fillStyle = "rgba(255,0,0,0.95)";
-   	scoreContext.fillText('8888', scoreCanvas.width / 2.0, scoreCanvas.height / 2.0);
+	scoreContext.font = "Bold " + options.fontSize * 13 + "px Arial";
+	scoreContext.fillStyle = options.color;
+   	scoreContext.fillText(options.text, scoreCanvas.width / 2.0, scoreCanvas.height / 2.0);
 
 	// canvas contents will be used for a texture
 	var scoreTexture = new THREE.Texture(scoreCanvas) 
 	scoreTexture.needsUpdate = true;
 
-	material = new THREE.MeshBasicMaterial({map: scoreTexture, visible: true});
-
-	var scoreboard = this.spawnInstance(null);
-//	scoreboard.userData.parentObject = this;
+	var material = new THREE.MeshBasicMaterial({map: scoreTexture, visible: true});
 
 	var scoreSlate = new THREE.Mesh(geometry, material);
-	scoreboard.add(scoreSlate);
+	var scoreboard = this.spawnInstance(null, {"object": scoreSlate});
+	scoreboard.userData.scoreCanvas = scoreCanvas;
+	scoreboard.userData.scoreTexture = scoreTexture;
+	scoreboard.userData.scoreContext = scoreContext;
+	scoreboard.userData.scoreTexture = scoreTexture;
 
+/* nobody said they wanted to auto-apply this behavior
 	scoreboard.addEventListener("tick", function()
 	{
+		var eyePosition;
 		if( !jumpStart.isAltspace )
-			eyePosition = jumpStart.camera.position.clone();
+			eyePosition = jumpStart.camera.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
 		else
 		{
-			return;
-			var joint = this.localUser.skeleton.getJoint("Eye");
-			var scaledJointPosition = new THREE.Vector3().copy(joint.position).multiplyScalar(1/this.worldScale);
-			eyePosition = scaledJointPosition;
+			var joint = jumpStart.localUser.skeleton.getJoint("Eye");
+			eyePosition = joint.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
+//			var scaledJointPosition = joint.position.clone().multiplyScalar(1/this.worldScale).multiplyScalar(1/this.options.sceneScale);
+//			eyePosition = scaledJointPosition;
 		}
 
-		this.up.set(0, 1, 0);
+		eyePosition.y = this.position.y;
 		this.lookAt(eyePosition);
 		this.rotateY(Math.PI);
 	});
+*/
+	return scoreboard;
+};
+
+JumpStart.prototype.updateTextPlane = function(textPlane, options)
+{
+	var defaultOptions = {
+		"width": "auto",
+		"height": 12,
+		"text": "88888888",
+		"fontSize": 12,
+		"color": "rgba(255,255,255,1.0)",
+		"background": "rgba(0,0,0,1.0)",
+		"backgroundImageElem": null
+	};
+
+	if( !!options )
+	{
+		var x;
+		for( x in defaultOptions )
+			options[x] = (!!options[x]) ? options[x] : defaultOptions[x];
+	}
+	else
+		options = defaultOptions;
+
+	scoreContext = textPlane.userData.scoreContext;
+	if( options.backgroundImageElem )
+	{
+		var width = textPlane.userData.scoreCanvas.width;
+		var height = textPlane.userData.scoreCanvas.height;
+		scoreContext.drawImage(options.backgroundImageElem, 0, 0, width, height);	
+	}
+	else
+	{
+		scoreContext.fillStyle = options.background;
+		scoreContext.fillRect(0, 0, textPlane.userData.scoreCanvas.width, textPlane.userData.scoreCanvas.height);
+	}
+	scoreContext.textAlign = "center";
+	scoreContext.textBaseline = "middle";
+	scoreContext.font = "Bold " + options.fontSize * 13 + "px Arial";
+	scoreContext.fillStyle = options.color;
+   	scoreContext.fillText(options.text, textPlane.userData.scoreCanvas.width / 2.0, textPlane.userData.scoreCanvas.height / 2.0);
+
+   	textPlane.userData.scoreTexture.needsUpdate = true;
 };
 
 JumpStart.prototype.spawnCursorPlane = function(options)
@@ -1407,6 +1510,135 @@ JumpStart.prototype.onReadyToReady = function()
 
 	// This will spawn the world, but nothing else.
 	this.doPendingUpdates();
+
+	if( this.isAltspace )
+		this.scene.add(this.localUser.skeleton);
+
+	// Add the app menu to the UI
+	if( this.options.appMenu )
+	{
+		var elem = document.createElement("div");
+		//elem.style.cssText = "position: fixed; top: 0; right: 0;";
+		elem.className = "JS_APPMENU";
+		elem.innerHTML = this.options.appID + "<img src='engine/misc/appMenu.png' class='JS_APP_MENU_LOGO' />";
+		elem.addEventListener("mouseover", function(e)
+		{
+			e.srcElement.src = "engine/misc/appMenu_on.png";
+		});
+		elem.addEventListener("mouseout", function(e)
+		{
+			e.srcElement.src = "engine/misc/appMenu.png";
+		});
+		elem.addEventListener("click", function(e)
+		{
+			var elem = document.getElementsByClassName("JS_MORE_APPS")[0];
+
+			if( elem.isHidden )
+			{
+				elem.style.display = "block";
+				elem.isHidden = false;
+			}
+			else
+			{
+				elem.style.display = "none";
+				elem.isHidden = true;
+			}
+		});
+
+		document.body.appendChild(elem);
+
+		var moreApps = document.createElement("div");
+		moreApps.className = "JS_MORE_APPS";
+		moreApps.innerHTML = "MORE APPS";
+		moreApps.isHidden = true;
+
+		var moreAppsContainer = document.createElement("div");
+		moreAppsContainer.className = "JS_MORE_APPS_CONTAINER";
+
+		var apps = [
+			{
+				"appID": "BuildingBlocks",
+				"url": "BuildingBlocks.html",
+				"isJumpStart": true
+			},
+			{
+				"appID": "LineRacers",
+				"url": "LineRacers.html",
+				"isJumpStart": true
+			},
+			{
+				"appID": "MoleWhack",
+				"url": "MoleWhack.html",
+				"isJumpStart": true
+			},
+			{
+				"appID": "AirHockey",
+				"url": "http://www.jumpstartsdk.com/live/AirHockey.html",
+				"isJumpStart": false
+			},
+			{
+				"appID": "AstroCatastrophe",
+				"url": "http://www.jumpstartsdk.com/live/AstroCatastrophe.html",
+				"isJumpStart": false
+			},
+			{
+				"appID": "SpacePilot",
+				"url": "http://www.jumpstartsdk.com/live/SpacePilot.html",
+				"isJumpStart": false
+			},
+			{
+				"appID": "GatorSmasher",
+				"url": "http://www.jumpstartsdk.com/live/GatorSmasher.html",
+				"isJumpStart": false
+			},
+			{
+				"appID": "TikiDrum",
+				"url": "http://www.jumpstartsdk.com/live/TikiDrum.html",
+				"isJumpStart": false
+			},
+			{
+				"appID": "SpookyMemory",
+				"url": "http://www.jumpstartsdk.com/live/SpookyMemory.html",
+				"isJumpStart": false
+			},
+			{
+				"appID": "ComboBreaker",
+				"url": "http://www.jumpstartsdk.com/live/ComboBreaker.html",
+				"isJumpStart": false
+			},
+			{
+				"appID": "Sammy",
+				"url": "http://www.jumpstartsdk.com/live/Sammy.html",
+				"isJumpStart": false
+			}
+		];
+
+		var i, app;
+		for( i in apps )
+		{
+//			if( apps[i].appID === jumpStart.options.appID )
+//				continue;
+
+			app = document.createElement("div");
+			app["app"] = apps[i];
+			app.className = "JS_APP";
+
+			if( !apps[i].isJumpStart )
+				app.style.color = "#bb0000";
+
+			app.innerHTML = apps[i].appID;
+			var appURL = apps[i].url;
+			app.addEventListener("click", function(e)
+			{
+				window.location = e.srcElement.app.url;
+			});
+
+			moreAppsContainer.appendChild(app);
+		}
+
+		moreApps.appendChild(moreAppsContainer);
+		document.body.appendChild(moreApps);
+	}
 
 	// Check for ready listeners
 	var asyncRequested = false;
@@ -1546,9 +1778,12 @@ JumpStart.prototype.doPendingUpdates = function()
 				deferredTransform = true;
 			else
 			{
-				instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
-				instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
-				instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+				if( !instance.ignoreSync.transform.position || (instance.ignoreSync.transform.position && data.vitalData && data.vitalData.ignoreSync.transform.position) )
+					instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+				if( !instance.ignoreSync.transform.quaternion || (instance.ignoreSync.transform.quaternion && data.vitalData && data.vitalData.ignoreSync.transform.quaternion) )
+					instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
+				if( !instance.ignoreSync.transform.scale || (instance.ignoreSync.transform.scale && data.vitalData && data.vitalData.ignoreSync.transform.scale) )
+					instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
 			}
 		}
 
@@ -1567,19 +1802,33 @@ JumpStart.prototype.doPendingUpdates = function()
 
 			if( !!!data.isInitialSync )
 			{
-				instance.userData.lerpSync.targetPosition.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
-				instance.userData.lerpSync.targetQuaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
+				if( !instance.ignoreSync.transform.position || (instance.ignoreSync.transform.position && !data.vitalData.ignoreSync.transform.position) )
+					instance.userData.lerpSync.targetPosition.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+				if( !instance.ignoreSync.transform.quaternion || (instance.ignoreSync.transform.quaternion && !data.vitalData.ignoreSync.transform.quaternion) )
+					instance.userData.lerpSync.targetQuaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
 
-				var distance = instance.position.distanceTo(instance.userData.lerpSync.targetPosition);
-				var autoSpeed = instance.syncData.lerpSync.speed + (0.9 * distance);
-				instance.userData.lerpSync.time = distance / autoSpeed;
-				instance.userData.lerpSync.amount = 0.0;
-				instance.userData.lerpSync.originalPosition.copy(instance.position);
-				instance.userData.lerpSync.originalQuaternion.copy(instance.quaternion);
+				if(
+					!instance.ignoreSync.transform.position ||
+					(instance.ignoreSync.transform.position && !data.vitalData.ignoreSync.transform.position) ||
+					!instance.ignoreSync.transform.quaternion ||
+					(instance.ignoreSync.transform.quaternion && !data.vitalData.ignoreSync.transform.quaternion) ||
+					!instance.ignoreSync.transform.scale ||
+					(instance.ignoreSync.transform.scale && !data.vitalData.ignoreSync.transform.scale)
+					)
+				{
+					var distance = instance.position.distanceTo(instance.userData.lerpSync.targetPosition);
+					var autoSpeed = instance.syncData.lerpSync.speed + (0.9 * distance);
+					instance.userData.lerpSync.time = distance / autoSpeed;
+					if( instance.userData.lerpSync.time === 0 )
+						instance.userData.lerpSync.time = 0.25;
+					instance.userData.lerpSync.amount = 0.0;
+					instance.userData.lerpSync.originalPosition.copy(instance.position);
+					instance.userData.lerpSync.originalQuaternion.copy(instance.quaternion);
+				}
 
-				// FIX ME: Only position is being lerped so far, but the qauternion and scale need to be lerped too.
-//				instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
-				instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+				// FIX ME: Only position & quaternion is being lerped so far, but the scale need to be lerped too.
+				if( !instance.ignoreSync.transform.scale || (instance.ignoreSync.transform.scale && !data.vitalData.ignoreSync.transform.scale) )
+					instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
 			}
 			else
 			{
@@ -2361,7 +2610,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	var originalAddEventListener = window.addEventListener;
 	var originalRemoveEventListener = window.removeEventListener;
 
-	var vitalDataNames = ["ownerID", "modelFile", "blocksLOS", "listeners", "behaviors"];	// These get synced
+	var vitalDataNames = ["ownerID", "modelFile", "blocksLOS", "listeners", "behaviors", "ignoreSync"];	// These get synced
 	var jumpStartData = {
 		"ownerID": this.localUser.userID,
 		"blocksLOS": false,
@@ -2369,6 +2618,15 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		"boundingSphere": computedBoundingSphere,
 		"listeners": computedListeners,
 		"syncData": {},
+		"ignoreSync": {
+			"transform": {
+				"position": false,
+				"quaternion": false,
+				"scale": false
+			},
+			"vitalData": {},
+			"syncData": {}
+		},
 		"spoofVisible": true,	// because Altspace does not respect object.visible values directly
 		"syncKey": options.syncKey,
 		"behaviors": {},
