@@ -4,6 +4,7 @@
 <html lang="en">
 	<head>
 		<title>Air Hockey</title>
+		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="AirHockey" appurl="http://www.jumpstartsdk.com/live/AirHockey.html"></script>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r73/build/three.min.js"></script>
@@ -22,6 +23,12 @@
 		<!-- JumpStart Styles -->
 		<link rel="stylesheet" type="text/css" href="myStyle.css" />
 		<style>
+			#leaderboardContainer {
+				position: fixed;
+				top: 80px;
+				width: 100%;
+			}
+
 			#leaderboard {
 				display: flex;
 				flex-direction: row;
@@ -63,14 +70,16 @@
 			<td class="topWinner"></td>
 			<td><span class="wins"></span> game<span class="winsPlural">s</span></td>
 		</script>
-		<div id="leaderboard">
-			<div class="col">
-				<h2>Recent Wins</h2>
-				<table id="recentWins"></table>
-			</div>
-			<div class="col">
-				<h2>Top Winners</h2>
-				<table id="topWinners"></table>
+		<div id="leaderboardContainer">
+			<div id="leaderboard">
+				<div class="col">
+					<h2>Recent Wins</h2>
+					<table id="recentWins"></table>
+				</div>
+				<div class="col">
+					<h2>Top Winners</h2>
+					<table id="topWinners"></table>
+				</div>
 			</div>
 		</div>
 

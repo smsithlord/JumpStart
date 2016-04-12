@@ -2,15 +2,18 @@
 <html lang="en">
 	<head>
 		<title>Line Racers</title>
+
+		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="LineRacers" appurl="http://www.jumpstartsdk.com/live/v2/LineRacers.html"></script>
+
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
 			loadJumpStart({
 				"appID": "LineRacers",
-				"sceneScale": 1.5,
+				"sceneScale": 3.0,
 				"multiuserOnly": true,
 				"enclosureOnly": true,
-				"scaleWithEnclosure": false,
+				"scaleWithEnclosure": true,
 				"debug": {"showCursorPlanes": false}
 			});
 
@@ -173,7 +176,7 @@
 						oldTrail.addEventListener("tick", function()
 						{
 							// Fade the trail to oblivion
-							var speed = (myCar) ? this.userData.fadeSpeed : this.userData.fadeSpeed / 1.05;
+							var speed = (myCar) ? this.userData.fadeSpeed : this.userData.fadeSpeed / 1.2;
 							//var speed = this.userData.fadeSpeed;
 							var zScale = this.scale.z - speed * jumpStart.deltaTime;
 
@@ -433,12 +436,20 @@
 				ball.addEventListener("remove", ballRemove);
 				ball.addEventListener("tick", ballTick);
 				ball.addEventListener("spawn", ballSpawn);
+				ball.addEventListener("networkRemove", ballNetworkRemove);
 
 				ball.applyBehavior("footballPass", {"targetPosition": jumpStart.localUser.cursorHit.scaledPoint.clone(), "originalPosition": ball.position.clone(), "callbackFuncName": "removeOnFinish"});
 
 				ball.applyBehavior("autoRemoval");
 
 				ball.sync();
+			}
+
+			function ballNetworkRemove()
+			{
+				// TRUE or UNDEFINED for the object to be locally deleted
+				// FALSE to prevent default and only unsync the ball instead of removing it
+				return false;
 			}
 
 			function carSpawn()
@@ -458,6 +469,24 @@
 					this.position.copy(this.userData.car.position);
 					this.translateY(30.0);
 				});
+				scoreCard.addEventListener("tick", function()
+				{
+					var eyePosition;
+					if( !jumpStart.isAltspace )
+						eyePosition = jumpStart.camera.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
+					else
+					{
+						var joint = jumpStart.localUser.skeleton.getJoint("Eye");
+						eyePosition = joint.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
+			//			var scaledJointPosition = joint.position.clone().multiplyScalar(1/this.worldScale).multiplyScalar(1/this.options.sceneScale);
+			//			eyePosition = scaledJointPosition;
+					}
+
+					eyePosition.y = this.position.y;
+					this.lookAt(eyePosition);
+					this.rotateY(Math.PI);
+				});
+
 				this.userData.scoreCard = scoreCard;
 
 				this.userData.oldScore = this.syncData.score;
@@ -473,6 +502,24 @@
 
 					this.position.copy(this.userData.car.position);
 					this.translateY(50.0);
+				});
+
+				nameTag.addEventListener("tick", function()
+				{
+					var eyePosition;
+					if( !jumpStart.isAltspace )
+						eyePosition = jumpStart.camera.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
+					else
+					{
+						var joint = jumpStart.localUser.skeleton.getJoint("Eye");
+						eyePosition = joint.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
+			//			var scaledJointPosition = joint.position.clone().multiplyScalar(1/this.worldScale).multiplyScalar(1/this.options.sceneScale);
+			//			eyePosition = scaledJointPosition;
+					}
+
+					eyePosition.y = this.position.y;
+					this.lookAt(eyePosition);
+					this.rotateY(Math.PI);
 				});
 			}
 
@@ -512,7 +559,7 @@
 				car.addEventListener("remove", carRemoved);
 
 				car.applyBehavior("autoSync");
-				car.applyBehavior("lerpSync", {"speed": 100.0});
+				car.applyBehavior("lerpSync", {"speed": 70.0});
 				car.applyBehavior("autoRemoval");
 
 				// Sync it right now too
@@ -675,10 +722,19 @@
 
 				var floorBoundary = jumpStart.enclosureBoundary("floor");
 				floorBoundary.addEventListener("cursordown", playerClick);
-				jumpStart.enclosureBoundary("north");
-				jumpStart.enclosureBoundary("south");
-				jumpStart.enclosureBoundary("west");
-				jumpStart.enclosureBoundary("east");
+				var boundary;
+				boundary = jumpStart.enclosureBoundary("north");
+				boundary.scale.y *= 0.3;
+				boundary.position.y = jumpStart.worldOffset.y;
+				boundary = jumpStart.enclosureBoundary("south");
+				boundary.scale.y *= 0.3;
+				boundary.position.y = jumpStart.worldOffset.y;
+				boundary = jumpStart.enclosureBoundary("west");
+				boundary.scale.y *= 0.3;
+				boundary.position.y = jumpStart.worldOffset.y;
+				boundary = jumpStart.enclosureBoundary("east");
+				boundary.scale.y *= 0.3;
+				boundary.position.y = jumpStart.worldOffset.y;
 
 				// Make the floor 40% larger to avoid Altspace from thinking mouse clicks are not captured along the edges
 				floorBoundary.scale.multiplyScalar(1.4);

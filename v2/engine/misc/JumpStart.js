@@ -166,12 +166,17 @@ function JumpStart(options)
 					"targetPosition": options.targetPosition,
 					"originalPosition": options.originalPosition,
 					"height": (!!options.height) ? options.height : 100.0,
+					"speed": (!!options.speed) ? options.speed : "auto",
 					"callbackFuncName": (!!options.callbackFuncName) ? options.callbackFuncName : "defaultCallback"
 				}
 
 				var distance = options.targetPosition.distanceTo(options.originalPosition);
-				var autoSpeed = 50 + (0.9 * distance);
-				this.syncData.footballPass.time = distance / autoSpeed;
+				//var autoSpeed = 50.0 + (0.9 * distance);
+				if( options.speed === "auto" )
+					options.speed = 50.0 + (0.9 * distance);
+
+//				var autoSpeed = 50.0 + (0.9 * distance);
+				this.syncData.footballPass.time = distance / options.speed;
 
 				this.addEventListener("tick", jumpStart.behaviors.footballPass.tickBehavior);
 				return true;
@@ -181,6 +186,15 @@ function JumpStart(options)
 
 			},
 			"removeOnFinish": function()
+			{
+				jumpStart.removeInstance(this);
+			},
+			"flagAsNaturalDeathAndRemove": function()
+			{
+				this.userData.naturalDeath = true;
+				jumpStart.removeInstance(this);
+			},
+			"ownerRemoveOnFinish": function()
 			{
 				if( this.ownerID === jumpStart.localUser.userID )
 					jumpStart.removeInstance(this);
@@ -414,7 +428,8 @@ function JumpStart(options)
 					};
 
 					this.userData.physics = {
-						"velocity": this.syncData.physics.force.clone()
+						"velocity": this.syncData.physics.force.clone(),
+						"rotVelocity": this.syncData.physics.rotation.clone()
 					};
 
 					this.addEventListener("tick", jumpStart.behaviors.physics.tickBehavior);
@@ -457,9 +472,9 @@ function JumpStart(options)
 					this.userData.physics.velocity.multiplyScalar(0.9);
 
 				// Update the rotation
-				this.rotateX((this.syncData.physics.rotation.x * 5.0) * jumpStart.deltaTime);
-				this.rotateY((this.syncData.physics.rotation.y * 5.0) * jumpStart.deltaTime);
-				this.rotateZ((this.syncData.physics.rotation.z * 5.0) * jumpStart.deltaTime);
+				this.rotateX((this.userData.physics.rotVelocity.x * 5.0) * jumpStart.deltaTime);
+				this.rotateY((this.userData.physics.rotVelocity.y * 5.0) * jumpStart.deltaTime);
+				this.rotateZ((this.userData.physics.rotVelocity.z * 5.0) * jumpStart.deltaTime);
 
 				// Bounce us off of walls
 				var maximums = {
@@ -496,7 +511,8 @@ function JumpStart(options)
 			"spawnBehavior": function(isInitialSync)
 			{
 				this.userData.physics = {
-					"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z)
+					"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z),
+					"rotVelocity": new THREE.Vector3(this.syncData.physics.rotation.x, this.syncData.physics.rotation.y, this.syncData.physics.rotation.z)
 				};
 			}
 		},
@@ -649,6 +665,10 @@ function JumpStart(options)
 					this.world.name = "jumpStartWorld";
 					//this.world.position.add(this.worldOffset);
 					this.world.position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
+
+					var listenerName;
+					for( listenerName in this.listeners.initialize )
+						this.listeners.initialize[listenerName]();
 
 					this.onReadyToReady();
 				}
@@ -900,7 +920,19 @@ function JumpStart(options)
 											return;
 
 										delete this.syncedObjects[key];
-										this.removeInstance(object);
+
+										var preventDefault = false;
+										var listenerName, result;
+										for( listenerName in object.listeners.networkRemove )
+										{
+											result = object.listeners.networkRemove[listenerName].call(object);
+
+											if( typeof result !== "undefined" && !result )
+												preventDefault = true;
+										}
+
+										if( !preventDefault )
+											this.removeInstance(object);
 									}
 								};
 							}
@@ -1088,8 +1120,8 @@ function JumpStart(options)
 					if( !this.isAltspace )
 					{
 						// Spoof the enclosure for web mode
-						var commonVal = Math.round(1024 / 2.5);	// FIX ME: Why this magic number?
-						var pixelsPerMeter = 50.0;	// FIX ME: Why this magic number?
+						var commonVal = Math.round(1024);// / 2.5);	// FIX ME: Why this magic number?
+						var pixelsPerMeter = 100.0;	// FIX ME: Why this magic number?
 
 						if( !this.options["scaleWithEnclosure"] )
 							this.options.sceneScale *= pixelsPerMeter / 100.0;	// FIX ME: Why this magic number?
@@ -1301,7 +1333,7 @@ JumpStart.prototype.spawnTextPlane = function(options)
 	{
 		var x;
 		for( x in defaultOptions )
-			options[x] = (!!options[x]) ? options[x] : defaultOptions[x];
+			options[x] = (options.hasOwnProperty(x)) ? options[x] : defaultOptions[x];
 	}
 	else
 		options = defaultOptions;
@@ -1384,7 +1416,7 @@ JumpStart.prototype.updateTextPlane = function(textPlane, options)
 	{
 		var x;
 		for( x in defaultOptions )
-			options[x] = (!!options[x]) ? options[x] : defaultOptions[x];
+			options[x] = (options.hasOwnProperty(x)) ? options[x] : defaultOptions[x];
 	}
 	else
 		options = defaultOptions;
@@ -1511,10 +1543,15 @@ JumpStart.prototype.onReadyToReady = function()
 	// This will spawn the world, but nothing else.
 	this.doPendingUpdates();
 
+	// AUTOMATICALLY ADJUST WORLD POSITION
+	// FIX ME: This should be an app option, not automatic.
+	this.scene.getObjectByName("jumpStartWorld").position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
+
 	if( this.isAltspace )
 		this.scene.add(this.localUser.skeleton);
 
 	// Add the app menu to the UI
+	/*
 	if( this.options.appMenu )
 	{
 		var elem = document.createElement("div");
@@ -1569,6 +1606,11 @@ JumpStart.prototype.onReadyToReady = function()
 			{
 				"appID": "MoleWhack",
 				"url": "MoleWhack.html",
+				"isJumpStart": true
+			},
+			{
+				"appID": "TicTacToe",
+				"url": "TicTacToe.html",
 				"isJumpStart": true
 			},
 			{
@@ -1639,7 +1681,7 @@ JumpStart.prototype.onReadyToReady = function()
 		moreApps.appendChild(moreAppsContainer);
 		document.body.appendChild(moreApps);
 	}
-
+*/
 	// Check for ready listeners
 	var asyncRequested = false;
 	var listenerName, result;
@@ -2450,6 +2492,7 @@ JumpStart.prototype.enclosureBoundary = function(boundaryID)
 			return;
 
 		this.userData.isHidden = true;
+		this.userData.originalScale.copy(this.scale);
 		this.scale.set(0.0001, 0.0001, 0.0001);
 	}
 
@@ -2459,7 +2502,7 @@ JumpStart.prototype.enclosureBoundary = function(boundaryID)
 			return;
 		
 		this.userData.isHidden = false;
-		this.scale.set(1, 1, 1);
+		this.scale.copy(this.userData.originalScale);
 	}
 
 	var boundary;
@@ -2508,6 +2551,7 @@ JumpStart.prototype.enclosureBoundary = function(boundaryID)
 				break;
 		}
 
+		boundary.userData.originalScale = new THREE.Vector3();
 		this.enclosureBoundaries[boundaryID] = boundary;
 	}
 
@@ -2601,7 +2645,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	}
 
 	// List all the object-level listeners
-	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup", "spawn", "remove"];
+	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup", "spawn", "remove", "networkRemove"];
 	var computedListeners = {};
 	for( i in validEvents )
 		computedListeners[validEvents[i]] = {};
@@ -2630,6 +2674,45 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		"spoofVisible": true,	// because Altspace does not respect object.visible values directly
 		"syncKey": options.syncKey,
 		"behaviors": {},
+		"setColor": function(color)
+		{
+			this.traverse(function(child)
+			{
+				if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+				{
+					child.material.color = color;
+					child.material.needsUpdate = true;
+				}
+			}.bind(this));
+		},
+		"setTint": function(tintColor)
+		{
+			// FIXME Inside of Altsapce it works fine, but in web mode every instance of the material used on the
+			// object gets highlighted, even if on a different object instance.
+
+			// Sets the TINT (or brightness) of an object.
+			if( jumpStart.isAltspace )
+			{
+				tintColor.multiplyScalar(0.5);
+				this.userData.tintColor = tintColor;
+
+				this.traverse(function(child)
+				{
+					child.userData.tintColor = tintColor;
+				}.bind(this));
+			}
+			else
+			{
+				this.traverse(function(child)
+				{
+					if( child.material && child.material instanceof THREE.MeshPhongMaterial )
+					{
+						child.material.color = tintColor;
+						child.material.needsUpdate = true;
+					}
+				}.bind(this));
+			}
+		},
 		"applyBehavior": function(behaviorName, options)
 		{
 			if( !!!options )

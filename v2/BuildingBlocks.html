@@ -2,6 +2,8 @@
 <html lang="en">
 	<head>
 		<title>Building Blocks</title>
+		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="BuildingBlocks" appurl="http://www.jumpstartsdk.com/live/v2/BuildingBlocks.html"></script>
+
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
@@ -9,8 +11,8 @@
 			var options = {
 				"appID": "BuildingBlocks",
 				"multiuserOnly": true,
-				"scaleWithEnclosure": false,
-				"sceneScale": 2.0,
+				"scaleWithEnclosure": true,
+				"sceneScale": 3.0,
 				"debug":
 				{
 					"showCursorPlanes": false
@@ -164,6 +166,12 @@
 
 			function createBlock()
 			{
+				if( jumpStart.hoveredObject && !!jumpStart.hoveredObject.userData.removeHandle )
+				{
+					clearTimeout(jumpStart.hoveredObject.userData.removeHandle);
+					delete jumpStart.hoveredObject.userData["removeHandle"];
+				}
+
 				var cage = jumpStart.scene.getObjectByName("cage");
 				if( cage.userData.hidden )
 					return;
@@ -173,6 +181,7 @@
 				var block = jumpStart.spawnInstance(sampleBlock.modelFile);
 				block.position.copy(cage.position);
 				block.blocksLOS = true;
+				block.addEventListener("cursordown", blockCursorDown);
 				block.addEventListener("cursorup", createBlock);
 				block.addEventListener("spawn", blockSpawn);
 				block.addEventListener("remove", blockRemove);
@@ -181,6 +190,17 @@
 				block.scale.copy(cage.userData.sampleBlock.scale);
 
 				jumpStart.playSound("sounds/spawn", 0.5);
+			}
+
+			function blockCursorDown()
+			{
+				this.userData.removeHandle = setTimeout(function()
+				{
+					if( jumpStart.hoveredObject === this )
+						jumpStart.removeInstance(this);
+					else
+						delete this.userData["removeHandle"];
+				}.bind(this), 300);
 			}
 
 			function blockRemove()

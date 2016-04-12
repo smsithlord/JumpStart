@@ -2,6 +2,8 @@
 <html lang="en">
 	<head>
 		<title>MoleWhack</title>
+		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="MoleWhack" appurl="http://www.jumpstartsdk.com/live/v2/MoleWhack.html"></script>
+
 		<script src="engine/misc/JumpStart.js"></script>
 
 		<script>
@@ -9,7 +11,8 @@
 				"appID": "MoleWhack",
 				"multiuserOnly": true,
 				"enclosureOnly": true,
-				"sceneScale": 3.0,
+				"sceneScale": 1.7,
+				"scaleWithEnclosure": false,
 				"debug": {"showCursorPlanes": false}
 			});
 
@@ -464,9 +467,13 @@
 				mole.userData.direction = 1.0;
 			}
 
+			var moleJumpHandle0 = null;
 			function startMoleSequence()
 			{
-				var moleJumpHandle0 = setInterval(randomMoleJump, 900);
+				if( moleJumpHandle0 )
+					clearInterval(moleJumpHandle0);
+				
+				moleJumpHandle0 = setInterval(randomMoleJump, 900);
 			}
 
 			function swingMySmasher()
