@@ -3,7 +3,7 @@
 <html lang="en">
 	<head>
 		<title>Combo Breaker</title>
-		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="ComboBreaker" appurl="http://www.jumpstartsdk.com/live/ComboBreaker.html"></script>
+		<script src="engine/misc/appMenu.js"></script>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
@@ -12,17 +12,17 @@
 		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
-		<script src="FirebaseSync.js"></script>
-		<script src="AltOBJMTLLoader.js"></script>
+		<script src="legacy/v1/FirebaseSync.js"></script>
+		<script src="legacy/v1/AltOBJMTLLoader.js"></script>
 
 		<!-- JumpStart Styles -->
-		<link rel="stylesheet" type="text/css" href="myStyle.css">
+		<link rel="stylesheet" type="text/css" href="legacy/v1/myStyle.css">
 	</head>
 
 	<body>
 
 		<!-- JumpStart SDK Core Include -->
-		<script src="JumpStart.js"></script>
+		<script src="legacy/v1/JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
@@ -64,7 +64,7 @@
 				}
 				
 				// Precache anything that your app needs.
-				var myModels = ["models/FourInRow/slot.obj", "models/FourInRow/frame.obj", "models/FourInRow/pointer.obj", "models/FourInRow/chip.obj", "models/FourInRow/chip2.obj", "models/JumpStart/reset.obj"];
+				var myModels = ["legacy/v1/models/FourInRow/slot.obj", "legacy/v1/models/FourInRow/frame.obj", "legacy/v1/models/FourInRow/pointer.obj", "legacy/v1/models/FourInRow/chip.obj", "legacy/v1/models/FourInRow/chip2.obj", "legacy/v1/models/JumpStart/reset.obj"];
 				JumpStart.loadModels(myModels).then(function() {
 
 					// Finally call JumpStart.doneCaching() to signify you are done.
@@ -102,10 +102,10 @@
 					g_chipPointer.JumpStart.hasChip = false;
 
 					var modelName = g_chipPointer.JumpStart.nextModel;
-					g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
+					g_chipPointer.JumpStart.nextModel = "legacy/v1/models/FourInRow/chip.obj";
 
 					if( g_chipPointer.JumpStart.nextModel === modelName )
-						g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip2.obj";
+						g_chipPointer.JumpStart.nextModel = "legacy/v1/models/FourInRow/chip2.obj";
 
 					g_chipPointer.JumpStart.sync();
 
@@ -148,6 +148,8 @@
 
 			function onReady()
 			{
+				var jumpStartAppMenu = new JumpStartAppMenu("ComboBreaker", "http://www.jumpstartsdk.com/live/ComboBreaker.html", g_scene);
+
 				if( !JumpStart.requestedRoomId )
 					return;
 
@@ -163,7 +165,7 @@
 					var loadingLogoElem = document.getElementById("loadingLogo");
 					if( loadingLogoElem )
 					{
-						loadingLogoElem.src = "misc/beamnow.png";
+						loadingLogoElem.src = "legacy/v1/misc/beamnow.png";
 					}
 
 					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
@@ -182,14 +184,14 @@
 					for( col = -3; col < 4; col++ )
 					{
 						offset.set(col * g_BlockWidth, yOffset + g_OffsetY, 0);
-						instance = JumpStart.spawnInstance("models/FourInRow/slot.obj");
+						instance = JumpStart.spawnInstance("legacy/v1/models/FourInRow/slot.obj");
 						instance.JumpStart.blocksLOS = false;
 						instance.position.add(offset);
 					}
 				}
 
 				// Create the frame
-				instance = JumpStart.spawnInstance("models/FourInRow/frame.obj");
+				instance = JumpStart.spawnInstance("legacy/v1/models/FourInRow/frame.obj");
 				instance.JumpStart.blocksLOS = false;
 				instance.position.y += g_OffsetY;
 
@@ -217,7 +219,7 @@
 					spawnPointer();
 				}
 
-						g_resetButton = JumpStart.spawnInstance("models/JumpStart/reset.obj");
+						g_resetButton = JumpStart.spawnInstance("legacy/v1/models/JumpStart/reset.obj");
 						g_resetButton.translateX(g_worldOffset.y - (g_worldOffset.y / 8.0));
 						g_resetButton.translateZ(-g_worldOffset.y + (g_worldOffset.y / 8.0));
 						g_resetButton.rotateY(-Math.PI / 2.0);
@@ -235,12 +237,12 @@
 						if( g_chipPointer )
 							return;
 
-						g_chipPointer = JumpStart.spawnInstance("models/FourInRow/pointer.obj");
+						g_chipPointer = JumpStart.spawnInstance("legacy/v1/models/FourInRow/pointer.obj");
 						g_chipPointer.position.copy(g_worldOffset).add(new THREE.Vector3(0, g_BlockWidth * 7.0, 0));
 
 						// Extending the JumpStart object with your own properties auto-syncs them
 						g_chipPointer.JumpStart.hasChip = true;
-						g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
+						g_chipPointer.JumpStart.nextModel = "legacy/v1/models/FourInRow/chip.obj";
 
 						g_chipPointer.JumpStart.onTick["chipPointerTick"] = chipPointerTick;
 						g_chipPointer.JumpStart.onSpawn["chipPointerSpawn"] = chipPointerSpawn;
@@ -263,7 +265,7 @@
 				this.JumpStart.makePhysics();
 
 				var colorDirection = 1.0;
-				if( this.JumpStart.modelFile === "models/FourInRow/chip2.obj" )
+				if( this.JumpStart.modelFile === "legacy/v1/models/FourInRow/chip2.obj" )
 					colorDirection = -1.0;
 
 				// Variation
@@ -538,12 +540,12 @@
 
 			function spawnPointer()
 			{
-				g_chipPointer = JumpStart.spawnInstance("models/FourInRow/pointer.obj");
+				g_chipPointer = JumpStart.spawnInstance("legacy/v1/models/FourInRow/pointer.obj");
 				g_chipPointer.position.copy(g_worldOffset).add(new THREE.Vector3(0, g_BlockWidth * 7.0, 0));
 
 				// Extending the JumpStart object with your own properties auto-syncs them
 				g_chipPointer.JumpStart.hasChip = true;
-				g_chipPointer.JumpStart.nextModel = "models/FourInRow/chip.obj";
+				g_chipPointer.JumpStart.nextModel = "legacy/v1/models/FourInRow/chip.obj";
 
 				g_chipPointer.JumpStart.onTick["chipPointerTick"] = chipPointerTick;
 				g_chipPointer.JumpStart.onSpawn["chipPointerSpawn"] = chipPointerSpawn;

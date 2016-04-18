@@ -3,6 +3,7 @@
 <html lang="en">
 	<head>
 		<title>Gator Smasher</title>
+		<script src="engine/misc/appMenu.js"></script>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
@@ -11,17 +12,17 @@
 		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
-		<script src="FirebaseSync.js"></script>
-		<script src="AltOBJMTLLoader.js"></script>
+		<script src="legacy/v1/FirebaseSync.js"></script>
+		<script src="legacy/v1/AltOBJMTLLoader.js"></script>
 
 		<!-- JumpStart Styles -->
-		<link rel="stylesheet" type="text/css" href="myStyle.css">
+		<link rel="stylesheet" type="text/css" href="legacy/v1/myStyle.css">
 	</head>
 
 	<body>
 
 		<!-- JumpStart SDK Core Include -->
-		<script src="JumpStart.js"></script>
+		<script src="legacy/v1/JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
@@ -31,7 +32,7 @@
 			var myOptions =
 			{
 				"showFPS": false,
-				"titleImageURL": "misc/gatorsmashertitle.png",
+				"titleImageURL": "legacy/v1/misc/gatorsmashertitle.png",
 				"legacyLoader": false,
 				"worldScale": 2.0,
 				"scaleWithEnclosure": true,
@@ -69,12 +70,12 @@
 				// local client gets the onReady window-level callback!!
 
 				// You can think of precaching sounds as synchronous (but it's not)
-				//JumpStart.precacheSound("sounds/JumpStart/trumpet");
-				//JumpStart.precacheSound("sounds/JumpStart/cashout");
-				JumpStart.precacheSound("sounds/TikiDrum/cymb0");
+				//JumpStart.precacheSound("legacy/v1/sounds/JumpStart/trumpet");
+				//JumpStart.precacheSound("legacy/v1/sounds/JumpStart/cashout");
+				JumpStart.precacheSound("legacy/v1/sounds/TikiDrum/cymb0");
 
 				// Precache any models that your app needs (asynchronous)
-				var myModels = ["models/GatorSmasher/table.obj", "models/JumpStart/jewel.obj", "models/JumpStart/grass.obj", "models/GatorSmasher/smasher.obj", "models/GatorSmasher/croc.obj"];
+				var myModels = ["legacy/v1/models/GatorSmasher/table.obj", "legacy/v1/models/JumpStart/jewel.obj", "legacy/v1/models/JumpStart/grass.obj", "legacy/v1/models/GatorSmasher/smasher.obj", "legacy/v1/models/GatorSmasher/croc.obj"];
 				JumpStart.loadModels(myModels).then(function() {
 
 					// All assets cached.
@@ -87,6 +88,8 @@
 			// Window-level callback for onReady event
 			function onReady()
 			{
+				var jumpStartAppMenu = new JumpStartAppMenu("GatorSmasher", "http://www.jumpstartsdk.com/live/GatorSmasher.html", g_scene);
+
 				if( !JumpStart.requestedRoomId )
 					return;
 
@@ -102,7 +105,7 @@
 					var loadingLogoElem = document.getElementById("loadingLogo");
 					if( loadingLogoElem )
 					{
-						loadingLogoElem.src = "misc/beamnow.png";
+						loadingLogoElem.src = "legacy/v1/misc/beamnow.png";
 					}
 
 					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
@@ -112,7 +115,7 @@
 				// Only the 1st user needs to create the networked object
 				if( g_localUser.firstUser )
 				{
-					var gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					var gator = JumpStart.spawnInstance("legacy/v1/models/GatorSmasher/croc.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
@@ -125,7 +128,7 @@
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("legacy/v1/models/GatorSmasher/croc.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
@@ -141,7 +144,7 @@
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("legacy/v1/models/GatorSmasher/croc.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
@@ -156,7 +159,7 @@
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("legacy/v1/models/GatorSmasher/croc.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
@@ -171,7 +174,7 @@
 					gator.JumpStart.active = false;
 					gator.JumpStart.sync();
 
-					gator = JumpStart.spawnInstance("models/GatorSmasher/croc.obj");
+					gator = JumpStart.spawnInstance("legacy/v1/models/GatorSmasher/croc.obj");
 					//gator.JumpStart.blocksLOS = false;
 					gator.JumpStart.onTick["gatorTick"] = gatorTick;
 					gator.JumpStart.onSpawn["gatorSpawn"] = gatorSpawn;
@@ -187,7 +190,7 @@
 					gator.JumpStart.sync();
 				}
 
-				g_table = JumpStart.spawnInstance("models/GatorSmasher/table.obj");
+				g_table = JumpStart.spawnInstance("legacy/v1/models/GatorSmasher/table.obj");
 				g_table.JumpStart.blocksLOS = false;
 
 				setTimeout(function()
@@ -227,7 +230,7 @@
 					if( g_mySmasher )
 						return;
 
-					g_mySmasher = JumpStart.spawnInstance("models/GatorSmasher/smasher.obj");
+					g_mySmasher = JumpStart.spawnInstance("legacy/v1/models/GatorSmasher/smasher.obj");
 					g_mySmasher.JumpStart.blocksLOS = false;
 					g_mySmasher.JumpStart.onSpawn["smasherSpawn"] = smasherSpawn;
 					g_mySmasher.JumpStart.onTick["smasherTick"] = smasherTick;
@@ -392,7 +395,7 @@
 					var _this = this;
 					setTimeout(function()
 					{
-						JumpStart.playSound("sounds/GatorSmasher/ow", 0.5, false);
+						JumpStart.playSound("legacy/v1/sounds/GatorSmasher/ow", 0.5, false);
 					}, 300);
 				}
 

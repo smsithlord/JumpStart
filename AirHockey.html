@@ -4,7 +4,7 @@
 <html lang="en">
 	<head>
 		<title>Air Hockey</title>
-		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="AirHockey" appurl="http://www.jumpstartsdk.com/live/AirHockey.html"></script>
+		<script src="engine/misc/appMenu.js"></script>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r73/build/three.min.js"></script>
@@ -17,11 +17,11 @@
 		<script src="http://sdk.altvr.com/libs/three.js/r73/examples/fonts/helvetiker_regular.typeface.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
-		<script src="FirebaseSync.js"></script>
-		<script src="AltOBJMTLLoader.js"></script>
+		<script src="legacy/v1/FirebaseSync.js"></script>
+		<script src="legacy/v1/AltOBJMTLLoader.js"></script>
 
 		<!-- JumpStart Styles -->
-		<link rel="stylesheet" type="text/css" href="myStyle.css" />
+		<link rel="stylesheet" type="text/css" href="legacy/v1/myStyle.css" />
 		<style>
 			#leaderboardContainer {
 				position: fixed;
@@ -85,7 +85,7 @@
 
 
 		<!-- JumpStart SDK Core Include -->
-		<script src="JumpStart.js"></script>
+		<script src="legacy/v1/JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
@@ -234,6 +234,9 @@
 
 			function flipLeaderboardToCamera()
 			{
+				if( JumpStart.webMode )
+					return;
+				
 				var head = JumpStart.localUser.trackingSkeleton.getJoint('Head');
 				var leaderboardIsFlipped = leaderboard.classList.contains('flipped');
 				if ( head.position.z >= 0 && leaderboardIsFlipped ) 
@@ -351,21 +354,21 @@
 				// Networked objects might get spawned before the
 				// local client gets the onReady window-level callback!!
 
-				JumpStart.precacheSound("sounds/AirHockey/score");
-				JumpStart.precacheSound("sounds/AirHockey/gameover");
-				JumpStart.precacheSound("sounds/AirHockey/hit1");
-				JumpStart.precacheSound("sounds/AirHockey/hit2");
-				JumpStart.precacheSound("sounds/AirHockey/hit3");
+				JumpStart.precacheSound("legacy/v1/sounds/AirHockey/score");
+				JumpStart.precacheSound("legacy/v1/sounds/AirHockey/gameover");
+				JumpStart.precacheSound("legacy/v1/sounds/AirHockey/hit1");
+				JumpStart.precacheSound("legacy/v1/sounds/AirHockey/hit2");
+				JumpStart.precacheSound("legacy/v1/sounds/AirHockey/hit3");
 
 				// Precache any models that your app needs (asynchronous)
 				JumpStart.loadModels([
-					"models/AirHockey/puck.obj",
-					"models/AirHockey/reset.obj",
-					"models/AirHockey/striker.obj",
-					"models/AirHockey/table.obj",
-					"models/AirHockey/scoreframe.obj",
-					"models/AirHockey/pixel1.obj",
-					"models/AirHockey/pixel2.obj"
+					"legacy/v1/models/AirHockey/puck.obj",
+					"legacy/v1/models/AirHockey/reset.obj",
+					"legacy/v1/models/AirHockey/striker.obj",
+					"legacy/v1/models/AirHockey/table.obj",
+					"legacy/v1/models/AirHockey/scoreframe.obj",
+					"legacy/v1/models/AirHockey/pixel1.obj",
+					"legacy/v1/models/AirHockey/pixel2.obj"
 				]).then(function()
 				{
 					// All assets cached.
@@ -379,6 +382,7 @@
 			// Window-level callback for onReady event
 			function onReady() 
 			{
+				var jumpStartAppMenu = new JumpStartAppMenu("AirHockey", "http://www.jumpstartsdk.com/live/AirHockey.html", g_scene);
 
 				if( !JumpStart.requestedRoomId )
 					return;
@@ -395,7 +399,7 @@
 					var loadingLogoElem = document.getElementById("loadingLogo");
 					if( loadingLogoElem )
 					{
-						loadingLogoElem.src = "misc/beamnow.png";
+						loadingLogoElem.src = "legacy/v1/misc/beamnow.png";
 					}
 
 					JumpStart.showLoadingMsg(
@@ -409,7 +413,7 @@
 				// Only the 1st user needs to create the networked object
 				if( g_localUser.firstUser ) 
 				{
-					g_resetButton = JumpStart.spawnInstance("models/AirHockey/reset.obj");
+					g_resetButton = JumpStart.spawnInstance("legacy/v1/models/AirHockey/reset.obj");
 					g_resetButton.JumpStart.numResets = 0;
 					g_resetButton.JumpStart.blocksLOS = true;
 					g_resetButton.JumpStart.onCursorDown["resetDown"] = resetDown;
@@ -421,7 +425,7 @@
 					g_resetButton.scale.z = 0.5;
 					g_resetButton.JumpStart.sync();
 
-					g_puck = JumpStart.spawnInstance("models/AirHockey/puck.obj");
+					g_puck = JumpStart.spawnInstance("legacy/v1/models/AirHockey/puck.obj");
 					g_puck.JumpStart.ownerId = "";
 					g_puck.JumpStart.blocksLOS = false;
 					g_puck.JumpStart.onSpawn["puckSpawn"] = puckSpawn;
@@ -430,14 +434,14 @@
 					g_puck.JumpStart.freefallRot.set(0, 0, 0);
 					g_puck.JumpStart.sync();
 
-					var striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
+					var striker = JumpStart.spawnInstance("legacy/v1/models/AirHockey/striker.obj");
 					resetStriker(striker, {side: "a", strikerNumber: 0});
 					g_strikers[0] = striker;
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
 					striker.userData.lastSyncTime = g_clock.elapsedTime;
 					DoAutoSync(striker, true);
 
-					striker = JumpStart.spawnInstance("models/AirHockey/striker.obj");
+					striker = JumpStart.spawnInstance("legacy/v1/models/AirHockey/striker.obj");
 					resetStriker(striker, {side: "b", strikerNumber: 1});
 					g_strikers[1] = striker;
 					striker.userData.lastSyncPos = new THREE.Vector3().copy(striker.position);
@@ -642,7 +646,7 @@
 			{
 				var scoreBoard = JumpStart.spawnInstance(null);
 				var scoreFrame = window.scoreFrame = JumpStart.spawnInstance(
-					"models/AirHockey/scoreframe.obj", {parent: scoreBoard});
+					"legacy/v1/models/AirHockey/scoreframe.obj", {parent: scoreBoard});
 				scoreFrame.name = "scoreFrame";
 				scoreFrame.rotation.y = Math.PI / 2;
 				scoreFrame.scale.set(5, 5.3, 10.1);
@@ -843,13 +847,13 @@
 
 				if( this.JumpStart.score > this.userData.oldScore )
 				{
-					playSoundThrottled("sounds/AirHockey/score", 0.7, 1000);
+					playSoundThrottled("legacy/v1/sounds/AirHockey/score", 0.7, 1000);
 					DoubleRainbow(this.JumpStart.side);
 				}
 
 				if( this.JumpStart.score >= g_winningScore )
 				{
-					playSoundThrottled("sounds/AirHockey/gameover", 0.7, 1000);
+					playSoundThrottled("legacy/v1/sounds/AirHockey/gameover", 0.7, 1000);
 					if( this.JumpStart.ownerId === g_localUser.userId )
 					{
 						recordWinOnLeaderboard();
@@ -997,16 +1001,14 @@
 
 				striker.JumpStart.score++;
 				DoAutoSync(striker, true);
-
-				console.log("GOOOOOOOOOOOOOOOOOOOOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAALLLLLLLLLL");
 			}
 
 			function playRandomHitSound(speed)
 			{
 				var hitSounds = [
-					"sounds/AirHockey/hit1",
-					"sounds/AirHockey/hit2",
-					"sounds/AirHockey/hit3"
+					"legacy/v1/sounds/AirHockey/hit1",
+					"legacy/v1/sounds/AirHockey/hit2",
+					"legacy/v1/sounds/AirHockey/hit3"
 				];
 				var volume = THREE.Math.clamp(speed, 0.8, 5) / 5;
 				JumpStart.playSound(hitSounds[Math.floor(Math.random() * 3)], volume);
@@ -1189,7 +1191,7 @@
 
 				g_rayCastObjects.push(g_table);
 
-				var tableModel = JumpStart.spawnInstance("models/AirHockey/table.obj", {"parent": g_table});
+				var tableModel = JumpStart.spawnInstance("legacy/v1/models/AirHockey/table.obj", {"parent": g_table});
 				tableModel.position.z += 0.1;
 				tableModel.JumpStart.blocksLOS = false;
 				tableModel.rotateX(-Math.PI / 2.0);
@@ -1283,12 +1285,12 @@
 
 				var yaw = 0;
 				var zOrigin = zMax;
-				var pixelModelName = "models/AirHockey/pixel2.obj";
+				var pixelModelName = "legacy/v1/models/AirHockey/pixel2.obj";
 				if( side !== "a" )
 				{
 					yaw = Math.PI;
 					zOrigin = zMin;
-					pixelModelName = "models/AirHockey/pixel1.obj";
+					pixelModelName = "legacy/v1/models/AirHockey/pixel1.obj";
 				}
 
 				var divisions = 8.0;

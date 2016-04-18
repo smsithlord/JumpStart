@@ -3,7 +3,7 @@
 <html lang="en">
 	<head>
 		<title>Sammy</title>
-		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="Sammy" appurl="http://www.jumpstartsdk.com/live/Sammy.html"></script>
+		<script src="engine/misc/appMenu.js"></script>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
@@ -12,17 +12,17 @@
 		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
-		<script src="FirebaseSync.js"></script>
-		<script src="AltOBJMTLLoader.js"></script>
+		<script src="legacy/v1/FirebaseSync.js"></script>
+		<script src="legacy/v1/AltOBJMTLLoader.js"></script>
 
 		<!-- JumpStart Styles -->
-		<link rel="stylesheet" type="text/css" href="myStyle.css">
+		<link rel="stylesheet" type="text/css" href="legacy/v1/myStyle.css">
 	</head>
 
 	<body>
 
 		<!-- JumpStart SDK Core Include -->
-		<script src="JumpStart.js"></script>
+		<script src="legacy/v1/JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
@@ -72,16 +72,16 @@
 
 				// Precache any models that your app needs (asynchronous)
 				var myModels = [
-					"models/Sammy/bugbody.obj",
-					"models/Sammy/bugeyes.obj",
-					"models/Sammy/bugdish.obj",
-					"models/Sammy/bugrig.obj",
-					"models/Sammy/bugrearleft.obj",
-					"models/Sammy/bugmidleft.obj",
-					"models/Sammy/bugfrontleft.obj",
-					"models/Sammy/bugrearright.obj",
-					"models/Sammy/bugmidright.obj",
-					"models/Sammy/bugfrontright.obj"
+					"legacy/v1/models/Sammy/bugbody.obj",
+					"legacy/v1/models/Sammy/bugeyes.obj",
+					"legacy/v1/models/Sammy/bugdish.obj",
+					"legacy/v1/models/Sammy/bugrig.obj",
+					"legacy/v1/models/Sammy/bugrearleft.obj",
+					"legacy/v1/models/Sammy/bugmidleft.obj",
+					"legacy/v1/models/Sammy/bugfrontleft.obj",
+					"legacy/v1/models/Sammy/bugrearright.obj",
+					"legacy/v1/models/Sammy/bugmidright.obj",
+					"legacy/v1/models/Sammy/bugfrontright.obj"
 				];
 
 				JumpStart.loadModels(myModels).then(function() {
@@ -94,6 +94,8 @@
 			// Window-level callback for onReady event
 			function onReady()
 			{
+				var jumpStartAppMenu = new JumpStartAppMenu("Sammy", "http://www.jumpstartsdk.com/live/Sammy.html", g_scene);
+
 //				if( !JumpStart.requestedRoomId )
 //					return;
 
@@ -109,7 +111,7 @@
 					var loadingLogoElem = document.getElementById("loadingLogo");
 					if( loadingLogoElem )
 					{
-						loadingLogoElem.src = "misc/beamnow.png";
+						loadingLogoElem.src = "legacy/v1/misc/beamnow.png";
 					}
 
 					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
@@ -121,7 +123,7 @@
 
 				}
 
-				//var bug = JumpStart.spawnInstance("models/Sammy/bugfull.obj");
+				//var bug = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugfull.obj");
 
 //				setTimeout(function() {
 					if( !g_sammy )
@@ -425,7 +427,7 @@
 				var x;
 				for( x in JumpStart.models )
 				{
-					if( JumpStart.models[x].fileName === "models/Sammy/bugrig.obj" )
+					if( JumpStart.models[x].fileName === "legacy/v1/models/Sammy/bugrig.obj" )
 					{
 						verts = JumpStart.models[x].object.children[JumpStart.models[x].object.children.length-1].geometry.vertices;
 						break;
@@ -434,11 +436,11 @@
 
 				var bugJoints = {"body": verts[4], "dish": verts[7], "eyes": verts[8], "rearleft": verts[1], "midleft": verts[0], "frontleft": verts[3], "rearright": verts[6], "midright": verts[5], "frontright": verts[2]};
 
-				var body = JumpStart.spawnInstance("models/Sammy/bugbody.obj", {"parent": this});
+				var body = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugbody.obj", {"parent": this});
 				body.position.copy(bugJoints.body);
 				body.JumpStart.blocksLOS = false;
 
-				var dish = JumpStart.spawnInstance("models/Sammy/bugdish.obj", {"parent": this});
+				var dish = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugdish.obj", {"parent": this});
 				dish.position.copy(bugJoints.dish);
 				dish.JumpStart.blocksLOS = false;
 
@@ -447,11 +449,11 @@
 					this.rotateY(2.0 * g_deltaTime);
 				};
 
-				var eyes = JumpStart.spawnInstance("models/Sammy/bugeyes.obj", {"parent": this});
+				var eyes = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugeyes.obj", {"parent": this});
 				eyes.position.copy(bugJoints.eyes);
 				eyes.JumpStart.blocksLOS = false;
 
-				var rearleft = JumpStart.spawnInstance("models/Sammy/bugrearleft.obj", {"parent": this});
+				var rearleft = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugrearleft.obj", {"parent": this});
 				rearleft.JumpStart.blocksLOS = false;
 				rearleft.position.copy(bugJoints.rearleft);
 				rearleft.userData.direction = -1.0;
@@ -464,7 +466,7 @@
 
 				rearleft.JumpStart.onTick = legWalk;
 
-				var midleft = JumpStart.spawnInstance("models/Sammy/bugmidleft.obj", {"parent": this});
+				var midleft = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugmidleft.obj", {"parent": this});
 				midleft.position.copy(bugJoints.midleft);
 				midleft.JumpStart.blocksLOS = false;
 				midleft.userData.direction = 1.0;
@@ -477,7 +479,7 @@
 
 				midleft.JumpStart.onTick = legWalk;
 
-				var frontleft = JumpStart.spawnInstance("models/Sammy/bugfrontleft.obj", {"parent": this});
+				var frontleft = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugfrontleft.obj", {"parent": this});
 				frontleft.position.copy(bugJoints.frontleft);
 				frontleft.JumpStart.blocksLOS = false;
 				frontleft.userData.direction = -1.0;
@@ -490,7 +492,7 @@
 
 				frontleft.JumpStart.onTick = legWalk;
 
-				var rearright = JumpStart.spawnInstance("models/Sammy/bugrearright.obj", {"parent": this});
+				var rearright = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugrearright.obj", {"parent": this});
 				rearright.position.copy(bugJoints.rearright);
 				rearright.JumpStart.blocksLOS = false;
 				rearright.userData.direction = -1.0;
@@ -503,7 +505,7 @@
 
 				rearright.JumpStart.onTick = legWalk2;
 
-				var midright = JumpStart.spawnInstance("models/Sammy/bugmidright.obj", {"parent": this});
+				var midright = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugmidright.obj", {"parent": this});
 				midright.position.copy(bugJoints.midright);
 				midright.JumpStart.blocksLOS = false;
 				midright.userData.direction = 1.0;
@@ -516,7 +518,7 @@
 
 				midright.JumpStart.onTick = legWalk2;
 
-				var frontright = JumpStart.spawnInstance("models/Sammy/bugfrontright.obj", {"parent": this});
+				var frontright = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugfrontright.obj", {"parent": this});
 				frontright.position.copy(bugJoints.frontright);
 				frontright.JumpStart.blocksLOS = false;
 				frontright.userData.direction = -1.0;
@@ -530,7 +532,7 @@
 				frontright.JumpStart.onTick = legWalk2;
 
 /*
-				var eyes = JumpStart.spawnInstance("models/Sammy/bugeyes.obj", {"parent": this});
+				var eyes = JumpStart.spawnInstance("legacy/v1/models/Sammy/bugeyes.obj", {"parent": this});
 				eyes.position.copy(bugJoints.eyes);
 				eyes.JumpStart.blocksLOS = false;
 */

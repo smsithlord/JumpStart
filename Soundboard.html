@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Soundboard</title>
+		<script src="engine/misc/appMenu.js"></script>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "Soundboard",
+				"multiuserOnly": false,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				jumpStart.precacheSound("sounds/ping");
+				jumpStart.precacheSound("sounds/pingoff");
+
+				// Async
+				jumpStart.loadModels(["models/pole", "models/buttonHolder", "models/buttonHolderMirrored", "models/button", "models/sign"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				jumpStart.precacheSound("sounds/applause");
+				jumpStart.precacheSound("sounds/boing");
+				jumpStart.precacheSound("sounds/laugh");
+
+				var pole = jumpStart.spawnInstance("models/pole");
+				pole.syncData.soundFile = "";
+				pole.syncData.playCount = "";
+				pole.addEventListener("spawn", poleSpawn);
+				pole.addEventListener("tick", poleTick);
+				pole.sync();
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			jumpStart.addEventListener("ready", function()
+			{
+				var jumpStartAppMenu = new JumpStartAppMenu("Soundboard", "http://www.jumpstartsdk.com/live/Soundboard.html", jumpStart.scene);
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function poleTick()
+			{
+				if( !!!this.userData.oldPlayCount )
+					this.userData.oldPlayCount = this.syncData.playCount;
+
+				if( this.userData.oldPlayCount !== this.syncData.playCount )
+				{
+					jumpStart.playSound(this.syncData.soundFile);
+					this.userData.oldPlayCount = this.syncData.playCount;
+				}
+			}
+
+			function poleSpawn()
+			{
+				spawnAButton.call(this, false, 46.223, "sounds/applause");
+				spawnAButton.call(this, false, 118.942, "sounds/boing");
+				spawnAButton.call(this, false, 191.661, "sounds/laugh");
+				spawnAButton.call(this, true, 82.857);
+				spawnAButton.call(this, true, 155.576);
+				spawnAButton.call(this, true, 228.295);
+
+				var sign = jumpStart.spawnInstance("models/sign", {"parent": this});
+				sign.position.y = 302.0;
+				//var button = jumpStart.spawnInstance("models/button", {"parent": buttonHolder});
+				//button.position.set(-68.945, 0, 14.123);
+
+				function spawnAButton(mirrored, offsetY, soundFile)
+				{
+					var model = (mirrored) ? "models/buttonHolderMirrored" : "models/buttonHolder";
+					var buttonHolder = jumpStart.spawnInstance(model, {"parent": this});
+					buttonHolder.position.y = offsetY;
+
+					var buttonFace = jumpStart.spawnInstance("models/button", {"parent": buttonHolder});
+					buttonFace.userData.pole = this;
+					buttonFace.scale.multiplyScalar(1.02);
+
+					var xMirror = (mirrored) ? 1.0 : -1.0;
+					buttonFace.translateX(68.55 * xMirror);
+					buttonFace.translateZ(13.5);
+
+					buttonFace.blocksLOS = true;
+					if( !!soundFile )
+						buttonFace.userData.soundFile = soundFile;
+
+					buttonFace.addEventListener("cursorenter", function()
+					{
+						this.setColor(new THREE.Color("rgb(100, 100, 255)"));
+						jumpStart.playSound("sounds/pingoff", 0.5);
+					});
+					buttonFace.addEventListener("cursorexit", function()
+					{
+						this.setColor(new THREE.Color("rgb(255, 255, 255)"));
+					});
+					buttonFace.addEventListener("cursorup", function()
+					{
+						if( !!soundFile )
+						{
+							this.userData.pole.syncData.soundFile = this.userData.soundFile;
+							this.userData.pole.syncData.playCount += 1;	
+							this.userData.pole.sync();
+						}
+					});
+//http://localhost:8000/live/v2/Soundboard.html
+
+					if( !!soundFile )
+					{
+						var textureName;
+
+						textureName = soundFile.substring(7);
+
+						var texture = THREE.ImageUtils.loadTexture("assets/Soundboard/models/" + textureName + ".jpg");
+						texture.needsUpdate = true;
+						var material = new THREE.MeshPhongMaterial({map: texture, visible: true});
+
+						buttonFace.traverse(function(child)
+						{
+							if( !!child.material )
+								child.material = material;
+						});
+					}
+
+					return buttonHolder;
+				}
+			}
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>

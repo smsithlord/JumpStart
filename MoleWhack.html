@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>MoleWhack</title>
+		<script src="engine/misc/appMenu.js"></script>
+		<script src="engine/misc/JumpStart.js"></script>
+		<script src="assets/MoleWhack/misc/moleWhackTable.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "MoleWhack",
+				"multiuserOnly": true,
+				"enclosureOnly": true,
+				"sceneScale": 1.7,
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": false}
+			});
+/*
+			var printed = [];
+			jumpStart.addEventListener("tick", function()
+			{
+				var gamepads = altspace.getGamepads();
+				var gamepad;
+				var x;
+				for( x in gamepads )
+				{
+					gamepad = gamepads[x];
+
+					if( printed.indexOf(gamepad) < 0 )
+					{
+						var elem = document.createElement("div");
+						elem.innerHTML = JSON.stringify(gamepad);
+						document.body.appendChild(elem);
+
+						printed.push(gamepad);
+					}
+
+					continue;
+					//console.log(gamepad.mapping);//http://localhost:8000/live/MoleWhack.html
+
+					var i, button;
+					for( i = 0; i < gamepad.buttons.length; i++ )
+					{
+						button = gamepad.buttons[i];
+
+						if(button.value !== 0 )
+							console.log(button);
+					}
+				}
+			});
+*/
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModels(["models/smasher", "models/table", "models/mole", "models/gold"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				var table = jumpStart.spawnInstance("models/table");
+				table.position.y += 48.0;
+//				table.position.x += 150.0;
+//				table.rotateY(Math.PI / -3.0);
+				table.name = "PLAY";
+				table.applyBehavior("moleWhackTable");	// This behavior requires each instance have a unique name.
+				table.sync();
+/*
+				table = jumpStart.spawnInstance("models/table");
+				table.position.y += 48.0;
+				table.position.x -= 150.0;
+				table.rotateY(Math.PI / 3.0);
+				table.name = "SecondTable";
+				table.applyBehavior("moleWhackTable");	// This behavior requires each instance have a unique name.
+				table.sync();
+*/
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			jumpStart.addEventListener("ready", function()
+			{
+				var jumpStartAppMenu = new JumpStartAppMenu("MoleWhack", "http://www.jumpstartsdk.com/live/MoleWhack.html", jumpStart.scene);
+
+				return true;
+			});
+
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>

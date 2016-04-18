@@ -3,8 +3,7 @@
 <html lang="en">
 	<head>
 		<title>AstroCatastrophe</title>
-
-		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="AstroCatastrophe" appurl="http://www.jumpstartsdk.com/live/AstroCatastrophe.html"></script>
+		<script src="engine/misc/appMenu.js"></script>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r73/build/three.min.js"></script>
@@ -13,11 +12,11 @@
 		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
-		<script src="FirebaseSync.js"></script>
-		<script src="AltOBJMTLLoader.js"></script>
+		<script src="legacy/v1/FirebaseSync.js"></script>
+		<script src="legacy/v1/AltOBJMTLLoader.js"></script>
 
 		<!-- JumpStart Styles -->
-		<link rel="stylesheet" type="text/css" href="myStyle.css">
+		<link rel="stylesheet" type="text/css" href="legacy/v1/myStyle.css">
 
 		<style>
 			#waveDisplay
@@ -35,16 +34,16 @@
 
 	<body>
 
-		<img src="misc/astrocontrols.png" id="controls" style="display: none; position: fixed; top: 150px; left: 10px; width: 200px;" />
+		<img src="legacy/v1/misc/astrocontrols.png" id="controls" style="display: none; position: fixed; top: 150px; left: 10px; width: 200px;" />
 
 		<div id="waveDisplay"></div>
 
 		<div style="position: absolute; top: 0; left: 0; width: 640px; height: 240px; display: none;" id="buildmenu">
-			<img src="misc/AstroCatastrophe/buildslate.jpg" style="position: absolute; top: 0; left: 0;" />
-			<img id="manualgun" src="misc/AstroCatastrophe/manualgun.jpg" style="position: absolute; top: 86px; left: 68px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/manualgun_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/manualgun.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawn('manualgun'); }" />
-			<img id="autogun" src="misc/AstroCatastrophe/autogun.jpg" style="position: absolute; top: 86px; left: 193px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/autogun_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/autogun.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawn('autogun'); }" />
-			<img id="missile" src="misc/AstroCatastrophe/missile_disabled.jpg" style="position: absolute; top: 86px; left: 320px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/missile_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/missile.jpg'; }" />
-			<img id="miner" src="misc/AstroCatastrophe/miner.jpg" style="position: absolute; top: 86px; left: 447px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/miner_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'misc/AstroCatastrophe/miner.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawnMiner(); destroyBuildMenu(); }" />
+			<img src="legacy/v1/misc/AstroCatastrophe/buildslate.jpg" style="position: absolute; top: 0; left: 0;" />
+			<img id="manualgun" src="legacy/v1/misc/AstroCatastrophe/manualgun.jpg" style="position: absolute; top: 86px; left: 68px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/manualgun_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/manualgun.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawn('manualgun'); }" />
+			<img id="autogun" src="legacy/v1/misc/AstroCatastrophe/autogun.jpg" style="position: absolute; top: 86px; left: 193px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/autogun_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/autogun.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawn('autogun'); }" />
+			<img id="missile" src="legacy/v1/misc/AstroCatastrophe/missile_disabled.jpg" style="position: absolute; top: 86px; left: 320px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/missile_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/missile.jpg'; }" />
+			<img id="miner" src="legacy/v1/misc/AstroCatastrophe/miner.jpg" style="position: absolute; top: 86px; left: 447px;" onmouseover="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/miner_on.jpg'; }" onmouseout="if( this.src.indexOf('_disabled.jpg') < 0 ) { this.src = 'legacy/v1/misc/AstroCatastrophe/miner.jpg'; }" onclick="if( this.src.indexOf('_disabled.jpg') < 0 ) { spawnMiner(); destroyBuildMenu(); }" />
 		</div>
 
 		<table id="gameover" style="background-color: rgba(0, 0, 0, 0.5); width: 100%; height: 100%; display: none;" onclick="window.location='AstroCatastrophe.html?random=' + Math.random();">
@@ -55,7 +54,7 @@
 		</table>
 
 		<!-- JumpStart SDK Core Include -->
-		<script src="JumpStart.js"></script>
+		<script src="legacy/v1/JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
@@ -106,34 +105,34 @@
 				// local client gets the onReady window-level callback!!
 
 				// You can think of precaching sounds as synchronous (but it's not)
-				JumpStart.precacheSound("sounds/SpacePilot/laser2");
-				JumpStart.precacheSound("sounds/SpacePilot/laser0");
-				JumpStart.precacheSound("sounds/SpacePilot/explosion0");
-				JumpStart.precacheSound("sounds/SpacePilot/explosion1");
-				//JumpStart.precacheSound("sounds/JumpStart/trumpet");
-				//JumpStart.precacheSound("sounds/JumpStart/cashout");
+				JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/laser2");
+				JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/laser0");
+				JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/explosion0");
+				JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/explosion1");
+				//JumpStart.precacheSound("legacy/v1/sounds/JumpStart/trumpet");
+				//JumpStart.precacheSound("legacy/v1/sounds/JumpStart/cashout");
 
 				// Precache any models that your app needs (asynchronous)
 				var myModels = [
-					"models/JumpStart/jewel.obj",
-					"models/JumpStart/grass.obj",
-					"models/AstroCatastrophe/capitol.obj",
-					"models/AstroCatastrophe/crystals.obj",
-					"models/AstroCatastrophe/asteroid.obj",
-					"models/AstroCatastrophe/manualgun.obj",
-					"models/AstroCatastrophe/manualgun_base.obj",
-					"models/AstroCatastrophe/manualgun_tower.obj",
-					"models/AstroCatastrophe/manualgun_barrels.obj",
-					"models/AstroCatastrophe/autogun.obj",
-					"models/AstroCatastrophe/autogun_base.obj",
-					"models/AstroCatastrophe/autogun_tower.obj",
-					"models/AstroCatastrophe/autogun_barrel.obj",
-					"models/AstroCatastrophe/missile.obj",
-					"models/SpacePilot/enemy_laser.obj",
-					"models/SpacePilot/explosion.obj",
-					"models/AstroCatastrophe/gold.obj",
-					"models/AstroCatastrophe/miner.obj",
-					"models/JumpStart/reset.obj"
+					"legacy/v1/models/JumpStart/jewel.obj",
+					"legacy/v1/models/JumpStart/grass.obj",
+					"legacy/v1/models/AstroCatastrophe/capitol.obj",
+					"legacy/v1/models/AstroCatastrophe/crystals.obj",
+					"legacy/v1/models/AstroCatastrophe/asteroid.obj",
+					"legacy/v1/models/AstroCatastrophe/manualgun.obj",
+					"legacy/v1/models/AstroCatastrophe/manualgun_base.obj",
+					"legacy/v1/models/AstroCatastrophe/manualgun_tower.obj",
+					"legacy/v1/models/AstroCatastrophe/manualgun_barrels.obj",
+					"legacy/v1/models/AstroCatastrophe/autogun.obj",
+					"legacy/v1/models/AstroCatastrophe/autogun_base.obj",
+					"legacy/v1/models/AstroCatastrophe/autogun_tower.obj",
+					"legacy/v1/models/AstroCatastrophe/autogun_barrel.obj",
+					"legacy/v1/models/AstroCatastrophe/missile.obj",
+					"legacy/v1/models/SpacePilot/enemy_laser.obj",
+					"legacy/v1/models/SpacePilot/explosion.obj",
+					"legacy/v1/models/AstroCatastrophe/gold.obj",
+					"legacy/v1/models/AstroCatastrophe/miner.obj",
+					"legacy/v1/models/JumpStart/reset.obj"
 				];
 
 				JumpStart.loadModels(myModels).then(function() {
@@ -154,6 +153,8 @@
 			// Window-level callback for onReady event
 			function onReady()
 			{
+				var jumpStartAppMenu = new JumpStartAppMenu("AstroCatastrophe", "http://www.jumpstartsdk.com/live/AstroCatastrophe.html", g_scene);
+
 				if( !JumpStart.requestedRoomId )
 					return;
 
@@ -169,7 +170,7 @@
 					var loadingLogoElem = document.getElementById("loadingLogo");
 					if( loadingLogoElem )
 					{
-						loadingLogoElem.src = "misc/beamnow.png";
+						loadingLogoElem.src = "legacy/v1/misc/beamnow.png";
 					}
 
 					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
@@ -183,7 +184,7 @@
 				{
 					/*
 					// Spawn a jewel block
-					var myInstance = JumpStart.spawnInstance("models/JumpStart/jewel.obj");
+					var myInstance = JumpStart.spawnInstance("legacy/v1/models/JumpStart/jewel.obj");
 
 					// Do something each render tick
 					myInstance.JumpStart.onTick["spinObject"] = spinObject;
@@ -205,7 +206,7 @@
 
 
 					// Spawn a grass block
-					var myOtherInstance = JumpStart.spawnInstance("models/JumpStart/grass.obj");
+					var myOtherInstance = JumpStart.spawnInstance("legacy/v1/models/JumpStart/grass.obj");
 
 					// Adjust the Object3D's position and scale
 					var offset = new THREE.Vector3(100.0, 0.0, 0.0);
@@ -252,7 +253,7 @@
 
 				setTimeout(function()
 				{
-					//g_marker = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_base.obj");
+					//g_marker = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/manualgun_base.obj");
 
 					if( !g_capitol )
 					{
@@ -271,7 +272,7 @@
 						g_capitol.JumpStart.wins = 0;
 						g_capitol.JumpStart.sync();
 
-						g_asteroid = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+						g_asteroid = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/asteroid.obj");
 						g_asteroid.JumpStart.ownerId = g_localUser.userId;
 						g_asteroid.scale.set(1, 1, 1).multiplyScalar(0.5);
 						g_asteroid.JumpStart.radius = 50.0;
@@ -282,7 +283,7 @@
 						g_asteroid.JumpStart.onTick["asteroidTick"] = asteroidTick;
 						g_asteroid.JumpStart.sync();
 
-						g_crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+						g_crystals = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/crystals.obj");
 						g_crystals.position.x += 120.0;
 						g_crystals.position.z += 20.0;
 						g_crystals.JumpStart.ownerId = g_localUser.userId;
@@ -292,14 +293,14 @@
 						spawnMiner(true);
 					}
 
-					//var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+					//var crystals = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/crystals.obj");
 					/*
-					var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+					var crystals = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/crystals.obj");
 					crystals.position.x += 120.0;
 					crystals.position.z += 20.0;
 					crystals.scale.set(0.5, 0.5, 0.5);
 
-					crystals = JumpStart.spawnInstance("models/AstroCatastrophe/miner.obj");
+					crystals = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/miner.obj");
 					crystals.position.x += 120.0;
 
 					crystals.position.z += 100.0;
@@ -308,7 +309,7 @@
 					//g_asteroid.translate.z(160.0);
 					//g_asteroid.scale.set(0.4, 0.4, 0.4);
 
-					g_resetButton = JumpStart.spawnInstance("models/JumpStart/reset.obj");
+					g_resetButton = JumpStart.spawnInstance("legacy/v1/models/JumpStart/reset.obj");
 					g_resetButton.translateX(g_worldOffset.y - (g_worldOffset.y / 8.0));
 					g_resetButton.translateZ(-g_worldOffset.y + (g_worldOffset.y / 8.0));
 					g_resetButton.rotateY(-Math.PI / 2.0);
@@ -336,7 +337,7 @@
 */
 
 /*
-var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
+var crystals = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/crystals.obj");
 					crystals.position.x += 120.0;
 					crystals.position.z += 20.0;
 					crystals.scale.set(0.5, 0.5, 0.5);
@@ -415,7 +416,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				{
 					if( g_spawning.type === "manualgun" )
 					{
-						var manualgun = JumpStart.spawnInstance();//"models/AstroCatastrophe/manualgun_base.obj");
+						var manualgun = JumpStart.spawnInstance();//"legacy/v1/models/AstroCatastrophe/manualgun_base.obj");
 						manualgun.JumpStart.onSpawn["manualgunSpawn"] = manualgunSpawn;
 						manualgun.JumpStart.onTick["manualgunTick"] = manualgunTick;
 						manualgun.position.copy(g_spawning.object.position);
@@ -474,7 +475,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 			{
 				if( g_capitol.JumpStart.money >= 30 || (typeof force !== "undefined" && force) )
 				{
-					var miner = JumpStart.spawnInstance("models/AstroCatastrophe/miner.obj");
+					var miner = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/miner.obj");
 					miner.position.copy(g_capitol.position);
 					miner.JumpStart.ownerId = g_localUser.userId;
 					miner.JumpStart.onSpawn["minerSpawn"] = minerSpawn;
@@ -522,7 +523,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				{
 					if( this.JumpStart.holding )
 					{
-						var object = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj", {"parent": this});
+						var object = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/crystals.obj", {"parent": this});
 						object.scale.set(0.5, 0.5, 0.5);
 						object.translateZ(15.0);
 						object.translateY(6.0);
@@ -610,24 +611,24 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				if( this.userData.oldMoney !== this.JumpStart.money || this.userData.oldHealth !== this.JumpStart.health )
 				{
 					if( this.JumpStart.money < 5 && g_manualgunElem.src.indexOf("_disabled.jpg") < 0 )
-						g_manualgunElem.src = "misc/AstroCatastrophe/manualgun_disabled.jpg";
+						g_manualgunElem.src = "legacy/v1/misc/AstroCatastrophe/manualgun_disabled.jpg";
 					else if( this.JumpStart.money >= 5 && g_manualgunElem.src.indexOf("_disabled.jpg") >= 0 )
-						g_manualgunElem.src = "misc/AstroCatastrophe/manualgun.jpg";
+						g_manualgunElem.src = "legacy/v1/misc/AstroCatastrophe/manualgun.jpg";
 
 					if( this.JumpStart.money < 10 && g_autogunElem.src.indexOf("_disabled.jpg") < 0 )
-						g_autogunElem.src = "misc/AstroCatastrophe/autogun_disabled.jpg";
+						g_autogunElem.src = "legacy/v1/misc/AstroCatastrophe/autogun_disabled.jpg";
 					else if( this.JumpStart.money >= 10 && g_autogunElem.src.indexOf("_disabled.jpg") >= 0 )
-						g_autogunElem.src = "misc/AstroCatastrophe/autogun.jpg";
+						g_autogunElem.src = "legacy/v1/misc/AstroCatastrophe/autogun.jpg";
 
 					if( this.JumpStart.money < 20 && g_missileElem.src.indexOf("_disabled.jpg") < 0 )
-						g_missileElem.src = "misc/AstroCatastrophe/missile_disabled.jpg";
+						g_missileElem.src = "legacy/v1/misc/AstroCatastrophe/missile_disabled.jpg";
 //					else if( this.JumpStart.money >= 20 && g_missileElem.src.indexOf("_disabled.jpg") >= 0 )
-//						g_missileElem.src = "misc/AstroCatastrophe/missile.jpg";
+//						g_missileElem.src = "legacy/v1/misc/AstroCatastrophe/missile.jpg";
 
 					if( this.JumpStart.money < 30 && g_minerElem.src.indexOf("_disabled.jpg") < 0 )
-						g_minerElem.src = "misc/AstroCatastrophe/miner_disabled.jpg";
+						g_minerElem.src = "legacy/v1/misc/AstroCatastrophe/miner_disabled.jpg";
 					else if( this.JumpStart.money >= 30 && g_minerElem.src.indexOf("_disabled.jpg") >= 0 )
-						g_minerElem.src = "misc/AstroCatastrophe/miner.jpg";
+						g_minerElem.src = "legacy/v1/misc/AstroCatastrophe/miner.jpg";
 
 					updateTexture();
 
@@ -661,7 +662,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				this.userData.oldHealth = this.JumpStart.health;
 				this.userData.isDirty = false;
 
-				var capitolBuilding = JumpStart.spawnInstance("models/AstroCatastrophe/capitol.obj", {parent: this});
+				var capitolBuilding = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/capitol.obj", {parent: this});
 				//console.log(JumpStart.worldScale);
 				//capitolBuilding.scale.multiplyScalar(1 / JumpStart.worldScale);
 				//capitolBuilding.scale.set(1, 1, 1);
@@ -725,7 +726,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 
 					var userOrigin;
 					if( JumpStart.webMode )
-						origin = g_localUser.lookOrigin;
+						userOrigin = g_localUser.lookOrigin;
 					else
 					{
 						var joint = g_localUser.trackingSkeleton.getJoint("Eye");
@@ -820,19 +821,19 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 			{
 				var scale = g_asteroid.scale.z;
 
-				SpawnExplosion(g_asteroid.position, 1.7, "sounds/SpacePilot/explosion1", 0.5, 3.0);
+				SpawnExplosion(g_asteroid.position, 1.7, "legacy/v1/sounds/SpacePilot/explosion1", 0.5, 3.0);
 
-				var debris0 = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+				var debris0 = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/asteroid.obj");
 				debris0.position.copy(g_asteroid.position);
 				debris0.scale.set(0.5, 0.5, 0.5).multiplyScalar(g_asteroid.scale.z);
 				explodeRandomly(debris0);
 
-				var debris1 = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+				var debris1 = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/asteroid.obj");
 				debris1.position.copy(g_asteroid.position);
 				debris1.scale.set(0.2, 0.5, 0.5).multiplyScalar(g_asteroid.scale.z);
 				explodeRandomly(debris1);
 
-				var debris2 = JumpStart.spawnInstance("models/AstroCatastrophe/asteroid.obj");
+				var debris2 = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/asteroid.obj");
 				debris2.position.copy(g_asteroid.position);
 				debris2.scale.set(0.4, 0.2, 0.3).multiplyScalar(g_asteroid.scale.z);
 				explodeRandomly(debris2);
@@ -949,15 +950,15 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				this.userData.parts = {};
 
 				// base
-				this.userData.parts["base"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_base.obj", {"parent": this})};
+				this.userData.parts["base"] = {"object": JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/manualgun_base.obj", {"parent": this})};
 
 				// tower
-				this.userData.parts["tower"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_tower.obj", {"parent": this.userData.parts["base"].object}).translateY(9.0)};
+				this.userData.parts["tower"] = {"object": JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/manualgun_tower.obj", {"parent": this.userData.parts["base"].object}).translateY(9.0)};
 
 				// barrels
 				this.userData.parts["barrelHousing"] = {"object": JumpStart.spawnInstance(null, {"parent": this.userData.parts["tower"].object}).translateZ(3.7).translateY(5.0)};
 
-				var barrels = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun_barrels.obj", {"parent": this.userData.parts["barrelHousing"].object});
+				var barrels = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/manualgun_barrels.obj", {"parent": this.userData.parts["barrelHousing"].object});
 
 				//barrels.position.copy(this.userData.parts["barrelHousing"].object.position);
 
@@ -986,13 +987,13 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				this.userData.parts = {};
 
 				// base
-				this.userData.parts["base"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/autogun_base.obj", {"parent": this})};
+				this.userData.parts["base"] = {"object": JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/autogun_base.obj", {"parent": this})};
 
 				// tower
-				this.userData.parts["tower"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/autogun_tower.obj", {"parent": this.userData.parts["base"].object}).translateY(3.5)};
+				this.userData.parts["tower"] = {"object": JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/autogun_tower.obj", {"parent": this.userData.parts["base"].object}).translateY(3.5)};
 
 				// barrel
-				this.userData.parts["barrel"] = {"object": JumpStart.spawnInstance("models/AstroCatastrophe/autogun_barrel.obj", {"parent": this.userData.parts["tower"].object}).translateY(13.9)};
+				this.userData.parts["barrel"] = {"object": JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/autogun_barrel.obj", {"parent": this.userData.parts["tower"].object}).translateY(13.9)};
 			}
 
 			function manualgunTick()
@@ -1110,7 +1111,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 						}
 					};
 
-					PlayDynamicSound("sounds/SpacePilot/laser0", 0.05, 2.0);
+					PlayDynamicSound("legacy/v1/sounds/SpacePilot/laser0", 0.05, 2.0);
 					manualgunFireLaser.call(barrelsObject, new THREE.Vector3(2.4, 0, 6.0), this, true);
 					manualgunFireLaser.call(barrelsObject, new THREE.Vector3(-2.4, 0, 6.0), this, false);
 				}
@@ -1227,7 +1228,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 
 			function SpawnExplosion(position, scale, sound, in_volume, in_period)
 			{
-				var soundFile = ( typeof sound === "undefined" ) ? "sounds/SpacePilot/explosion0" : sound;
+				var soundFile = ( typeof sound === "undefined" ) ? "legacy/v1/sounds/SpacePilot/explosion0" : sound;
 
 				var volume = (typeof in_volume === "undefined" ) ? 0.2 : in_volume;
 				var period = (typeof in_period === "undefined" ) ? 1.0 : in_period;
@@ -1235,7 +1236,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				//JumpStart.playSound(soundFile, 0.5);
 				PlayDynamicSound(soundFile, volume, period);
 
-				var explosion = JumpStart.spawnInstance("models/SpacePilot/explosion.obj");
+				var explosion = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/explosion.obj");
 				explosion.position.copy(position);
 				//explosion.scale.set(0.001, 0.001, 0.001);
 
@@ -1276,10 +1277,10 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				var laser;
 				if( !JumpStart.webMode )
 				{
-					laser = JumpStart.spawnInstance("models/SpacePilot/enemy_laser.obj", {"parent": this});
+					laser = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/enemy_laser.obj", {"parent": this});
 				}
 				else
-					laser = JumpStart.spawnInstance("models/SpacePilot/enemy_laser.obj");
+					laser = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/enemy_laser.obj");
 
 				laser.userData.parent = parent;
 				laser.userData.explosive = explosive;
@@ -1442,17 +1443,17 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 
 			function autogunFireLaser(offset, parent)
 			{
-				PlayDynamicSound("sounds/SpacePilot/laser2", 0.1, 3.0);
-//				JumpStart.playSound("sounds/SpacePilot/laser1", 0.2);//volume * volumeScale);
-				//JumpStart.playSound("sounds/SpacePilot/laser1", 0.4);
+				PlayDynamicSound("legacy/v1/sounds/SpacePilot/laser2", 0.1, 3.0);
+//				JumpStart.playSound("legacy/v1/sounds/SpacePilot/laser1", 0.2);//volume * volumeScale);
+				//JumpStart.playSound("legacy/v1/sounds/SpacePilot/laser1", 0.4);
 
 				var laser;
 				//if( !JumpStart.webMode )
 				//{
-					laser = JumpStart.spawnInstance("models/AstroCatastrophe/gold.obj", {"parent": this});
+					laser = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/gold.obj", {"parent": this});
 				//}
 				//else
-				//	laser = JumpStart.spawnInstance("models/AstroCatastrophe/gold.obj");
+				//	laser = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/gold.obj");
 
 				laser.userData.parent = parent;
 //				laser.userData.explosive = explosive;
@@ -1541,7 +1542,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 
 			function createSlowDust(laser)
 			{
-				//JumpStart.playSound("sounds/SpacePilot/laser1", 0.4);
+				//JumpStart.playSound("legacy/v1/sounds/SpacePilot/laser1", 0.4);
 				//console.log("laser dust");
 				// Make fairy dust
 				var pos = new THREE.Vector3();
@@ -1551,7 +1552,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				var i, particle;
 				for( i = 0; i < maxParticles; i++ )
 				{
-					particle = JumpStart.spawnInstance("models/AstroCatastrophe/gold.obj");
+					particle = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/gold.obj");
 
 					//var vector = laser.userData.parent.userData.target.position.clone();
 					//vector.sub(laser.userData.parent.position);
@@ -1656,7 +1657,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				//console.log(type);
 				if( type === "manualgun" && g_capitol.JumpStart.money >= 5 )
 				{
-					var manualgun = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun.obj");
+					var manualgun = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/manualgun.obj");
 					//manualgun.scale.set(0.3, 0.3, 0.3);
 					//manualgun.position.set(-22.0, -10.0, 8.0);
 					if( g_lookHit )
@@ -1680,7 +1681,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				}
 				else if( type === "autogun" && g_capitol.JumpStart.money >= 10 )
 				{
-					var autogun = JumpStart.spawnInstance("models/AstroCatastrophe/autogun.obj");
+					var autogun = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/autogun.obj");
 					//autogun.scale.set(0.3, 0.3, 0.3);
 					//autogun.position.set(-22.0, -10.0, 8.0);
 					if( g_lookHit )
@@ -1778,7 +1779,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				
 				var userOrigin;
 				if( JumpStart.webMode )
-					origin = g_localUser.lookOrigin;
+					userOrigin = g_localUser.lookOrigin;
 				else
 				{
 					var joint = g_localUser.trackingSkeleton.getJoint("Eye");
@@ -1964,7 +1965,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				// add the image to the slate
 				/*
 				var img = document.createElement("img");
-				img.src = "misc/AstroCatastrophe/buildslate.jpg";
+				img.src = "legacy/v1/misc/AstroCatastrophe/buildslate.jpg";
 				img.addEventListener("load", function()
 				{
 					var _this = this;
@@ -1992,7 +1993,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				compositeMenu();
 
 /*
-				var manualgun = JumpStart.spawnInstance("models/AstroCatastrophe/manualgun.obj", {parent: this});
+				var manualgun = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/manualgun.obj", {parent: this});
 				manualgun.scale.set(0.3, 0.3, 0.3);
 				manualgun.position.set(-22.0, -10.0, 8.0);
 
@@ -2001,7 +2002,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 					this.rotateY(1.0 * g_deltaTime);
 				};
 				
-				var autogun = JumpStart.spawnInstance("models/AstroCatastrophe/autogun.obj", {parent: this});
+				var autogun = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/autogun.obj", {parent: this});
 				autogun.scale.set(0.3, 0.3, 0.3);
 				autogun.position.set(-8.0, -10.0, 8.0);
 
@@ -2010,7 +2011,7 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 					this.rotateY(1.0 * g_deltaTime);
 				};
 
-				var missile = JumpStart.spawnInstance("models/AstroCatastrophe/missile.obj", {parent: this});
+				var missile = JumpStart.spawnInstance("legacy/v1/models/AstroCatastrophe/missile.obj", {parent: this});
 				missile.scale.set(0.25, 0.25, 0.25);
 				missile.position.set(8.0, -10.0, 8.0);
 
@@ -2065,9 +2066,9 @@ var crystals = JumpStart.spawnInstance("models/AstroCatastrophe/crystals.obj");
 				// this object or somebody else did over the network.
 
 				if( isLocal )
-					JumpStart.playSound("sounds/JumpStart/trumpet", 0.5, false);
+					JumpStart.playSound("legacy/v1/sounds/JumpStart/trumpet", 0.5, false);
 				else
-					JumpStart.playSound("sounds/JumpStart/cashout", 0.5, false);
+					JumpStart.playSound("legacy/v1/sounds/JumpStart/cashout", 0.5, false);
 			}
 		</script>
 	</body>

@@ -11,17 +11,17 @@
 		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
-		<script src="FirebaseSync.js"></script>
-		<script src="AltOBJMTLLoader.js"></script>
+		<script src="legacy/v1/FirebaseSync.js"></script>
+		<script src="legacy/v1/AltOBJMTLLoader.js"></script>
 
 		<!-- JumpStart Styles -->
-		<link rel="stylesheet" type="text/css" href="myStyle.css">
+		<link rel="stylesheet" type="text/css" href="legacy/v1/myStyle.css">
 	</head>
 
 	<body>
 
 		<!-- JumpStart SDK Core Include -->
-		<script src="JumpStart.js"></script>
+		<script src="legacy/v1/JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
@@ -74,21 +74,21 @@
 
 				// Precache any models that your app needs (asynchronous)
 				var myModels = [
-					"models/Vrisbee/colorVrisbee.obj",
-					"models/Vrisbee/colorArrow.obj",
-					"models/Vrisbee/target.obj",
-					"models/Vrisbee/gold.obj",
-					"models/Vrisbee/explosion.obj"/*,
-					"models/Vrisbee/bugbody.obj",
-					"models/Vrisbee/bugeyes.obj",
-					"models/Vrisbee/bugdish.obj",
-					"models/Vrisbee/bugrig.obj",
-					"models/Vrisbee/bugrearleft.obj",
-					"models/Vrisbee/bugmidleft.obj",
-					"models/Vrisbee/bugfrontleft.obj",
-					"models/Vrisbee/bugrearright.obj",
-					"models/Vrisbee/bugmidright.obj",
-					"models/Vrisbee/bugfrontright.obj"*/
+					"legacy/v1/models/Vrisbee/colorVrisbee.obj",
+					"legacy/v1/models/Vrisbee/colorArrow.obj",
+					"legacy/v1/models/Vrisbee/target.obj",
+					"legacy/v1/models/Vrisbee/gold.obj",
+					"legacy/v1/models/Vrisbee/explosion.obj"/*,
+					"legacy/v1/models/Vrisbee/bugbody.obj",
+					"legacy/v1/models/Vrisbee/bugeyes.obj",
+					"legacy/v1/models/Vrisbee/bugdish.obj",
+					"legacy/v1/models/Vrisbee/bugrig.obj",
+					"legacy/v1/models/Vrisbee/bugrearleft.obj",
+					"legacy/v1/models/Vrisbee/bugmidleft.obj",
+					"legacy/v1/models/Vrisbee/bugfrontleft.obj",
+					"legacy/v1/models/Vrisbee/bugrearright.obj",
+					"legacy/v1/models/Vrisbee/bugmidright.obj",
+					"legacy/v1/models/Vrisbee/bugfrontright.obj"*/
 				];
 
 				JumpStart.loadModels(myModels).then(function() {
@@ -131,7 +131,7 @@
 					var loadingLogoElem = document.getElementById("loadingLogo");
 					if( loadingLogoElem )
 					{
-						loadingLogoElem.src = "misc/beamnow.png";
+						loadingLogoElem.src = "legacy/v1/misc/beamnow.png";
 					}
 
 					JumpStart.showLoadingMsg("Loading complete.<br /><br /><font style='color: #00ff00; font-size: 30px; background-color: rgba(0, 0, 0, 0.5); padding: 10px; border-radius: 10px;'>Beam this app to an enclosure to begin!</font>");
@@ -143,7 +143,7 @@
 
 				}
 
-				//var bug = JumpStart.spawnInstance("models/Vrisbee/bugfull.obj");
+				//var bug = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/bugfull.obj");
 /*
 				var bug = JumpStart.spawnInstance();
 				bug.JumpStart.onSpawn["bugSpawn"] = bugSpawn;
@@ -461,21 +461,21 @@
 				if( g_targets.length > 0 )
 					return;
 
-				var target = JumpStart.spawnInstance("models/Vrisbee/target.obj");
+				var target = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/target.obj");
 				target.position.set(-g_worldOffset.y / 2.0, g_worldOffset.y / 2.0, g_worldOffset.y);
 				target.JumpStart.onSpawn["targetSpawn"] = targetSpawn;
 				target.JumpStart.onNetworkRemoved["targetRemoved"] = targetRemoved;
 				target.JumpStart.sync();
 //				g_targets.push(target);
 
-				target = JumpStart.spawnInstance("models/Vrisbee/target.obj");
+				target = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/target.obj");
 				target.position.set(g_worldOffset.y / 2.0, g_worldOffset.y / 2.0, g_worldOffset.y);
 				target.JumpStart.onSpawn["targetSpawn"] = targetSpawn;
 				target.JumpStart.onNetworkRemoved["targetRemoved"] = targetRemoved;
 				target.JumpStart.sync();
 //				g_targets.push(target);
 
-				target = JumpStart.spawnInstance("models/Vrisbee/target.obj");
+				target = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/target.obj");
 				target.position.set(0, g_worldOffset.y / 2.0, g_worldOffset.y);
 				target.JumpStart.onSpawn["targetSpawn"] = targetSpawn;
 				target.JumpStart.onNetworkRemoved["targetRemoved"] = targetRemoved;
@@ -484,7 +484,7 @@
 
 
 
-				target = JumpStart.spawnInstance("models/Vrisbee/target.obj");
+				target = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/target.obj");
 				target.position.set(-g_worldOffset.y, g_worldOffset.y / 2.0, g_worldOffset.y / 2.0);
 				target.rotateY(-Math.PI / 2.0);
 				target.JumpStart.onSpawn["targetSpawn"] = targetSpawn;
@@ -492,7 +492,7 @@
 				target.JumpStart.sync();
 //				g_targets.push(target);
 
-				target = JumpStart.spawnInstance("models/Vrisbee/target.obj");
+				target = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/target.obj");
 				target.position.set(-g_worldOffset.y, g_worldOffset.y / 2.0, -g_worldOffset.y / 2.0);
 				target.rotateY(-Math.PI / 2.0);
 				target.JumpStart.onSpawn["targetSpawn"] = targetSpawn;
@@ -500,7 +500,7 @@
 				target.JumpStart.sync();
 //				g_targets.push(target);
 
-				target = JumpStart.spawnInstance("models/Vrisbee/target.obj");
+				target = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/target.obj");
 				target.position.set(-g_worldOffset.y, g_worldOffset.y / 2.0, 0);
 				target.rotateY(-Math.PI / 2.0);
 				target.JumpStart.onSpawn["targetSpawn"] = targetSpawn;
@@ -560,7 +560,7 @@ elem.id = "debugStuff";
 				}
 				//JumpStart.makeInvisible(this);
 
-				var localVrisbee = JumpStart.spawnInstance("models/Vrisbee/colorVrisbee.obj", {parent: this});
+				var localVrisbee = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/colorVrisbee.obj", {parent: this});
 //				localVrisbee.scale.set(2, 2, 2);
 				localVrisbee.JumpStart.blocksLOS = false;
 				localVrisbee.userData.spinAmount = 0.0;
@@ -609,7 +609,7 @@ elem.id = "debugStuff";
 
 //				if( this === g_vrisbee )
 //				{
-					var localArrow = JumpStart.spawnInstance("models/Vrisbee/colorArrow.obj", {parent: this});
+					var localArrow = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/colorArrow.obj", {parent: this});
 					localArrow.JumpStart.blocksLOS = false;
 					localArrow.userData.parentObject = this;
 
@@ -638,7 +638,7 @@ elem.id = "debugStuff";
 							var i, particle;
 							for( i = 0; i < 1; i++ )
 							{
-								particle = JumpStart.spawnInstance("models/Vrisbee/gold.obj");
+								particle = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/gold.obj");
 								particle.JumpStart.blocksLOS = false;
 
 								if( !JumpStart.webMode )
@@ -818,7 +818,7 @@ elem.id = "debugStuff";
 					{
 						this.userData.searchLife = 2.0;
 
-						var explosion = JumpStart.spawnInstance("models/Vrisbee/explosion.obj");
+						var explosion = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/explosion.obj");
 						explosion.position.copy(this.position);
 						explosion.rotation.set(0, 0, 0);
 						explosion.scale.set(0.0001, 1, 1);
@@ -831,7 +831,7 @@ elem.id = "debugStuff";
 					{
 						this.userData.searchLife = 2.0;
 
-						var explosion = JumpStart.spawnInstance("models/Vrisbee/explosion.obj");
+						var explosion = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/explosion.obj");
 						explosion.position.copy(this.position);
 						explosion.rotation.set(0, 0, 0);
 						explosion.scale.set(1, 0.0001, 1);
@@ -843,7 +843,7 @@ elem.id = "debugStuff";
 					{
 						this.userData.searchLife = 2.0;
 
-						var explosion = JumpStart.spawnInstance("models/Vrisbee/explosion.obj");
+						var explosion = JumpStart.spawnInstance("legacy/v1/models/Vrisbee/explosion.obj");
 						explosion.position.copy(this.position);
 						explosion.rotation.set(0, 0, 0);
 						explosion.scale.set(1, 1, 0.0001);
@@ -1046,9 +1046,9 @@ elem.id = "debugStuff";
 				// this object or somebody else did over the network.
 
 				if( isLocal )
-					JumpStart.playSound("sounds/JumpStart/trumpet", 0.5, false);
+					JumpStart.playSound("legacy/v1/sounds/JumpStart/trumpet", 0.5, false);
 				else
-					JumpStart.playSound("sounds/JumpStart/cashout", 0.5, false);
+					JumpStart.playSound("legacy/v1/sounds/JumpStart/cashout", 0.5, false);
 			}
 		</script>
 	</body>

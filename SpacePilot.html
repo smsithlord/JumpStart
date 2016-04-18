@@ -3,7 +3,7 @@
 <html lang="en">
 	<head>
 		<title>Space Pilot</title>
-		<script src="http://www.jumpstartsdk.com/live/v2/engine/misc/appMenu.js" appid="SpacePilot" appurl="http://www.jumpstartsdk.com/live/SpacePilot.html"></script>
+		<script src="engine/misc/appMenu.js"></script>
 
 		<!-- AltspaceVR SDK Core Includes -->
 		<script src="http://sdk.altvr.com/libs/three.js/r71/build/three.min.js"></script>
@@ -12,19 +12,19 @@
 		<script src="http://sdk.altvr.com/libs/altspace.js/latest/altspace.min.js"></script>
 
 		<!-- JumpStart SDK Additional Includes -->
-		<script src="FirebaseSync.js"></script>
-		<script src="AltOBJMTLLoader.js"></script>
+		<script src="legacy/v1/FirebaseSync.js"></script>
+		<script src="legacy/v1/AltOBJMTLLoader.js"></script>
 
 		<!-- JumpStart Styles -->
-		<link rel="stylesheet" type="text/css" href="myStyle.css" />
+		<link rel="stylesheet" type="text/css" href="legacy/v1/myStyle.css" />
 	</head>
 
 	<body>
 
-		<img src="misc/spacepilotcontrols.png" id="controls" style="display: none; position: fixed; top: 150px; left: 10px; width: 200px;" />
+		<img src="legacy/v1/misc/spacepilotcontrols.png" id="controls" style="display: none; position: fixed; top: 150px; left: 10px; width: 200px;" />
 
 		<!-- JumpStart SDK Core Include -->
-		<script src="JumpStart.js"></script>
+		<script src="legacy/v1/JumpStart.js"></script>
 
 		<!-- Window-Level Event Callbacks -->
 		<script>
@@ -81,7 +81,7 @@
 				shipSoundCooldown = 10.0 + 10.0 * Math.random();
 
 				var index = Math.floor(Math.random() * (3+1));
-//				JumpStart.playSound("sounds/SpacePilot/ship" + index, 0.4);
+//				JumpStart.playSound("legacy/v1/sounds/SpacePilot/ship" + index, 0.4);
 			}
 		}
 
@@ -96,7 +96,7 @@
 			var i, stardust;
 			for( i = 0; i < g_targetStardustsCount; i++ )
 			{
-				stardust = JumpStart.spawnInstance("models/SpacePilot/pixel.obj", {"parent": g_galaxy});
+				stardust = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/pixel.obj", {"parent": g_galaxy});
 				stardust.JumpStart.blocksLOS = false;
 
 				PositionStardust(stardust);
@@ -259,32 +259,32 @@
 		function onPrecache()
 		{
 			var myModels = [
-				"models/SpacePilot/sun.obj",
-				"models/SpacePilot/pluto.obj",
-				"models/SpacePilot/mars.obj",
-				"models/SpacePilot/pixel.obj",
-				"models/SpacePilot/hawk.obj",
-				"models/SpacePilot/player_laser.obj",
-				"models/SpacePilot/enemy_laser.obj",
-				"models/SpacePilot/thai.obj",
-				"models/SpacePilot/explosion.obj",
-				"models/SpacePilot/roundArrow.obj",
-				"models/SpacePilot/hawktraila.obj",
-				"models/SpacePilot/hawktrailb.obj"
+				"legacy/v1/models/SpacePilot/sun.obj",
+				"legacy/v1/models/SpacePilot/pluto.obj",
+				"legacy/v1/models/SpacePilot/mars.obj",
+				"legacy/v1/models/SpacePilot/pixel.obj",
+				"legacy/v1/models/SpacePilot/hawk.obj",
+				"legacy/v1/models/SpacePilot/player_laser.obj",
+				"legacy/v1/models/SpacePilot/enemy_laser.obj",
+				"legacy/v1/models/SpacePilot/thai.obj",
+				"legacy/v1/models/SpacePilot/explosion.obj",
+				"legacy/v1/models/SpacePilot/roundArrow.obj",
+				"legacy/v1/models/SpacePilot/hawktraila.obj",
+				"legacy/v1/models/SpacePilot/hawktrailb.obj"
 			];
 
-			JumpStart.precacheSound("sounds/SpacePilot/laser0");
-			JumpStart.precacheSound("sounds/SpacePilot/laser1");
-			JumpStart.precacheSound("sounds/SpacePilot/explosion0");
-			JumpStart.precacheSound("sounds/SpacePilot/hit0");
-			JumpStart.precacheSound("sounds/SpacePilot/damage0");
-//			JumpStart.precacheSound("sounds/SpacePilot/ship0");
-//			JumpStart.precacheSound("sounds/SpacePilot/ship1");
-//			JumpStart.precacheSound("sounds/SpacePilot/ship2");
-//			JumpStart.precacheSound("sounds/SpacePilot/ship3");
-//			JumpStart.precacheSound("sounds/SpacePilot/damage1");
-//			JumpStart.precacheSound("sounds/SpacePilot/damage2");
-//			JumpStart.precacheSound("sounds/SpacePilot/damage3");
+			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/laser0");
+			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/laser1");
+			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/explosion0");
+			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/hit0");
+			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/damage0");
+//			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/ship0");
+//			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/ship1");
+//			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/ship2");
+//			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/ship3");
+//			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/damage1");
+//			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/damage2");
+//			JumpStart.precacheSound("legacy/v1/sounds/SpacePilot/damage3");
 
 			JumpStart.loadModels(myModels).then(function() {
 				JumpStart.doneCaching();
@@ -293,7 +293,7 @@
 
 		function SpawnTie()
 		{
-			var tie = JumpStart.spawnInstance("models/SpacePilot/thai.obj", {"parent": g_galaxy});
+			var tie = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/thai.obj", {"parent": g_galaxy});
 			g_enemies.push(tie);
 
 			tie.userData.boundFade = true;
@@ -366,7 +366,7 @@
 
 			function FireEnemyLaser(offset)
 			{
-				var laser = JumpStart.spawnInstance("models/SpacePilot/enemy_laser.obj", {"parent": g_galaxy});
+				var laser = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/enemy_laser.obj", {"parent": g_galaxy});
 				laser.position.copy(this.position);
 				laser.rotation.copy(this.rotation);
 
@@ -469,7 +469,7 @@
 
 								if( this.userData.lastSoundPlayed > 4.0 )
 								{
-									JumpStart.playSound("sounds/SpacePilot/laser1", 0.2);
+									JumpStart.playSound("legacy/v1/sounds/SpacePilot/laser1", 0.2);
 									this.userData.lastSoundPlayed = 0.0;
 								}
 
@@ -547,7 +547,7 @@
 
 				if( this.userData.health > 0 )
 				{
-					JumpStart.playSound("sounds/SpacePilot/hit0", 0.15);
+					JumpStart.playSound("legacy/v1/sounds/SpacePilot/hit0", 0.15);
 				}
 				else
 				{
@@ -561,7 +561,7 @@
 
 		function SpawnPlayerShip()
 		{
-			g_myShip = JumpStart.spawnInstance("models/SpacePilot/hawk.obj", {"parent": g_galaxy});
+			g_myShip = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/hawk.obj", {"parent": g_galaxy});
 			g_myShip.JumpStart.blocksLOS = false;
 			g_myShip.userData.trailRate = 0.01;
 			g_myShip.userData.lastTrail = g_myShip.userData.trailRate;
@@ -576,7 +576,7 @@
 
 				if( this.userData.health <= 0 )
 				{
-					SpawnExplosion(g_myShip.position, 2.0, "sounds/SpacePilot/explosion3");
+					SpawnExplosion(g_myShip.position, 2.0, "legacy/v1/sounds/SpacePilot/explosion3");
 
 					g_galaxy.remove(this);
 					g_myShip = null;
@@ -589,7 +589,7 @@
 					{
 						this.userData.damageSoundCooldown = 0.1;
 
-						JumpStart.playSound("sounds/SpacePilot/damage0", 0.1);
+						JumpStart.playSound("legacy/v1/sounds/SpacePilot/damage0", 0.1);
 					}
 				}
 			};
@@ -674,7 +674,7 @@
 				{
 					this.userData.lastTrail = this.userData.trailRate;
 
-					var trail = JumpStart.spawnInstance("models/SpacePilot/hawktraila.obj", {"parent": g_galaxy});
+					var trail = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/hawktraila.obj", {"parent": g_galaxy});
 					trail.position.copy(this.position);
 					trail.rotation.copy(this.rotation);
 					trail.translateZ(-30.0);
@@ -697,7 +697,7 @@
 						}
 					};
 
-					trail = JumpStart.spawnInstance("models/SpacePilot/hawktrailb.obj", {"parent": g_galaxy});
+					trail = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/hawktrailb.obj", {"parent": g_galaxy});
 					trail.position.copy(this.position);
 					trail.rotation.copy(this.rotation);
 					trail.translateZ(-30.0);
@@ -855,8 +855,10 @@
 
 		function onReady() {
 
+			var jumpStartAppMenu = new JumpStartAppMenu("SpacePilot", "http://www.jumpstartsdk.com/live/SpacePilot.html", g_scene);
+
 			// Load your model
-//			JumpStart.loadModels(["models/SpacePilot/sun.obj","models/SpacePilot/pixel.obj", "models/SpacePilot/Falcon.obj"]).then(function() {
+//			JumpStart.loadModels(["legacy/v1/models/SpacePilot/sun.obj","legacy/v1/models/SpacePilot/pixel.obj", "legacy/v1/models/SpacePilot/Falcon.obj"]).then(function() {
 
 				g_galaxy = JumpStart.spawnInstance();
 				g_galaxy.position.set(0, 0, 0);
@@ -865,7 +867,7 @@
 
 				CreateStardusts();
 
-				var theSun = JumpStart.spawnInstance("models/SpacePilot/sun.obj", {"parent": g_galaxy});
+				var theSun = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/sun.obj", {"parent": g_galaxy});
 				theSun.userData.boundFade = true;
 				theSun.JumpStart.blocksLOS = false;
 				theSun.position.set(1000, -500, 500);
@@ -880,7 +882,7 @@
 					}
 				};
 
-				var pluto = JumpStart.spawnInstance("models/SpacePilot/pluto.obj", {"parent": g_galaxy});
+				var pluto = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/pluto.obj", {"parent": g_galaxy});
 				pluto.userData.boundFade = true;
 				pluto.JumpStart.blocksLOS = false;
 				pluto.position.set(0, 0, 0);
@@ -895,7 +897,7 @@
 					}
 				};
 
-				var mars = JumpStart.spawnInstance("models/SpacePilot/mars.obj", {"parent": g_galaxy});
+				var mars = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/mars.obj", {"parent": g_galaxy});
 				mars.userData.boundFade = true;
 				mars.JumpStart.blocksLOS = false;
 				mars.position.set(-500, 500, -500);
@@ -913,7 +915,7 @@
 				// Spawn an instance of your model
 //				SpawnPlayerShip();
 
-				g_enemyPointer = JumpStart.spawnInstance("models/SpacePilot/roundArrow.obj", {"parent": g_galaxy});
+				g_enemyPointer = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/roundArrow.obj", {"parent": g_galaxy});
 				g_enemyPointer.JumpStart.blocksLOS = false;
 				g_enemyPointer.scale.set(0.0001, 0.0001, 0.0001);
 
@@ -922,7 +924,7 @@
 				// Start the simulation
 				JumpStart.run();
 
-				JumpStart.playSound("sounds/SpacePilot/laser1", 0.1);
+				JumpStart.playSound("legacy/v1/sounds/SpacePilot/laser1", 0.1);
 
 //				g_rayCastObjects.push(JumpStart.floorPlane);
 //				rayCastObjects.push(JumpStart.roofPlane);
@@ -935,12 +937,12 @@
 
 		function SpawnExplosion(position, scale, sound)
 		{
-			var soundFile = ( typeof sound === "undefined" ) ? "sounds/SpacePilot/explosion0" : sound;
+			var soundFile = ( typeof sound === "undefined" ) ? "legacy/v1/sounds/SpacePilot/explosion0" : sound;
 
 			//console.log(arguments);
 			JumpStart.playSound(soundFile, 0.5);
 
-			var explosion = JumpStart.spawnInstance("models/SpacePilot/explosion.obj", {"parent": g_galaxy});
+			var explosion = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/explosion.obj", {"parent": g_galaxy});
 			explosion.position.copy(position);
 			//explosion.scale.set(0.001, 0.001, 0.001);
 
@@ -1015,14 +1017,14 @@
 			if( !g_myShip )
 				return;
 
-			JumpStart.playSound("sounds/SpacePilot/laser0", 0.15);
+			JumpStart.playSound("legacy/v1/sounds/SpacePilot/laser0", 0.15);
 
 			FireProjectile(ship, new THREE.Vector3(5.0, 0.0, 50.0));
 			FireProjectile(ship, new THREE.Vector3(-5.0, 0.0, 50.0));
 
 			function FireProjectile(ship, offset)
 			{
-				var laser = JumpStart.spawnInstance("models/SpacePilot/player_laser.obj", {"parent": g_galaxy});
+				var laser = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/player_laser.obj", {"parent": g_galaxy});
 				laser.JumpStart.blocksLOS = false;
 				laser.userData.ownerShip = ship;
 				laser.userData.power = 50.0;
