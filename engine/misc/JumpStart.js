@@ -37,6 +37,7 @@ function JumpStart(options, appBehaviors)
 		"isReady",
 		"isRunning",
 		"isEnclosure",	// Enclosure or personal browser
+		"users",
 		"camera",
 		"renderer",
 		"clock",
@@ -49,7 +50,7 @@ function JumpStart(options, appBehaviors)
 		"worldOffset",
 		"deltaTime",
 		"elapsedTime",
-		"crosshair",
+		"gamepad",
 		"gamepads",
 		"activeGamepadIndex",
 		"previousGamepadStates"
@@ -83,6 +84,7 @@ function JumpStart(options, appBehaviors)
 		"pendingUpdates",
 		"firebase",
 		"pendingEvents",
+		"pendingFirebaseEvents",
 		"selfSyncingObject",	// Used to avoid syncing to updates that we locally send
 		"doneCaching",
 		"audioContext",	// For precaching sounds, etc.
@@ -97,6 +99,7 @@ function JumpStart(options, appBehaviors)
 		this[privateVariables[i]] = null;
 
 	// Set as many synchronous non-null PUBLIC member variables as possible
+	this.gamepad = undefined;
 	this.roomID = this.getQueryVariable("room");
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
 	this.isGear = navigator.userAgent.match(/mobile/i);
@@ -118,7 +121,6 @@ function JumpStart(options, appBehaviors)
 		"sceneScale": 1.0,	// relative scale
 		"scaleWithEnclosure": true,	// false means consistent size, regardless of enclosure size
 		"timeScale": 1.0,
-		"appMenu": true,
 		"webControls": true,
 		"debug":
 		{
@@ -132,9 +134,13 @@ function JumpStart(options, appBehaviors)
 	this.firebase = {
 		"rootRef": null,
 		"roomRef": null,
+		"usersRef": null,
+		"connectedRef": null,
+		"localUserRef": null,
 		"state": null,
 		"isLocallyInitializing": false
 	};
+	this.users = {};
 	this.models = [];
 	this.objects = {};
 	this.sounds = {};
@@ -144,8 +150,9 @@ function JumpStart(options, appBehaviors)
 	this.freshObjects = [];
 	this.cursorPlanes = {};
 	this.pendingEvents = {};
+	this.pendingFirebaseEvents = {};
 	this.selfSyncingObject = false;
-	this.audioContext = new window.webkitAudioContext();
+	this.audioContext = new window.webkitAudioContext();	// Is webkit required? (probably??)
 	this.enclosureBoundaries = 
 	{
 		"floor": null,
@@ -243,86 +250,80 @@ function JumpStart(options, appBehaviors)
 		},
 		"autoRemoval":
 		{
+			"autoRemove": function()
+			{
+				// Take control
+				this.ownerID = jumpStart.localUser.userID;
+				
+				// Remove us the next tick cycle, to avoid immediate respawn issues.
+				this.addEventListener("tick", function()
+				{
+					jumpStart.removeInstance(this);
+				});
+
+				this.sync();
+			},
+			"onUserDisconnect": function(val)
+			{
+				if( val.id !== this.ownerID )
+					return;
+				
+				var needsRemove = false;
+
+				// Figure out if we are the guy that should handle it.
+				var index = -1;
+				var x, user;
+				for( x in jumpStart.users )
+				{
+					var user = jumpStart.users[x];
+					if( user.id === this.ownerID )
+						continue;
+
+					index++;
+
+					if( user.id === jumpStart.localUser.userID )
+					{
+						if( index === 0 )
+							needsRemove = true;
+
+						break;
+					}
+				}
+
+				if( needsRemove )
+					jumpStart.behaviors.autoRemoval.autoRemove.call(this);
+			},
 			"applyBehavior": function(options)
 			{
-				this.syncData.autoRemoval = {};
-				this.syncData.autoRemoval.heartbeats = 0;
-				this.syncData.autoRemoval.flatlineDelay = (!!options.flatlineDelay) ? options.flatlineDelay : 6.0;
-				this.syncData.autoRemoval.adopterID = 0;
-				this.addEventListener("tick", jumpStart.behaviors.autoRemoval.tickBehavior);
+				this.addEventListener("spawn", jumpStart.behaviors.autoRemoval.spawnBehavior);
+				this.addEventListener("userdisconnect", jumpStart.behaviors.autoRemoval.onUserDisconnect);
 				return true;
 			},
 			"unapplyBehavior": function()
 			{
-				delete this.syncData["autoRemoval"];
-				delete this.userData["autoRemoval"];
+				this.removeEventListener("spawn", jumpStart.behaviors.autoRemoval.spawnBehavior);
+				this.removeEventListener("userdisconnect", jumpStart.behaviors.autoRemoval.onUserDisconnect);
 				return true;
 			},
-			"tickBehavior": function()
+			"spawnBehavior": function(isInitialSync)
 			{
-				var isOwner = (this.ownerID === jumpStart.localUser.userID);
-				if( !!!this.userData.autoRemoval )
-					this.userData.autoRemoval = {
-						"previousHeartbeats": this.syncData.autoRemoval.heartbeats,
-						"time": (isOwner) ? 0 : jumpStart.elapsedTime
-					};
+				if( !isInitialSync )
+					return;
 
-				if( isOwner )
+				var needsRemoval = true;
+				var x, user;
+				for( x in jumpStart.users )
 				{
-					// As the owner, we just increase the heartbeats value according to the rate & do a shallow sync each time.
-					this.userData.autoRemoval.time += jumpStart.deltaTime;
-					if( this.userData.autoRemoval.time >= this.syncData.autoRemoval.flatlineDelay / 2.0 )
+					user = jumpStart.users[x];
+					if( user.id === this.ownerID )
 					{
-						this.userData.autoRemoval.time = 0;
-						this.syncData.autoRemoval.heartbeats = this.syncData.autoRemoval.heartbeats + 1;
-						this.sync({"vitalData": true, "syncData": true});
+						needsRemoval = false;
+						break;
 					}
 				}
-				else
-				{
-					var delayTime = this.syncData.autoRemoval.flatlineDelay;
-					if( this.syncData.autoRemoval.adopterID === jumpStart.localUser.userID )
-						delayTime *= 0.7;
 
-					// As a client, we monitor the time since the last heartbeats change and remove this object if it needs to be.
-					if( this.syncData.autoRemoval.heartbeats !== this.userData.autoRemoval.previousHeartbeats )
-					{
-						this.userData.autoRemoval.previousHeartbeats = this.syncData.autoRemoval.heartbeats;
-						this.userData.autoRemoval.time = jumpStart.elapsedTime;
-					}
-					else if( jumpStart.elapsedTime - this.userData.autoRemoval.time >= delayTime )
-					{
-						// 1. Set the ownerID to 0.
-						// 2. Set us as the adopterID on the firebase.
-						// 3. Wait flatlineDelay/2.0 more seconds
-						// 4. If we are still the adopterID, take control of this item and remove it.
-
-						if( this.syncData.autoRemoval.adopterID !== jumpStart.localUser.userID )
-						{
-							this.syncData.autoRemoval.adopterID = jumpStart.localUser.userID;
-							this.syncData.autoRemoval.heartbeats = this.syncData.autoRemoval.heartbeats + 1;
-							this.userData.autoRemoval.time = jumpStart.elapsedTime;
-							this.userData.autoRemoval.previousHeartbeats = this.syncData.autoRemoval.heartbeats;
-							this.sync({"syncData": true});
-						}
-						else if( this.syncData.autoRemoval.adopterID === jumpStart.localUser.userID )
-						{
-							// Take control
-							this.ownerID = jumpStart.localUser.userID;
-							this.syncData.autoRemoval.adopterID = 0;
-							this.syncData.autoRemoval.heartbeats = this.syncData.autoRemoval.heartbeats + 1;
-							this.userData.autoRemoval.time = 0;
-
-							// Remove us the next tick cycle, to avoid immediate respawn issues.
-							this.addEventListener("tick", function()
-							{
-								jumpStart.removeInstance(this);
-							});
-
-							this.sync();
-						}
-					}
-				}
+				if( needsRemoval || this.ownerID === jumpStart.localUser.userID )
+					jumpStart.behaviors.autoRemoval.autoRemove.call(this);
 			}
 		},
 		"autoSync":
@@ -416,16 +417,30 @@ function JumpStart(options, appBehaviors)
 		"physics": {
 			"applyBehavior": function(options)
 			{
+				//this.parent.updateMatrixWorld();
+//				this.updateMatrixWorld();
+
 				if( !!!options )
 					options = {};
 
-				if( !!!this.behaviors.physics )
+				if( !!!this.userData.physics )
 				{
+//					if( !!this.syncData.physics )
+//						console.log(this.syncData.physics.force);
+
 					// This is our 1st time applying ourselves
-					this.syncData.physics = {
-						"force": (!!options.force) ? options.force.clone() : new THREE.Vector3(),
-						"rotation": (!!options.rotation) ? options.rotation.clone() : new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random())
-					};
+					if( !!!this.syncData.physics )
+					{
+						this.syncData.physics = {
+							"force": (!!options.force) ? options.force.clone() : new THREE.Vector3(),
+							"rotation": (!!options.rotation) ? options.rotation.clone() : new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random())
+						};
+					}
+					else
+					{
+						this.syncData.physics.force = new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z);
+						this.syncData.physics.rotation = new THREE.Vector3(this.syncData.physics.rotation.x, this.syncData.physics.rotation.y, this.syncData.physics.rotation.z);
+					}
 
 					this.userData.physics = {
 						"velocity": this.syncData.physics.force.clone(),
@@ -483,7 +498,7 @@ function JumpStart(options, appBehaviors)
 					"z": jumpStart.enclosure.innerDepth / 2.0
 				};
 
-				this.updateMatrixWorld();
+				//this.updateMatrixWorld();	// FIX ME: This was needed for some reason, but it messes with the physics behavior on network clients.
 				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
 				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(jumpStart.deltaTime * 100.0)
 				pos.add(deltaPos);
@@ -510,6 +525,7 @@ function JumpStart(options, appBehaviors)
 			},
 			"spawnBehavior": function(isInitialSync)
 			{
+				this.updateMatrixWorld();
 				this.userData.physics = {
 					"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z),
 					"rotVelocity": new THREE.Vector3(this.syncData.physics.rotation.x, this.syncData.physics.rotation.y, this.syncData.physics.rotation.z)
@@ -558,6 +574,9 @@ function JumpStart(options, appBehaviors)
 			},
 			"tickBehavior": function()
 			{
+				if( !!!this.userData.lerpSync )
+					return;
+				
 				if( this.userData.lerpSync.amount < 1.0 )
 				{
 					this.userData.lerpSync.amount += jumpStart.deltaTime / this.userData.lerpSync.time;
@@ -586,6 +605,8 @@ function JumpStart(options, appBehaviors)
 		this.behaviors[x] = appBehaviors[x];
 	
 	this.listeners = {
+		"userconnect": {},
+		"userdisconnect": {},
 		"precache": {},
 		"initialize": {},	// Only used by the local user when initializing a multiuser room
 		"ready": {},
@@ -786,6 +807,47 @@ function JumpStart(options, appBehaviors)
 
 							function onStateReady()
 							{
+								this.firebase.usersRef = this.firebase.roomRef.child("users");
+
+								this.firebase.connectedRef = new Firebase("https://jumpstart-2.firebaseio.com/.info/connected");
+
+								//this.firebase.localUserRef = this.firebase.usersRef.push();
+								this.firebase.localUserRef = this.firebase.usersRef.child(jumpStart.localUser.userID);
+								this.firebase.connectedRef.on("value", function(snapshot)
+								{
+									var val = snapshot.val();
+									if( val )
+									{
+										this.firebase.localUserRef.onDisconnect().remove();
+										this.firebase.localUserRef.set({"id": jumpStart.localUser.userID, "displayName": jumpStart.localUser.displayName});
+									}
+								}.bind(this));
+
+								this.firebase.usersRef.on("child_removed", function(snapshot)
+								{
+									if( !this.pendingEvents.hasOwnProperty("userdisconnect") )
+										this.pendingEvents.userdisconnect = {};
+									
+									var val = snapshot.val();
+									this.pendingEvents["userdisconnect"][val.id] = val;
+								}.bind(this));
+
+								this.firebase.usersRef.on("child_added", function(snapshot)
+								{
+									if( !this.pendingEvents.hasOwnProperty("userconnect") )
+										this.pendingEvents.userconnect = {};
+
+									var val = snapshot.val();
+									this.pendingEvents["userconnect"][val.id] = val;
+								}.bind(this));
+
+								this.firebase.usersRef.on("value", function(snapshot)
+								{
+									var val = snapshot.val();
+									if( val )
+										this.users = val;
+								}.bind(this));
+
 								var initialKeys = {};
 
 								// Spawn all of the initial objects
@@ -1038,12 +1100,51 @@ function JumpStart(options, appBehaviors)
 
 				this.scene = new THREE.Scene();
 				this.scene.scale.multiplyScalar(this.options.sceneScale);
-				this.scene.addEventListener( "cursormove", this.onCursorMove.bind(this));
+				this.scene.addEventListener("cursormove", this.onCursorMove.bind(this));
 				this.scene.addEventListener("cursordown", this.onCursorDown.bind(this));
 				this.scene.addEventListener("cursorup", this.onCursorUp.bind(this));
 
 				this.clock = new THREE.Clock();
 				this.raycaster = new THREE.Raycaster();
+
+				// FIX ME: It might be worth it for all blocksLOS objects to always know the distance from themselves to the player's eye so that we can perform the raycasts in order of distance, and only on objects within range.
+				this.raycaster.intersectObjectsAdv = function(objects, recursive, recursiveCompare)
+				{
+					function ascSort(a, b)
+					{
+						return a.distance - b.distance;
+					}
+
+					function intersectObject(object, raycaster, intersects, recursive)
+					{
+						var result = recursiveCompare(object);
+						if( object.visible === false || !!!result || !result )
+							return;
+
+						object.raycast(raycaster, intersects);
+
+						if( recursive === true )
+						{
+							var children = object.children;
+
+							var i;
+							for( i = 0; i < children.length; i ++ )
+								intersectObject( children[ i ], raycaster, intersects, true );
+						}
+					}
+
+					var intersects = [];
+
+					var i, result;
+					for( i = 0; i < objects.length; i++ )
+						intersectObject(objects[i], this, intersects, recursive);
+
+					intersects.sort(ascSort);
+
+					return intersects;
+				};
+
+
 
 				// FIX ME: Why is this a spoofed ray?  We should have THREE.js loaded by now to make a real one.
 				this.cursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
@@ -1100,6 +1201,9 @@ function JumpStart(options, appBehaviors)
 							"http://sdk.altvr.com/libs/three.js/r73/build/three.min.js",
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/OBJMTLLoader.js",
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/MTLLoader.js",
+							"http://sdk.altvr.com/libs/three.js/r73/examples/js/geometries/TextGeometry.js",
+							"http://sdk.altvr.com/libs/three.js/r73/examples/js/utils/FontUtils.js",
+							"http://sdk.altvr.com/libs/three.js/r73/examples/fonts/helvetiker_regular.typeface.js",
 							"http://sdk.altvr.com/libs/altspace.js/0.5.3/altspace.min.js"
 							//"engine/misc/threeoctree.js"	// Octree disabled for now
 						];
@@ -1812,11 +1916,13 @@ JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDe
 JumpStart.prototype.doPendingUpdates = function()
 {
 	// Handle pending object updates
-	var x, y, data, instance;
+	var x, y, data, instance, pendingApplyBehaviors, pendingUnapplyBehaviors;
 	for( x in this.pendingUpdates )
 	{
 		data = this.pendingUpdates[x];
 
+		pendingApplyBehaviors = [];
+		pendingUnapplyBehaviors = [];
 		if( !!data.needsSpawn )
 			instance = this.spawnInstance(null, {"networkData": data, "syncKey": x, "isInitialSync": !!data.isInitialSync});
 		else
@@ -1830,13 +1936,14 @@ JumpStart.prototype.doPendingUpdates = function()
 			}
 
 			var x;
-			// Handle changed behaviors BEFORE merging in the rest of the networked data
+			// Handle changed behaviors BEFORE merging in the rest of the networked data (WHY? this causes an issue with physics behavior.)
 			if( !!data.vitalData && !!data.vitalData.behaviors )
 			{
 				for( x in data.vitalData.behaviors )
 				{
 					if( !!!instance.behaviors || !!!instance.behaviors[x] )
-						instance.applyBehavior(x);
+						pendingApplyBehaviors.push(x);
+						//instance.applyBehavior(x);
 				}
 			}
 
@@ -1845,7 +1952,8 @@ JumpStart.prototype.doPendingUpdates = function()
 				for( x in instance.behaviors )
 				{
 					if( !!data.vitalData && (!!!data.vitalData.behaviors || !!!data.vitalData.behaviors[x]) )
-						instance.unapplyBehavior(x);
+						pendingUnapplyBehaviors.push(x);
+						//instance.unapplyBehavior(x);
 				}
 			}
 		}
@@ -1878,6 +1986,14 @@ JumpStart.prototype.doPendingUpdates = function()
 
 		if( data.hasOwnProperty("syncData") )
 			this.extractData.call(this, data.syncData, instance.syncData, Infinity);
+
+		// Apply any behaviors that need to be applied
+		var i, behavior;
+		for( i = 0; i < pendingApplyBehaviors.length; i++ )
+			instance.applyBehavior(pendingApplyBehaviors[i]);
+
+		for( i = 0; i < pendingUnapplyBehaviors.length; i++ )
+			instance.unapplyBehavior(pendingUnapplyBehaviors[i]);
 
 		// Deferred transforms means a lerpSync behavior applied to this object
 		if( deferredTransform && !!instance.behaviors.lerpSync )
@@ -1972,7 +2088,10 @@ JumpStart.prototype.onTick = function()
 					else if( previousGamepadState.buttons[buttonIndex].value !== gamepad.buttons[buttonIndex].value )
 					{
 						if( this.activeGamepadIndex === -1 )
+						{
 							this.activeGamepadIndex = gamepadIndex;
+							this.gamepad = this.gamepads[this.activeGamepadIndex];
+						}
 					}
 
 					previousGamepadState.buttons[buttonIndex].value = gamepad.buttons[buttonIndex].value;
@@ -2011,7 +2130,7 @@ JumpStart.prototype.onTick = function()
 	function doPendingListeners()
 	{
 		// Do some more event listeners
-		var x, y, z, eventCategory;
+		var w, x, y, z, eventCategory, object, listenerName;
 		for( x in this.pendingEvents )
 		{
 			eventCategory = this.pendingEvents[x];
@@ -2019,6 +2138,25 @@ JumpStart.prototype.onTick = function()
 			{
 				for( z in this.listeners[x] )
 					this.listeners[x][z].call(this, eventCategory[y]);
+
+				if( x === "userdisconnect" )
+				{
+					for( w in this.objects )
+					{
+						object = this.objects[w];
+						for( listenerName in object.listeners.userdisconnect )
+							object.listeners.userdisconnect[listenerName].call(object, eventCategory[y]);
+					}
+				}
+				else if( x === "userconnect" )
+				{
+					for( w in this.objects )
+					{
+						object = this.objects[w];
+						for( listenerName in object.listeners.userconnect )
+							object.listeners.userconnect[listenerName].call(object, eventCategory[y]);
+					}
+				}
 			}
 
 			this.pendingEvents[x] = {};
@@ -2278,7 +2416,12 @@ JumpStart.prototype.processCursorMove = function()
 		break;
 	}
 */
-	var intersects = this.raycaster.intersectObjects(this.raycastArray, true);	// FIX ME: Wish there was a way to quit after 1st "hit".
+
+	// FIX ME: Wish there was a way to quit after 1st "hit".
+	var intersects = this.raycaster.intersectObjectsAdv(this.raycastArray, true, function(obj)
+	{
+		return !(obj.hasOwnProperty("blocksLOS") && !obj.blocksLOS);
+	});
 
 	// Hover events
 	var hasIntersection = false;
@@ -2365,7 +2508,7 @@ JumpStart.prototype.onCursorUp = function(e)
 {
 	if( this.clickedObject )
 	{
-		if( this.hoveredObject === this.clickedObject )
+		if( this.hoveredObject === this.clickedObject || !this.clickedObject.blocksLOS )
 		{
 			// Check for cursorup listeners
 			var listenerName;
@@ -2660,7 +2803,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	}
 	*/
 	
-	if( !!options.networkData && options.networkData.transform.name === "jumpStartWorld" )
+	if( !!options.networkData && !!options.networkData.transform && options.networkData.transform.name === "jumpStartWorld" )
 	{
 		this.scene.add(instance);
 		this.world = instance;
@@ -2692,14 +2835,14 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	}
 
 	// List all the object-level listeners
-	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup", "spawn", "remove", "networkRemove"];
+	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup", "spawn", "remove", "networkRemove", "userconnect", "userdisconnect"];
 	var computedListeners = {};
 	for( i in validEvents )
 		computedListeners[validEvents[i]] = {};
 
 	// Just extend this object instead of adding a namespace
-	var originalAddEventListener = window.addEventListener;
-	var originalRemoveEventListener = window.removeEventListener;
+	var originalObjectAddEventListener = instance.addEventListener;
+	var originalObjectRemoveEventListener = instance.removeEventListener;
 
 	var vitalDataNames = ["ownerID", "modelFile", "blocksLOS", "listeners", "behaviors", "ignoreSync"];	// These get synced
 	var jumpStartData = {
@@ -2791,7 +2934,10 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			if( !!behavior )
 			{
 				if( behavior.unapplyBehavior.call(this, options) )
+				{
+				//	delete this.behaviors[behaviorName];
 					this.behaviors[behaviorName] = false;
+				}
 				else
 					console.warn("Behavior \"" + behaviorName + "\" failed to unapply.");
 			}
@@ -2947,7 +3093,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			if( validEvents.indexOf(eventType) < 0 )
 			{
 				console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified. Applying as non-JumpStart listener.");
-				originalAddEventListener.apply(window, arguments);
+				originalObjectAddEventListener.apply(this, arguments);
 				return;
 			}
 
@@ -3014,7 +3160,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			this.listeners[eventType][listenerName] = listener;
 
 			// BaseClass::addEventListener
-			originalAddEventListener.apply(window, arguments);
+			//originalObjectAddEventListener.apply(this, arguments);
 		}.bind(instance),
 		"removeEventListener": function(eventType, listener)
 		{
@@ -3022,7 +3168,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			if( validEvents.indexOf(eventType) < 0 )
 			{
 				console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified. Removing as non-JumpStart listener.");
-				originalRemoveEventListener.apply(window, arguments);
+				originalObjectRemoveEventListener.apply(this, arguments);
 				return;
 			}
 
@@ -3040,7 +3186,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			}
 
 			// BaseClass::addEventListener
-			originalRemoveEventListener.apply(window, arguments);
+			//originalObjectRemoveEventListener.apply(this, arguments);
 		}.bind(instance),
 		"hasEventListener": function(eventType, listener)
 		{
@@ -3111,7 +3257,7 @@ JumpStart.prototype.addEventListener = function(eventType, listener)
 	// Make sure this is a valid event type
 	if( validEvents.indexOf(eventType) < 0 )
 	{
-		console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified.");
+		console.warn("JumpStart: Invalid event type \"" + eventType + "\" specified.");//
 		return;
 	}
 

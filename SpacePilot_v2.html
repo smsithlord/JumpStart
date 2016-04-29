@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Space Pilot v2</title>
+		<script src="engine/misc/appMenu.js"></script>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "SpacePilot",
+				"sceneScale": 1.0,
+				"multiuserOnly": true,
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": false}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModels(["models/Falcon", "models/player_laser", "models/thai"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			function spawnEnemy()
+			{
+				var enemy = jumpStart.spawnInstance("models/thai");
+			}
+
+			function fireLaser()
+			{
+				//if( falcon.userData.fireCooldown !== 0 )
+					//return;
+
+				var laser = jumpStart.spawnInstance("models/player_laser");
+				laser.position.copy(this.position);
+				laser.quaternion.copy(this.quaternion);
+				laser.translateX(5.0);
+				laser.translateY(0.0);
+				laser.translateZ(50.0);
+				laser.scale.set(0.2, 0.2, 1.0);
+				laser.addEventListener("tick", laserTick);
+
+				laser = jumpStart.spawnInstance("models/player_laser");
+				laser.position.copy(this.position);
+				laser.quaternion.copy(this.quaternion);
+				laser.translateX(-5.0);
+				laser.translateY(0.0);
+				laser.translateZ(50.0);
+				laser.scale.set(0.2, 0.2, 1.0);
+				laser.addEventListener("tick", laserTick);
+			}
+
+			function laserTick()
+			{
+				this.translateZ(300.0 * jumpStart.deltaTime);
+
+				//if( !jumpStart.isWorldPosInsideOfEnclosure(this.getWorldPosition()) )
+				if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+					jumpStart.removeInstance(this);
+			}
+
+			var falcon;
+			jumpStart.addEventListener("gamepadbutton", function(e)
+			{
+				return;
+				if( !!!falcon )
+					return;
+
+				if( true )//jumpStart.gamepad.mapping === "steamvr" )
+				{
+					var preventButtons = [];
+					preventButtons[0] = true;
+
+					if( typeof jumpStart.gamepad.preventDefault === "function" )
+						jumpStart.gamepad.preventDefault([], preventButtons);
+
+					if( e.buttonCode === 0 && e.value == 1.0 && !!falcon && falcon.userData.fireCooldown === 0 )
+					{
+						falcon.userData.fireCooldown = 0.02;
+						falcon.syncData.shotsFired += 1;
+						falcon.sync();
+
+						fireLaser.call(falcon);
+					}
+					//debugElem.innerHTML = JSON.stringify(e);
+				}
+			});
+
+			function falconSpawn(isInitialSync)
+			{
+				if( isInitialSync && this.ownerID === jumpStart.localUser.userID )
+					jumpStart.removeInstance(this);
+				else
+					this.userData.oldShotsFired = this.syncData.shotsFired;
+			}
+
+			function falconShotMonitor()
+			{
+				if( this.userData.oldShotsFired !== this.syncData.shotsFired && this.ownerID !== jumpStart.localUser.userID )
+				{
+					this.userData.oldShotsFired = this.syncData.shotsFired;
+
+					fireLaser.call(this);
+				}
+			}
+
+			function enclosureFire()
+			{
+				if( !!falcon && falcon.userData.fireCooldown === 0 )
+				{
+					falcon.syncData.shotsFired += 1;
+					falcon.sync();
+					falcon.userData.fireCooldown = 0.02;
+
+					fireLaser.call(falcon);
+				}
+			}
+
+			var debugElem;
+			jumpStart.addEventListener("ready", function()
+			{
+				var jumpStartAppMenu = new JumpStartAppMenu("SpacePilotV2", "http://www.jumpstartsdk.com/live/SpacePilot_v2.html", jumpStart.scene);
+
+				spawnEnemy();
+
+				debugElem = document.createElement("div");
+				debugElem.style.cssText = "position: fixed; top: 0; left: 0; font-size: 20px; font-weight: 900;";
+				document.body.appendChild(debugElem);
+
+				falcon = jumpStart.spawnInstance("models/Falcon");
+				falcon.syncData.shotsFired = 0;
+				falcon.addEventListener("spawn", falconSpawn);
+				falcon.addEventListener("tick", falconShotMonitor);
+
+				var boundary = jumpStart.enclosureBoundary("floor");
+				boundary.addEventListener("cursordown", enclosureFire);
+				boundary.scale.multiplyScalar(1.5);
+
+				boundary = jumpStart.enclosureBoundary("north");
+				boundary.addEventListener("cursordown", enclosureFire);
+				boundary.scale.multiplyScalar(1.5);
+
+				boundary = jumpStart.enclosureBoundary("east");
+				boundary.addEventListener("cursordown", enclosureFire);
+				boundary.scale.multiplyScalar(1.5);
+
+				boundary = jumpStart.enclosureBoundary("south");
+				boundary.addEventListener("cursordown", enclosureFire);
+				boundary.scale.multiplyScalar(1.5);
+
+				boundary = jumpStart.enclosureBoundary("west");
+				boundary.addEventListener("cursordown", enclosureFire);
+				boundary.scale.multiplyScalar(1.5);
+
+				boundary = jumpStart.enclosureBoundary("ceiling");
+				boundary.addEventListener("cursordown", enclosureFire);
+				boundary.scale.multiplyScalar(1.5);
+
+				boundary = falcon.userData.fireCooldown = 0.0;
+
+				//falcon.scale.set(2.0, 2.0, 2.0);
+				falcon.addEventListener("tick", function()
+				{
+					if( this.userData.fireCooldown > 0 )
+					{
+						this.userData.fireCooldown -= jumpStart.deltaTime;
+
+						if( this.userData.fireCooldown <= 0 )
+						{
+							this.userData.fireCooldown = 0;
+						}
+					}
+
+					var position, quaternion;
+					if( jumpStart.activeGamepadIndex > -1 && jumpStart.gamepad.mapping === "steamvrx" )
+					{
+
+						var pos = jumpStart.gamepad.position;
+						var rot = jumpStart.gamepad.rotation;
+						var gamepadMatrix = new THREE.Matrix4().set(pos.x, pos.y, pos.z, 0, rot.x, rot.y, rot.z, 0, 1, 1, 1, 0, 0, 0, 0, 0);
+/*
+						// position
+						var matrix = eyeMatrix.clone();
+						var translationMatrix = new THREE.Matrix4();
+						translationMatrix.makeTranslation(0, 50.0, 0);
+						matrix.multiply(translationMatrix);
+						position = new THREE.Vector3().setFromMatrixPosition(matrix);
+						jumpStart.world.worldToLocal(position);
+
+						// quaternion
+						matrix = eyeMatrix.clone();
+						translationMatrix = new THREE.Matrix4();
+						translationMatrix.makeRotationY(Math.PI);
+						matrix.multiply(translationMatrix);
+						quaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
+*/
+						// First convert the gamepad input into a position, then a quaternion, then a matrix.
+						//position = jumpStart.gamepad.position;
+						//position = new THREE.Vector3().set(position.x, position.y, position.z);
+						//jumpStart.world.worldToLocal(position);
+
+						// gamepad returns rotation as a quaternion!!
+						//quaternion = jumpStart.gamepad.rotation;
+						//quaternion = new THREE.Quaternion().set(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
+
+						//var gamepadMatrix = new THREE.Matrix4().compose(position, quaternion);
+					}
+					else
+					{
+						var eyeMatrix = (jumpStart.isAltspace) ? jumpStart.localUser.skeleton.getJoint("Eye").matrixWorld : jumpStart.camera.matrixWorld;
+
+						// position
+						var matrix = eyeMatrix.clone();
+
+						if( jumpStart.isAltspace )
+							matrix.multiplyScalar(1 / jumpStart.options.sceneScale);
+
+						var translationMatrix = new THREE.Matrix4();
+
+						if( jumpStart.isAltspace )
+							translationMatrix.makeTranslation(0, 0, 250.0);
+						else
+							translationMatrix.makeTranslation(0, 0, -250);
+
+						matrix.multiply(translationMatrix);
+
+						if( jumpStart.localUser.cursorHit )
+							matrix.lookAt(this.getWorldPosition(), jumpStart.localUser.cursorHit.point, new THREE.Vector3(0, 1, 0));
+
+						translationMatrix.makeRotationY(Math.PI);
+						matrix.multiply(translationMatrix);
+
+						if( jumpStart.isAltspace )
+							translationMatrix.makeTranslation(0, -100.0, 0);
+						else
+							translationMatrix.makeTranslation(0, -20.0, 0);
+
+						matrix.multiply(translationMatrix);
+
+						quaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
+						position = new THREE.Vector3().setFromMatrixPosition(matrix);
+						jumpStart.world.worldToLocal(position);
+
+						// quaternion
+						matrix = eyeMatrix.clone();
+						if( jumpStart.isAltspace )
+							matrix.multiplyScalar(1 / jumpStart.options.sceneScale);
+
+//						translationMatrix = new THREE.Matrix4();
+//						translationMatrix.makeRotationY(Math.PI);
+//						matrix.multiply(translationMatrix);
+
+						if( jumpStart.localUser.cursorHit )
+							matrix.lookAt(this.getWorldPosition(), jumpStart.localUser.cursorHit.point, new THREE.Vector3(0, 1, 0));
+
+						translationMatrix = new THREE.Matrix4();
+						translationMatrix.makeRotationY(Math.PI);
+						matrix.multiply(translationMatrix);
+					
+//						quaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
+					}
+
+					if( jumpStart.isWorldPosInsideOfEnclosure(position) )
+						applyLerpMove.call(this, {"targetPosition": position, "targetQuaternion": quaternion});
+
+					function applyLerpMove(options)
+					{
+						options = {
+							"targetPosition": options.targetPosition,
+							"targetQuaternion": options.targetQuaternion
+						};
+
+						var position = this.getWorldPosition();
+						jumpStart.world.worldToLocal(position);
+
+						var distance = options.targetPosition.distanceTo(position);
+						//var speed = 100.0;
+						var autoSpeed = 50 + (0.9 * distance);
+
+						this.userData.lerpMove = {};
+						this.userData.lerpMove.targetPosition = options.targetPosition;
+						this.userData.lerpMove.targetQuaternion = options.targetQuaternion;
+						this.userData.lerpMove.time = distance / autoSpeed;
+
+						if( !!!jumpStart.gamepad || jumpStart.gamepad.mapping !== "steamvrx" )
+							this.userData.lerpMove.time = 600.0;
+						else
+							this.userData.lerpMove.time *= 50.0;
+
+						this.userData.lerpMove.originalPosition = this.position.clone();
+						this.userData.lerpMove.originalQuaternion = this.quaternion.clone();
+						this.userData.lerpMove.amount = 0.0;
+
+						this.addEventListener("tick", function()
+						{
+							if( this.userData.lerpMove.amount < 1.0 )
+							{
+								this.userData.lerpMove.amount += jumpStart.deltaTime / this.userData.lerpMove.time;
+
+								var justFinished = false;
+								if( this.userData.lerpMove.amount >= 1.0 )
+								{
+									this.userData.lerpMove.amount = 1.0;
+									justFinished = true;
+								}
+
+								this.position.lerpVectors(this.userData.lerpMove.originalPosition, this.userData.lerpMove.targetPosition, this.userData.lerpMove.amount);
+
+								var currentQuaternion = this.userData.lerpMove.originalQuaternion.clone();
+								currentQuaternion.slerp(this.userData.lerpMove.targetQuaternion, this.userData.lerpMove.amount);
+								this.quaternion.copy(currentQuaternion);
+
+								if( justFinished )
+								{
+									//console.log("Animation finished!");
+								}
+							}
+						});
+					}
+
+					//this.translateZ(20.0);
+					//this.rotateX(Math.PI / 4.0);
+				});
+
+				falcon.applyBehavior("lerpSync");
+				falcon.applyBehavior("autoSync");
+				falcon.applyBehavior("autoRemoval");
+				falcon.sync();
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>

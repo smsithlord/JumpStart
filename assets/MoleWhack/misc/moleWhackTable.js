@@ -445,7 +445,8 @@ jumpStartBehavior({
 				table = jumpStart.scene.getObjectByName(this.syncData.tableName);
 
 			var nameCard = table.userData.moleWhackTable.nameCard;
-			jumpStart.updateTextPlane(nameCard, {"backgroundImageElem": table.userData.moleWhackTable.imageElem, "width": 52.5, "height": 9, "fontSize": 4, "text": "THANKS FOR PLAYING", "color": "#ffffff"});
+			if( nameCard )
+				jumpStart.updateTextPlane(nameCard, {"backgroundImageElem": table.userData.moleWhackTable.imageElem, "width": 52.5, "height": 9, "fontSize": 4, "text": "THANKS FOR PLAYING", "color": "#ffffff"});
 
 			var moles = table.userData.moleWhackTable.moles;
 			if( moles.length > 0 && (moles[0].ownerID !== this.ownerID || this.ownerID === jumpStart.localUser.userID) )

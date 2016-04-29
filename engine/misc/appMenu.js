@@ -53,6 +53,18 @@ function JumpStartAppMenu(appID, appURL, scene)
 							{
 								"id": "MoleWhack",
 								"url": "http://www.jumpstartsdk.com/live/MoleWhack.html"
+							},
+							{
+								"id": "Soundboard",
+								"url": "http://www.jumpstartsdk.com/live/Soundboard.html"
+							},
+							{
+								"id": "Stuntman",
+								"url": "http://www.jumpstartsdk.com/live/Stuntman.html"
+							},
+							{
+								"id": "SpacePilotV2",
+								"url": "http://www.jumpstartsdk.com/live/SpacePilot_v2.html"
 							}
 						];
 
@@ -231,22 +243,98 @@ function JumpStartAppMenu(appID, appURL, scene)
 			this.container.userData.visible = true;
 			this.scene.add(this.container);
 
+			var upArrow = spawnArrow.call(this, "up");
+			this.upArrow = upArrow;
+			upArrow.addEventListener("cursordown", function(e)
+			{
+				var max = 5;
+				var i, item;
+
+				// Get the last visible item
+				var firstIndex = 0;
+				for( i = this.items.length-1; i >= 0; i-- )
+				{
+					item = this.items[i];
+					if( item.scale.x == 1 )
+						firstIndex = i;
+
+					item.scale.set(0.0001, 0.0001, 0.0001);
+				}
+
+				if( true )// firstIndex !== 0 )
+				{
+					if( firstIndex - max < 0 )
+						firstIndex -= (firstIndex - max);
+
+					var count = 0;
+					for( i = firstIndex - max; i >= 0 && i < firstIndex; i++, count++ )
+					{
+						item = this.items[i];
+						item.scale.set(1, 1, 1);
+						item.position.y = (count + 1) * -this.itemHeight;
+					}
+				}
+			}.bind(this));
+
+			var downArrow = spawnArrow.call(this, "down");
+			this.downArrow = downArrow;
+			downArrow.addEventListener("cursordown", function(e)
+			{
+				var max = 5;
+				var i, item;
+
+				// Get the last visible item
+				var lastIndex = this.items.length-1;
+				for( i = 0; i < this.items.length; i++ )
+				{
+					item = this.items[i];
+					if( item.scale.x == 1 )
+						lastIndex = i;
+
+					item.scale.set(0.0001, 0.0001, 0.0001);
+				}
+
+				if( true )//lastIndex !== this.items.length-1 )
+				{
+					if( lastIndex + max > this.items.length-1 )
+						lastIndex -= (lastIndex + max) - (this.items.length-1);
+
+					for( i = lastIndex; i < this.items.length && i < lastIndex + max; i++ )
+					{
+						item = this.items[i];
+						item.scale.set(1, 1, 1);
+						item.position.y = ((i - lastIndex) + 1) * -this.itemHeight;
+					}
+				}
+			}.bind(this));
+
 			var x;
 			for( x in this.apps )
 				spawnItem.call(this, this.apps[x]);
 
-			//this.container.position.y += this.itemHeight * this.items.length / 2.0;
+			var max = 5;
+			var i, item;
+			for( i = 0; i < this.items.length; i++ )
+			{
+				item = this.items[i];
+				if( i < max )
+				{
+					item.scale.set(1, 1, 1);
+					item.position.y = (i+1) * -this.itemHeight;
+				}
+				else
+					item.scale.set(0.0001, 0.0001, 0.0001);
+			}
+
+			// Adjust the Y position of everything else
+			var upArrow = this.upArrow;
+			upArrow.position.y = 0;
+
+			var downArrow = this.downArrow;
+			downArrow.position.y = (max+1) * -this.itemHeight;
+
 			this.container.position.copy(this.nameCard.position);
 			this.container.position.y -= this.itemHeight;
-/*
-			var upArrow = spawnArrow.call(this, "up");
-			upArrow.translateY((this.itemHeight * this.container.items) / 2.0);
-			this.upArrow = upArrow;
-
-			var downArrow = spawnArrow.call(this, "down");
-			downArrow.translateY((this.itemHeight * this.container.items) / 2.0);
-			this.downArrow = downArrow;
-			*/
 
 			// Spawn the UP ARROW
 			function spawnArrow(direciton)
@@ -284,9 +372,14 @@ function JumpStartAppMenu(appID, appURL, scene)
 
 				//var geometry = //new THREE.BoxGeometry(options.width, options.height, 0);
 				var geometry = new THREE.Geometry();
+				/*
 				geometry.vertices.push(new THREE.Vector3(0, 2, 0).multiplyScalar(scale));
     			geometry.vertices.push(new THREE.Vector3(-2, 0, 0).multiplyScalar(scale));
    				geometry.vertices.push(new THREE.Vector3(2, 0, 0).multiplyScalar(scale));
+   				*/
+   				geometry.vertices.push(new THREE.Vector3(0, options.height, 0));
+    			geometry.vertices.push(new THREE.Vector3(-options.width / 2.0, -options.height * 1.5, 0));
+   				geometry.vertices.push(new THREE.Vector3(options.width / 2.0, -options.height * 1.5, 0));
 				geometry.faces.push(new THREE.Face3(0, 1, 2));
 				geometry.computeFaceNormals();
 
@@ -353,22 +446,7 @@ function JumpStartAppMenu(appID, appURL, scene)
 
 				this.items.push(plane);
 
-				var i, item;
-				for( i = 0; i < this.items.length; i++ )
-				{
-					item = this.items[i];
-					item.position.y = -i * this.itemHeight;
-				}
-
-				// Adjust the Y position of everything else
-				/*
-				var upArrow = this.upArrow;
-				upArrow.position.set(0, this.container.items * this.itemHeight / 2.0, 0);
-
-				var downArrow = this.downArrow;
-				downArrow.position.set(0, -this.container.items * this.itemHeight / 2.0, 0);
-				*/
-
+				plane.scale.set(0.0001, 0.0001, 0.0001);
 				this.container.add(plane);
 			}
 			else

@@ -208,6 +208,8 @@
 			{
 				function spawnDebris(parent, translation)
 				{
+//					parent.parent.updateMatrixWorld();
+
 					var force = new THREE.Vector3();
 					var rotation = new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random());
 
@@ -450,6 +452,10 @@
 			var gamepadActive = false;
 			jumpStart.addEventListener("gamepadbutton", function(e)
 			{
+				console.log(e);
+				if( jumpStart.gamepad.mapping === "steamvr" )
+					return;
+
 				if( e.buttonCode === 0 )
 				{
 					// A BUTTON
