@@ -500,7 +500,9 @@ function JumpStart(options, appBehaviors)
 
 				//this.updateMatrixWorld();	// FIX ME: This was needed for some reason, but it messes with the physics behavior on network clients.
 				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
-				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(jumpStart.deltaTime * 100.0)
+				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(jumpStart.deltaTime * 100.0);
+				//.multiplyScalar(jumpStart.options.sceneScale)
+				//deltaPos.multiplyScalar(1 / jumpStart.options.sceneScale);
 				pos.add(deltaPos);
 
 				var x, max;
@@ -522,6 +524,7 @@ function JumpStart(options, appBehaviors)
 				pos.sub(jumpStart.world.position);
 
 				this.position.copy(pos);
+				this.updateMatrixWorld();
 			},
 			"spawnBehavior": function(isInitialSync)
 			{

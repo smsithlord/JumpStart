@@ -480,6 +480,9 @@
 
 											var force = new THREE.Vector3().copy(cannon.userData.barrelGrip.getWorldPosition()).sub(stuntman.getWorldPosition());
 											force.multiplyScalar(0.05);
+
+											force.multiplyScalar(jumpStart.options.sceneScale);
+											//force.multiplyScalar(0.1);
 											stuntman.applyBehavior("physics", {"force": force});
 											stuntman.addEventListener("tick", function()
 											{
