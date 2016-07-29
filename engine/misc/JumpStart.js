@@ -2,6 +2,8 @@
 function JumpStart(options, appBehaviors)
 {
 	this.version = "0.2.0";
+	this.shouldSimulateLag = false;
+	this.tickLag = 0.0;	// for simulating bad performance.
 
 	// Only allow ONE instance
 	if( window.hasOwnProperty("jumpStart") )
@@ -981,6 +983,8 @@ function JumpStart(options, appBehaviors)
 											this.pendingUpdates[key] = {};
 
 										this.pendingUpdates[key].syncData = snapshot.val();
+//										console.log("Update: ");
+//										console.log(snapshot.val());
 									}.bind(this));
 
 									function objectRemoved(key)
@@ -1441,6 +1445,8 @@ JumpStart.prototype.onReadyToPrecache = function()
 
 JumpStart.prototype.spawnTextPlane = function(options)
 {
+	this.tickLag += 0.04;
+
 	var defaultOptions = {
 		"width": "auto",
 		"height": 12,
@@ -1543,6 +1549,8 @@ JumpStart.prototype.spawnTextPlane = function(options)
 
 JumpStart.prototype.updateTextPlane = function(textPlane, options)
 {
+	this.tickLag += 0.04;
+
 	var defaultOptions = {
 		"width": "auto",
 		"height": 12,
@@ -1698,8 +1706,8 @@ JumpStart.prototype.onReadyToReady = function()
 	// FIX ME: This should be an app option, not automatic.
 	this.scene.getObjectByName("jumpStartWorld").position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
 
-	if( this.isAltspace )
-		this.scene.add(this.localUser.skeleton);
+//	if( this.isAltspace )
+//		this.scene.add(this.localUser.skeleton);
 
 	// Add the app menu to the UI
 	/*
@@ -1866,6 +1874,10 @@ JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDe
 	if( arguments.length < 4 )
 		currentDepth = 0;
 
+	// added 7/24/2016 to sync removed properties
+	//if( !!!targetData.listeners )
+	//	targetData = {};
+
 	var x, childData, childDataType, listenerName, funcName, handler, dotIndex, behaviorName, eventName, behaviorHandler;
 	for( x in data)
 	{
@@ -1988,7 +2000,10 @@ JumpStart.prototype.doPendingUpdates = function()
 			this.extractData.call(this, data.vitalData, instance, Infinity);
 
 		if( data.hasOwnProperty("syncData") )
+		{
+			instance.syncData = {};
 			this.extractData.call(this, data.syncData, instance.syncData, Infinity);
+		}
 
 		// Apply any behaviors that need to be applied
 		var i, behavior;
@@ -2056,16 +2071,41 @@ JumpStart.prototype.onGamepadButtonEvent = function(e)
 	this.pendingEvents[e.type][e.buttonCode] = e;
 };
 
+JumpStart.prototype.simulateLag = function()
+{
+	if( this.shouldSimulateLag )
+	{
+		var length = new Date().getTime() + (this.tickLag * 1000);
+		while( new Date().getTime() <= length )
+		{
+
+		}
+	}
+
+	return true;
+};
+
 JumpStart.prototype.onTick = function()
 {
+	this.tickLag += 0.01;
+	var dummy = this.simulateLag();
+	this.tickLag = 0.0;
+
 	if( !this.isInitialized )
 		return;
 
 	// do gamepad input
 	if( this.isAltspace )
-		this.gamepads = altspace.getGamepads();
+	{
+		//console.log("uno");
+		this.gamepads = altspace.getGamepads();	// NOTE: This always returns an empty array the 1st time the enclosure is loaded.  Unknown why.  Probably an API bug.
+		//console.log("Detected: " + this.gamepads);
+	}
 	else
+	{
+		//console.log("dos");
 		this.gamepads = (!!navigator.getGamepads) ? navigator.getGamepads() : this.gamepads = navigator.webkitGetGamepads();
+	}
 	
 	// Detect a gamepad
 	if( this.activeGamepadIndex === -1 )
@@ -2426,6 +2466,8 @@ JumpStart.prototype.processCursorMove = function()
 		return !(obj.hasOwnProperty("blocksLOS") && !obj.blocksLOS);
 	});
 
+	this.tickLag += 0.01 * this.raycastArray.length;
+
 	// Hover events
 	var hasIntersection = false;
 	var x, object;
@@ -2634,7 +2676,21 @@ JumpStart.prototype.removeInstance = function(instance)
 	for( listenerName in instance.listeners.remove )
 		instance.listeners.remove[listenerName].call(instance);
 
-	instance.parent.remove(instance);
+	// remove all children
+	var i, child;
+	for( i = 0; i < instance.children.length; i++ )
+	{
+		child = instance.children[i];
+		if( !!child.jumpStart )
+			child.parent.remove(instance);
+	}
+
+	if( !instance.parent )
+		console.log("whaaat no parent");
+	else
+		instance.parent.remove(instance);
+	//console.log(instance);
+	//this.scene.remove(instance);
 
 	if( instance.syncKey && this.syncedObjects.hasOwnProperty(instance.syncKey))
 	{
@@ -2753,6 +2809,8 @@ JumpStart.prototype.enclosureBoundary = function(boundaryID)
 
 JumpStart.prototype.spawnInstance = function(modelFile, options)
 {
+	this.tickLag += 0.02;
+
 	var defaultOptions = {
 		"object": null,
 		"parent": this.world,
@@ -3058,18 +3116,21 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			if( options.syncData )
 			{
 				var syncData = makeSyncable(this.syncData);
+//				console.log("Data: ");
+//				console.log(syncData);
 				data.syncData = syncData;
 			}
 
 			// FIX ME: Only non-default values should need to be stored on the firebase.
 			if( this.syncKey )
 			{
-				jumpStart.selfSyncingObject = true;
+				jumpStart.selfSyncingObject = true;	// DISABLED ON 7/24/2016 (TODO: Look into side-effects!!)  Turns out update does not get syncronously called on local client.
 				jumpStart.firebase.roomRef.child("objects").child(this.syncKey).update(data, function(error)
 				{
 					if( error )
 						console.log("JumpStart: " + error);
 				});
+				
 				jumpStart.selfSyncingObject = false;
 
 				//console.log("JumpStart: Syncing object with key " + this.syncKey + ".");

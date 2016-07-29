@@ -1,0 +1,84 @@
+<html>
+	<head>
+		<style>
+			body
+			{
+				margin: 0;
+				padding: 0;
+			}
+
+			.popup
+			{
+				position: absolute;
+				border: 5px solid #000;/* #43A8F5; */
+				height: 70%;
+				left: 0;
+				right: 0;
+				background: rgba(0, 0, 0, 0.5);
+			}
+
+			.popup td
+			{
+				color: #fff;
+				font-weight: 900;
+				font-family: Arial;
+				font-size: 23px;
+			}
+
+			.identity
+			{
+				position: fixed;
+				bottom: 5px;
+				left: 50px;
+				font-size: 30px;
+				font-weight: 900;
+				font-family: Arial;
+				border: 5px solid #000;/*#0A8FA7;*/
+				background: rgba(0, 0, 0, 0.7);
+				padding: 7px;
+				border-radius: 10px;
+				color: #fff;
+			}
+
+			.icon
+			{
+				cursor: hand;
+				width: 177px;
+				height: 177px;
+				background-image: url("helpicon.png");
+				margin: 20px;
+			}
+
+			.icon div
+			{
+				font-size: 18px;
+				visibility: hidden;
+			}
+
+			.icon:hover div
+			{
+				visibility: visible;
+			}
+
+			.icon:hover
+			{
+				background-image: url("helpicon_on.png");
+			}
+		</style>
+	</head>
+	<body>
+		<div class="popup">
+			<table style="width: 100%; height: 100%;">
+				<tr>
+					<td align="center">
+						<img src="gamepadcontrols.png" /> <img src="wandcontrols.png" />
+					</td>
+				</tr>
+			</table>
+		</div>
+
+		<div class="identity">
+			Hover Blaster
+		</div>
+	</body>
+</html>

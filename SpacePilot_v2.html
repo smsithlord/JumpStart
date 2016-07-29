@@ -14,10 +14,21 @@
 				"debug": {"showCursorPlanes": false}
 			});
 
+			var shipTypes = [
+				{
+					"modelFile": "models/Falcon",
+					"laserOffsets": [{"x": 5, "y": 0, "z": 50}, {"x": -5, "y": 0, "z": 50}]
+				},
+				{
+					"modelFile": "models/hawk",
+					"laserOffsets": [{"x": 5, "y": 0, "z": 50}, {"x": -5, "y": 0, "z": 50}]
+				}
+			];
+
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModels(["models/Falcon", "models/player_laser", "models/thai"]).then( function()
+				jumpStart.loadModels(["models/explosion", "models/hawk", "models/Falcon", "models/player_laser", "models/thai", "models/button", "models/buttonFrame"]).then( function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -29,47 +40,92 @@
 
 			jumpStart.addEventListener("initialize", function()
 			{
+				var button = jumpStart.spawnInstance("models/button");
+				button.name = "button";
+				button.blocksLOS = true;
+				button.rotateX(-Math.PI / 2.0);
+				button.addEventListener("spawn", buttonSpawn);
+				button.addEventListener("cursorenter", buttonEnter);
+				button.addEventListener("cursorexit", buttonExit);
+				button.addEventListener("cursordown", buttonDown);
+				button.sync();
+
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
 				return true;
 			});
-
+/*
 			function spawnEnemy()
 			{
 				var enemy = jumpStart.spawnInstance("models/thai");
 			}
+			*/
 
 			function fireLaser()
 			{
+				if( !!!falcon )
+				{
+					falcon = jumpStart.scene.getObjectByName("playerShip");
+
+					if( !!!falcon )
+						return;
+				}
+
 				//if( falcon.userData.fireCooldown !== 0 )
 					//return;
 
-				var laser = jumpStart.spawnInstance("models/player_laser");
-				laser.position.copy(this.position);
-				laser.quaternion.copy(this.quaternion);
-				laser.translateX(5.0);
-				laser.translateY(0.0);
-				laser.translateZ(50.0);
-				laser.scale.set(0.2, 0.2, 1.0);
-				laser.addEventListener("tick", laserTick);
+				var shipType = shipTypes.find(function(element)
+				{
+					return (this.modelFile === element.modelFile);
+				}, this);
 
-				laser = jumpStart.spawnInstance("models/player_laser");
-				laser.position.copy(this.position);
-				laser.quaternion.copy(this.quaternion);
-				laser.translateX(-5.0);
-				laser.translateY(0.0);
-				laser.translateZ(50.0);
-				laser.scale.set(0.2, 0.2, 1.0);
-				laser.addEventListener("tick", laserTick);
+				var laserOffsets = shipType.laserOffsets;
+
+				var i, laserOffset, laser;
+				for( i = 0; i < laserOffsets.length; i++ )
+				{
+					laser = jumpStart.spawnInstance("models/player_laser");
+					laser.userData.power = 20.0;
+					laser.position.copy(this.position);
+					laser.quaternion.copy(this.quaternion);
+
+					laserOffset = laserOffsets[i];
+					laser.translateX(laserOffset.x);
+					laser.translateY(laserOffset.y);
+					laser.translateZ(laserOffset.z);
+					laser.scale.set(0.2, 0.2, 1.0);
+					laser.userData.target = jumpStart.syncedObjects[falcon.syncData.target];
+					laser.addEventListener("tick", laserTick);
+				}
 			}
 
 			function laserTick()
 			{
+				if( !!this.userData.target && !!this.userData.target.parent )
+					this.lookAt(this.userData.target.position);
+
 				this.translateZ(300.0 * jumpStart.deltaTime);
 
-				//if( !jumpStart.isWorldPosInsideOfEnclosure(this.getWorldPosition()) )
 				if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+				{
 					jumpStart.removeInstance(this);
+					return;
+				}
+
+				var i, enemy;
+				for( i = 0; i < g_enemies.length; i++ )
+				{
+					enemy = g_enemies[i];
+
+					if( enemy.position.distanceTo(this.position) < 30.0 )
+					{
+						if( enemy.ownerID === jumpStart.localUser.userID )
+							enemy.userData.onDamage.call(enemy, this.userData.power);
+
+						jumpStart.removeInstance(this);
+						return;
+					}
+				}
 			}
 
 			var falcon;
@@ -99,12 +155,28 @@
 				}
 			});
 
+			function falconRemove()
+			{
+				if( this.ownerID === jumpStart.localUser.userID )
+				{
+					var button = jumpStart.scene.getObjectByName("button");
+					button.scale.set(1, 1, 1);
+					//button.userData.buttonFrame.scale.set(1, 1, 1);
+					button.sync();
+				}
+			}
+
 			function falconSpawn(isInitialSync)
 			{
-				if( isInitialSync && this.ownerID === jumpStart.localUser.userID )
-					jumpStart.removeInstance(this);
-				else
-					this.userData.oldShotsFired = this.syncData.shotsFired;
+				this.userData.oldShotsFired = this.syncData.shotsFired;
+
+//				if( this.ownerID === jumpStart.localUser.userID )
+//				{
+//					console.log(this.ownerID);
+//					var enemy = spawnEnemy();
+//					RandoPosition(enemy);
+//					enemy.sync();
+//				}
 			}
 
 			function falconShotMonitor()
@@ -134,42 +206,81 @@
 			{
 				var jumpStartAppMenu = new JumpStartAppMenu("SpacePilotV2", "http://www.jumpstartsdk.com/live/SpacePilot_v2.html", jumpStart.scene);
 
-				spawnEnemy();
+				//spawnEnemy();
 
 				debugElem = document.createElement("div");
 				debugElem.style.cssText = "position: fixed; top: 0; left: 0; font-size: 20px; font-weight: 900;";
 				document.body.appendChild(debugElem);
 
-				falcon = jumpStart.spawnInstance("models/Falcon");
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function buttonSpawn()
+			{
+				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});
+//				buttonFrame.position.copy(this.position);
+//				buttonFrame.quaternion.copy(this.quaternion);
+
+				this.userData.buttonFrame = buttonFrame;
+			}
+
+			function buttonEnter()
+			{
+				this.setColor(new THREE.Color("#5599ff"));
+				jumpStart.playSound("sounds/ping");
+			}
+
+			function buttonExit()
+			{
+				this.setColor(new THREE.Color("rgb(100%, 100%, 100%)"));
+				jumpStart.playSound("sounds/pingoff", 0.3);
+			}
+
+			function buttonDown()
+			{
+				var playerShip = jumpStart.scene.getObjectByName("playerShip");
+				if( !!playerShip )
+					return;
+
+				this.scale.set(0.0001, 0.0001, 0.0001);
+				//this.userData.buttonFrame.scale.set(0.0001, 0.0001, 0.0001);
+				this.sync();
+
+				falcon = jumpStart.spawnInstance("models/hawk");
+				falcon.syncData.target = "";
+				falcon.name = "playerShip";
 				falcon.syncData.shotsFired = 0;
 				falcon.addEventListener("spawn", falconSpawn);
 				falcon.addEventListener("tick", falconShotMonitor);
+				falcon.addEventListener("remove", falconRemove);
 
 				var boundary = jumpStart.enclosureBoundary("floor");
-				boundary.addEventListener("cursordown", enclosureFire);
-				boundary.scale.multiplyScalar(1.5);
+				//boundary.addEventListener("cursordown", enclosureFire);
+				//boundary.scale.multiplyScalar(1.5);
 
 				boundary = jumpStart.enclosureBoundary("north");
-				boundary.addEventListener("cursordown", enclosureFire);
-				boundary.scale.multiplyScalar(1.5);
+				//boundary.addEventListener("cursordown", enclosureFire);
+				//boundary.scale.multiplyScalar(1.5);
 
 				boundary = jumpStart.enclosureBoundary("east");
-				boundary.addEventListener("cursordown", enclosureFire);
-				boundary.scale.multiplyScalar(1.5);
+				//boundary.addEventListener("cursordown", enclosureFire);
+				//boundary.scale.multiplyScalar(1.5);
 
 				boundary = jumpStart.enclosureBoundary("south");
-				boundary.addEventListener("cursordown", enclosureFire);
-				boundary.scale.multiplyScalar(1.5);
+				//boundary.addEventListener("cursordown", enclosureFire);
+				//boundary.scale.multiplyScalar(1.5);
 
 				boundary = jumpStart.enclosureBoundary("west");
-				boundary.addEventListener("cursordown", enclosureFire);
-				boundary.scale.multiplyScalar(1.5);
+				//boundary.addEventListener("cursordown", enclosureFire);
+				//boundary.scale.multiplyScalar(1.5);
 
 				boundary = jumpStart.enclosureBoundary("ceiling");
-				boundary.addEventListener("cursordown", enclosureFire);
-				boundary.scale.multiplyScalar(1.5);
+				//boundary.addEventListener("cursordown", enclosureFire);
+				//boundary.scale.multiplyScalar(1.5);
 
-				boundary = falcon.userData.fireCooldown = 0.0;
+				falcon.userData.fireCooldown = 0.0;
 
 				//falcon.scale.set(2.0, 2.0, 2.0);
 				falcon.addEventListener("tick", function()
@@ -231,7 +342,7 @@
 						var translationMatrix = new THREE.Matrix4();
 
 						if( jumpStart.isAltspace )
-							translationMatrix.makeTranslation(0, 0, 250.0);
+							translationMatrix.makeTranslation(0, 0, 200.0);
 						else
 							translationMatrix.makeTranslation(0, 0, -250);
 
@@ -252,7 +363,29 @@
 
 						quaternion = new THREE.Quaternion().setFromRotationMatrix(matrix);
 						position = new THREE.Vector3().setFromMatrixPosition(matrix);
+
 						jumpStart.world.worldToLocal(position);
+
+						if( position.y < 100.0 )
+							position.y = 100.0;
+
+						if( !jumpStart.isWorldPosInsideOfEnclosure(position) )
+						{
+							if( position.y < 0 )
+								position.y = 0;
+
+							if( position.x < jumpStart.worldOffset.y )
+								position.x = jumpStart.worldOffset.y;
+
+							if( position.x > -jumpStart.worldOffset.y )
+								position.x = -jumpStart.worldOffset.y;
+
+							if( position.z < jumpStart.worldOffset.y )
+								position.z = jumpStart.worldOffset.y;
+
+							if( position.z > -jumpStart.worldOffset.y )
+								position.z = -jumpStart.worldOffset.y;
+						}
 
 						// quaternion
 						matrix = eyeMatrix.clone();
@@ -278,6 +411,8 @@
 
 					function applyLerpMove(options)
 					{
+						var needsTick = !!!this.userData.lerpMove;
+
 						options = {
 							"targetPosition": options.targetPosition,
 							"targetQuaternion": options.targetQuaternion
@@ -295,40 +430,44 @@
 						this.userData.lerpMove.targetQuaternion = options.targetQuaternion;
 						this.userData.lerpMove.time = distance / autoSpeed;
 
-						if( !!!jumpStart.gamepad || jumpStart.gamepad.mapping !== "steamvrx" )
-							this.userData.lerpMove.time = 600.0;
-						else
-							this.userData.lerpMove.time *= 50.0;
+//						if( !!!jumpStart.gamepad || jumpStart.gamepad.mapping !== "steamvrx" )
+//							this.userData.lerpMove.time = 600.0;
+//						else
+//							this.userData.lerpMove.time *= 50.0;
+						this.userData.lerpMove.time = 0.5;
 
 						this.userData.lerpMove.originalPosition = this.position.clone();
 						this.userData.lerpMove.originalQuaternion = this.quaternion.clone();
 						this.userData.lerpMove.amount = 0.0;
 
-						this.addEventListener("tick", function()
+						if( needsTick )
 						{
-							if( this.userData.lerpMove.amount < 1.0 )
+							this.addEventListener("tick", function()
 							{
-								this.userData.lerpMove.amount += jumpStart.deltaTime / this.userData.lerpMove.time;
-
-								var justFinished = false;
-								if( this.userData.lerpMove.amount >= 1.0 )
+								if( this.userData.lerpMove.amount < 1.0 )
 								{
-									this.userData.lerpMove.amount = 1.0;
-									justFinished = true;
+									this.userData.lerpMove.amount += jumpStart.deltaTime / this.userData.lerpMove.time;
+
+									var justFinished = false;
+									if( this.userData.lerpMove.amount >= 1.0 )
+									{
+										this.userData.lerpMove.amount = 1.0;
+										justFinished = true;
+									}
+
+									this.position.lerpVectors(this.userData.lerpMove.originalPosition, this.userData.lerpMove.targetPosition, this.userData.lerpMove.amount);
+
+									var currentQuaternion = this.userData.lerpMove.originalQuaternion.clone();
+									currentQuaternion.slerp(this.userData.lerpMove.targetQuaternion, this.userData.lerpMove.amount);
+									this.quaternion.copy(currentQuaternion);
+
+									if( justFinished )
+									{
+										//console.log("Animation finished!");
+									}
 								}
-
-								this.position.lerpVectors(this.userData.lerpMove.originalPosition, this.userData.lerpMove.targetPosition, this.userData.lerpMove.amount);
-
-								var currentQuaternion = this.userData.lerpMove.originalQuaternion.clone();
-								currentQuaternion.slerp(this.userData.lerpMove.targetQuaternion, this.userData.lerpMove.amount);
-								this.quaternion.copy(currentQuaternion);
-
-								if( justFinished )
-								{
-									//console.log("Animation finished!");
-								}
-							}
-						});
+							});
+						}
 					}
 
 					//this.translateZ(20.0);
@@ -340,10 +479,477 @@
 				falcon.applyBehavior("autoRemoval");
 				falcon.sync();
 
-				// true	: SYNCHRONOUS
-				// false: ASYNCHRONOUS (must call JumpStart.run)
-				return true;
-			});
+				waveInterval = setInterval(function()
+				{
+					if( g_enemies.length < 7 )
+					{
+						var enemy = spawnEnemy();
+						RandoPosition(enemy);
+						enemy.sync();
+					}
+				}, 1000);
+
+//				SpawnThai();
+			}
+
+			var waveInterval = null;
+			var g_enemies = new Array();
+			function spawnEnemy()
+			{
+				var enemy = jumpStart.spawnInstance("models/thai");
+				enemy.syncData.health = 100;
+				enemy.blocksLOS = true;
+				enemy.addEventListener("spawn", enemySpawn);
+				enemy.addEventListener("remove", enemyRemove);
+				enemy.addEventListener("tick", enemyTick);
+				enemy.addEventListener("cursorenter", enemyCursorEnter);
+				enemy.addEventListener("cursorexit", enemyCursorExit);
+				enemy.applyBehavior("autoRemoval");
+				enemy.applyBehavior("autoSync");
+				enemy.applyBehavior("lerpSync");
+				//enemy.sync();
+
+				return enemy;
+			}
+
+			function enemyCursorEnter()
+			{
+				this.userData.hotFire = true;
+				falcon.syncData.target = this.syncKey;
+				falcon.sync();
+			}
+
+			function enemyCursorExit()
+			{
+				this.userData.hotFire = false;
+				falcon.syncData.target = "";
+				falcon.sync();
+			}
+
+			function enemySpawn(isInitialSync)
+			{
+				this.userData.onDamage = function(amount)
+				{
+					this.syncData.health -= amount;
+
+					if( this.syncData.health <= 0 )
+					{
+						jumpStart.removeInstance(this);
+					}
+					else
+					{
+						this.sync();
+					}
+				};
+
+				this.userData.hotFire = false;
+
+				RandoPitch(this);
+				RandoRoll(this);
+
+				g_enemies.push(this);
+			}
+
+			function enemyTick()
+			{
+				if( this.userData.hotFire && !!falcon && falcon.userData.fireCooldown === 0 )
+				{
+					falcon.syncData.shotsFired += 1;
+					falcon.sync();
+					falcon.userData.fireCooldown = 0.15;
+
+					fireLaser.call(falcon);
+				}
+
+				if( -jumpStart.worldOffset.y - Math.abs(this.position.x) < 50 )
+					this.lookAt(new THREE.Vector3(0, -jumpStart.worldOffset.y / 2.0, 0));
+				else if( -jumpStart.worldOffset.y - Math.abs(this.position.z) < 50 )
+					this.lookAt(new THREE.Vector3(0, -jumpStart.worldOffset.y / 2.0, 0));
+				else if( this.position.y < 50 || (-jumpStart.worldOffset.y * 2.0) - this.position.y < 50 )
+					this.lookAt(new THREE.Vector3(0, -jumpStart.worldOffset.y / 2.0, 0));
+
+				//this.translateZ(5.0 * jumpStart.deltaTime);
+
+				this.userData.pitch--;
+				if( this.userData.pitch <= 0 )
+					RandoPitch(this);
+				else
+					this.rotateX(this.userData.deltaPitch * jumpStart.deltaTime);
+
+				this.userData.roll--;
+				if( this.userData.roll <= 0 )
+					RandoRoll(this);
+				else
+					this.rotateZ(this.userData.deltaRoll * jumpStart.deltaTime);
+
+				this.translateZ(50 * jumpStart.deltaTime);
+			}
+
+			function enemyRemove()
+			{
+				SpawnExplosion(this.position, 1.0);
+				g_enemies.splice(g_enemies.indexOf(this), 1);
+			}
+
+			function SpawnThai()
+			{
+				var thai = jumpStart.spawnInstance("models/thai");
+				thai.addEventListener("spawn", thaiSpawn);
+				thai.applyBehavior("autoRemoval");
+				thai.applyBehavior("autoSync");
+				thai.applyBehavior("lerpSync");
+				thai.sync();
+
+				g_enemies.push(thai);
+				//this.userData.boundFade = true;
+
+/*
+				RandoPosition(tie);
+				RandoPitch(tie);
+				RandoRoll(tie);
+
+				function RandoPosition(ship)
+				{
+					var randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					ship.position.x = Math.random() * g_worldOffset.y * 2.0 * (1/g_galaxy.scale.x) * randoSign;
+
+					randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					ship.position.y = Math.random() * g_worldOffset.y * 2.0  * (1/g_galaxy.scale.x) * randoSign;
+
+					randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					ship.position.z = Math.random() * g_worldOffset.y * 2.0  * (1/g_galaxy.scale.x) * randoSign;
+				}
+
+				function RandoPitch(ship)
+				{
+					var sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+					ship.userData.pitch = 300 * Math.random() * sign;
+
+					if( ship.userData.pitch < 50 )
+						ship.userData.pitch = 50;
+
+					sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+					ship.userData.deltaPitch = 2.0 * Math.random() * sign;
+				}
+
+				function RandoRoll(ship)
+				{
+					var sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+					ship.userData.roll = 300 * Math.random() * sign;
+
+					if( ship.userData.roll < 50 )
+						ship.userData.roll = 50;
+
+					sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+					ship.userData.deltaRoll = 2.0 * Math.random() * sign;
+				}
+*/
+			}
+
+			function thaiSpawn(isInitialSync)
+			{
+				var tie = this;
+
+				tie.userData.target = null;
+				tie.userData.maxDedication = 4.0;
+				tie.userData.maxWonder = 6.0;
+				tie.userData.wonder = 0.0;
+				tie.userData.dedication = tie.userData.maxDedication;
+				tie.userData.maxTargetingDistance = 600.0;
+				tie.userData.maxBarrage = 1.5;
+				tie.userData.barrage = tie.userData.maxBarrage;
+				tie.userData.maxPeaceful = 4.0;
+				tie.userData.peaceful = 0.0;
+				tie.userData.shotRate = 0.3;
+				tie.userData.lastShot = tie.userData.shotRate;
+				tie.userData.lastSoundPlayed = 0;
+
+				function FireEnemyLaser(offset)
+				{
+					return;
+					/*
+					var laser = JumpStart.spawnInstance("legacy/v1/models/SpacePilot/enemy_laser.obj", {"parent": g_galaxy});
+					laser.position.copy(this.position);
+					laser.rotation.copy(this.rotation);
+
+					laser.translateX(offset.x);
+					laser.translateY(offset.y);
+					laser.translateZ(offset.z);
+
+					laser.scale.set(0.2, 0.2, 1.0);
+
+					laser.userData.power = 10.0;
+
+					laser.JumpStart.onTick = function()
+					{
+						if( !g_myShip )
+						{
+							g_galaxy.remove(this);
+							return;
+						}
+
+						this.translateZ(150 * g_deltaTime);
+
+						var dist = this.position.distanceTo(g_myShip.position);
+
+						if( dist > 600.0 )
+						{
+							g_galaxy.remove(this);
+						}
+						else if( dist < 40.0 )
+						{
+							g_myShip.userData.onDamage.call(g_myShip, this.userData.power);
+
+							g_galaxy.remove(this);
+						}
+					};
+					*/
+				}
+
+				tie.addEventListener("tick", function()
+				{
+					var ship = this.userData.playerShip;
+					if( !!!ship || !!!ship.parent )
+					{
+						this.userData.playerShip = jumpStart.scene.getObjectByName("playerShip");
+						ship = this.userData.playerShip;
+						if( !!!ship )
+						{
+							return;
+						}
+					}
+
+					this.userData.lastSoundPlayed += jumpStart.deltaTime;
+
+					var dist = this.position.distanceTo(ship.position);
+
+					if( dist > 1000 )
+						this.lookAt(ship.position);
+					else if( false &&  dist < 40 )
+					{
+						//SpawnExplosion(this.position, 1.0);
+
+						jumpStart.removeInstance(this);
+						g_enemies.splice(g_enemies.indexOf(this), 1);
+
+						//ship.userData.onDamage.call(ship, 50.0);
+						return;
+					}
+
+					var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+					pos.multiplyScalar(1.0 / jumpStart.options.sceneScale);
+
+					/*
+					var boundScaleDif = -jumpStart.worldOffset.y - Math.abs(pos.x);
+
+					testDif = -jumpStart.worldOffset.y - Math.abs(pos.y);
+					if( testDif < boundScaleDif )
+						boundScaleDif = testDif;
+
+					testDif = -jumpStart.worldOffset.y - Math.abs(pos.z);
+					if( testDif < boundScaleDif )
+						boundScaleDif = testDif;
+
+					if( this.userData.target && boundScaleDif > 50.0 )
+					{
+						*/
+						this.userData.dedication -= jumpStart.deltaTime;
+
+						if( false && (this.userData.dedication <= 0 || dist >= this.userData.maxTargetingDistance) )
+						{
+							this.userData.dedication = this.userData.maxDedication;
+							this.userData.target = null;
+							this.userData.wonder = this.userData.maxWonder;
+							this.userData.barrage = this.userData.maxBarrage;
+							this.userData.dedication = this.userData.maxDedication;
+							this.userData.lastShot = this.userData.shotRate;
+						}
+						else
+						{
+							// Should we attack?
+							if( false && this.userData.barrage > 0 )
+							{
+								this.userData.barrage -= jumpStart.deltaTime;
+
+								if( this.userData.barrage <= 0 )
+									this.userData.peaceful = this.userData.maxPeaceful;
+
+								this.userData.lastShot += jumpStart.deltaTime;
+
+								if( this.userData.lastShot >= this.userData.shotRate )
+								{
+									this.userData.lastShot = 0.0;
+
+									if( this.userData.lastSoundPlayed > 4.0 )
+									{
+										//JumpStart.playSound("legacy/v1/sounds/SpacePilot/laser1", 0.2);
+										this.userData.lastSoundPlayed = 0.0;
+									}
+
+									if( this.userData.target )
+										this.lookAt(this.userData.target.position);
+
+									FireEnemyLaser.call(this, new THREE.Vector3(1.0, -1.0, 6.0));
+									FireEnemyLaser.call(this, new THREE.Vector3(-1.0, -1.0, 6.0));
+								}
+							}
+							else
+							{
+								this.userData.peaceful -= jumpStart.deltaTime;
+								if( this.userData.peaceful <= 0 )
+								{
+									this.userData.peaceful = 0.0;
+									this.userData.barrage = this.userData.maxBarrage;
+									this.userData.dedication = this.userData.maxDedication;
+									this.userData.lastShot = this.userData.shotRate;
+								}
+							}
+						}
+					//}
+
+					if( this.userData.target )
+					{
+						this.lookAt(this.userData.target.position);
+						this.translateZ(50 * jumpStart.deltaTime);
+					}
+					else
+					{
+						this.userData.pitch--;
+						if( this.userData.pitch <= 0 )
+							RandoPitch(this);
+						else
+							this.rotateX(this.userData.deltaPitch * jumpStart.deltaTime);
+
+						this.userData.roll--;
+						if( this.userData.roll <= 0 )
+							RandoRoll(this);
+						else
+							this.rotateZ(this.userData.deltaRoll * jumpStart.deltaTime);
+
+						this.translateZ(50 * jumpStart.deltaTime);
+
+						if( this.userData.wonder > 0 )
+						{
+							this.userData.wonder -= jumpStart.deltaTime;
+						}
+
+						if( this.userData.wonder <= 0 || this.position.distanceTo(ship) < this.userData.maxTargetingDistance )
+						{
+							// Check if we have a target in FOV
+							this.updateMatrix();
+
+							var matrix = new THREE.Matrix4().extractRotation(this.matrix);
+							var direction = new THREE.Vector3(0, 0, 1).applyMatrix4(matrix);
+							var ray = new THREE.Ray(this.position, direction);
+							var lookPos = new THREE.Vector3().copy(ray.at(10.0));
+							var lookVec = new THREE.Vector3().copy(lookPos).sub(this.position).normalize();
+
+							var potentialVec = new THREE.Vector3().copy(ship.position).sub(this.position);
+							potentialVec.normalize();
+
+							var dot = potentialVec.dot(lookVec);
+							if( dot > 0.8 )
+								this.userData.target = ship;
+						}
+					}
+				});
+
+				tie.userData.health = 50.0;
+
+				tie.userData.onDamage = function(amount, attacker)
+				{
+					this.userData.health -= amount;
+
+					if( this.userData.health > 0 )
+					{
+						//JumpStart.playSound("legacy/v1/sounds/SpacePilot/hit0", 0.15);
+					}
+					else
+					{
+						SpawnExplosion(this.position, 1.0);
+
+						jumpStart.removeInstance(this);
+						g_enemies.splice(g_enemies.indexOf(this), 1);
+					}
+				};
+			}
+
+			function RandoPosition(ship)
+			{
+				var randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				ship.position.x = Math.random() * jumpStart.worldOffset.y * 1.0 * (1/jumpStart.options.sceneScale) * randoSign;
+
+				//randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				randoSign = -1.0;
+				ship.position.y = Math.random() * jumpStart.worldOffset.y * 2.0  * (1/jumpStart.options.sceneScale) * randoSign;
+
+				randoSign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				ship.position.z = Math.random() * jumpStart.worldOffset.y * 1.0  * (1/jumpStart.options.sceneScale) * randoSign;
+			}
+
+			function RandoPitch(ship)
+			{
+				var sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.pitch = 300 * Math.random() * sign;
+
+				if( ship.userData.pitch < 50 )
+					ship.userData.pitch = 50;
+
+				sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.deltaPitch = 2.0 * Math.random() * sign;
+			}
+
+			function RandoRoll(ship)
+			{
+				var sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.roll = 300 * Math.random() * sign;
+
+				if( ship.userData.roll < 50 )
+					ship.userData.roll = 50;
+
+				sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+				ship.userData.deltaRoll = 2.0 * Math.random() * sign;
+			}
+
+			function SpawnExplosion(position, scale, sound)
+			{
+				//var soundFile = ( typeof sound === "undefined" ) ? "legacy/v1/sounds/SpacePilot/explosion0" : sound;
+
+				//console.log(arguments);
+				//JumpStart.playSound(soundFile, 0.5);
+
+				var explosion = jumpStart.spawnInstance("models/explosion");
+				explosion.position.copy(position);
+
+				explosion.userData.scaleSize = 0.001;
+				explosion.userData.scaleDirection = 1;
+				explosion.userData.maxScale = scale;
+
+				explosion.addEventListener("tick", function()
+				{
+					if( this.userData.scaleDirection === 1 )
+					{
+						this.userData.scaleSize += 5.0 * jumpStart.deltaTime;
+
+						if( this.userData.scaleSize >= this.userData.maxScale )
+							this.userData.scaleDirection = -1;
+					}
+					else
+					{
+						this.userData.scaleSize -= 4.0 * jumpStart.deltaTime;
+
+						if( this.userData.scaleSize <= 0.001 )
+						{
+							jumpStart.removeInstance(this);
+							return;
+						}
+					}
+
+					this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+					this.rotateY(15.0 * jumpStart.deltaTime);
+					this.rotateX(20.0 * jumpStart.deltaTime);
+				});
+			}
 		</script>
 	</head>
 

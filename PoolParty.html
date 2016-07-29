@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Pool Party</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "PoolParty",
+				"multiuserOnly": true,
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			function spin()
+			{
+				this.rotateY(1.0 * jumpStart.deltaTime);
+			}
+
+			function extraRemove()
+			{
+				console.log("Object removed listener.");
+			}
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModels(["models/pool", "models/block", "models/water"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			jumpStart.addEventListener("ready", function()
+			{
+				function makeWater()
+				{
+					this.position.y = 45.0;
+					this.addEventListener("tick", function()
+					{
+						var amount = 1.0 * jumpStart.deltaTime;
+						if( !!this.userData.reverseWaterSpin )
+						{
+							amount *= 0.8;
+							this.rotateY(amount);
+						}
+						else
+							this.rotateY(-amount);
+					});
+
+					if( !!this.userData.reverseWaterSpin )
+					{
+						this.scale.y *= 0.7;	// Don't want the waves to be 100% identical at the half-way mark.
+						makeThrob.call(this, {"maxScale": 1.0, "minScale": 0.05, "direction": 1.0, "rate": 0.5, "axes": "y"});
+					}
+					else
+						makeThrob.call(this, {"maxScale": 1.0, "minScale": 0.05, "direction": -1.0, "rate": 0.5, "axes": "y"});	
+				}
+
+				var pool = jumpStart.spawnInstance("models/pool");
+				pool.scale.set(2, 2, 2);
+				var water1 = jumpStart.spawnInstance("models/water", {"parent": pool});
+				makeWater.call(water1);
+				var water2 = jumpStart.spawnInstance("models/water", {"parent": pool});
+				water2.rotation.y = Math.PI * 1.2;
+				water2.userData.reverseWaterSpin = true;
+				makeWater.call(water2);
+
+				var ball = jumpStart.spawnInstance("models/block");
+				ball.scale.set(2, 2, 2);
+				ball.position.y += 150;
+				ball.position.x += 120;
+				//ball.translateY(150.0);
+				//ball.translateX(120.0);
+				ball.userData.raycaster = new THREE.Raycaster();
+				ball.addEventListener("tick", function()
+				{
+					var scaledPosition = this.position.clone().sub(jumpStart.world.position).multiplyScalar(jumpStart.options.sceneScale);
+
+//					var scaledPosition = this.clone().sub(ju)
+					scaledPosition.y += 50.0;
+
+					this.userData.raycaster.set(scaledPosition, new THREE.Vector3(0, -1, 0));
+/*
+					var direction = pool.position.clone();
+					direction.x = this.position.x;
+					direction.z = this.position.z;
+					direction = direction.sub(this.position).normalize();
+					this.userData.raycaster.set(scaledPosition, direction);
+*/
+					var intersects = this.userData.raycaster.intersectObjects([water1, water2], true);
+
+					var i;
+					for( i = 0; i < intersects.length; i++ )
+					{
+						//var scaledPoint = jumpStart.world.worldToLocal(intersects[i].point.clone()).add(jumpStart.world.position);
+						var scaledPoint = intersects[i].point.clone().multiplyScalar(1 / jumpStart.options.sceneScale).sub(jumpStart.world.position);
+						scaledPoint.y -= 20.0;
+
+						this.position.copy(scaledPoint);
+						/*
+						this.position.x = scaledPoint.x;
+						this.position.y = scaledPoint.y;
+						console.log(this.position.y + " vs " + scaledPoint.y);
+						*/
+						break;
+					}
+				});
+
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function makeThrob(options)
+			{
+				// Throb
+				// FIX ME: This should be a behavior, and needs to have info split between userData and syncData to do so.
+
+				options = {
+					"rate": (!!options.rate) ? options.rate : 25.0,
+					"maxScale": (!!options.maxScale) ? options.maxScale : 14.0,
+					"minScale": (!!options.minScale) ? options.minScale : 8.0,
+					"direction": (!!options.direction) ? options.direction : 1.0,
+					"axes": (!!options.axes) ? options.axes : "xyz"
+				};
+				this.userData.throb = options;
+
+				this.addEventListener("tick", function()
+				{
+					var i;
+					var axes = this.userData.throb.axes;
+					var amount = this.userData.throb.rate * jumpStart.deltaTime * this.userData.throb.direction;
+					if( this.scale[axes[0]] + amount > this.userData.throb.maxScale )
+					{
+						this.userData.throb.direction = -1.0;
+
+						for( i = 0; i < axes.length; i++ )
+							this.scale[axes[i]] = this.userData.throb.maxScale;
+					}
+					else if( this.scale[axes[0]] + amount < this.userData.throb.minScale )
+					{
+						this.userData.throb.direction = 1.0;
+
+						for( i = 0; i < axes.length; i++ )
+							this.scale[axes[i]] = this.userData.throb.minScale;
+					}
+					else
+					{
+						for( i = 0; i < axes.length; i++ )
+							this.scale[axes[i]] += amount;
+					}
+				});
+			}
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>

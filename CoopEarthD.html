@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Cooperative Earth Defense</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "CoopEarthD",
+				"multiuserOnly": false,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModels(["models/earth", "models/missile", "models/missile_door_a", "models/missile_door_b", "models/missile_body", "models/missile_base"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			function spin()
+			{
+				this.rotateY(1.0 * jumpStart.deltaTime);
+			}
+
+			function earthContainerSpawn()
+			{
+				var earth = jumpStart.spawnInstance("models/earth", {"parent": this});
+				earth.addEventListener("tick", function()
+				{
+					this.rotateY(0.4 * jumpStart.deltaTime);
+				});
+			}
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				console.log("initing");
+
+				// This listener only gets called when initializing the room of a multiuser app.
+				var earthContainer = jumpStart.spawnInstance();
+				earthContainer.addEventListener("spawn", earthContainerSpawn);
+				earthContainer.name = "earthContainer";
+				earthContainer.scale.set(3, 3, 3);
+				earthContainer.position.y += 150;//jumpStart.worldOffset.y * -0.25;
+				//earthContainer.addEventListener("tick", spin);
+				earthContainer.sync();
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			function missileBaseSpawn()
+			{
+				this.userData.hitPlate = jumpStart.spawnCursorPlane({"parent": this, "width": 30, "height": 30});
+				this.userData.hitPlate.rotateX(Math.PI/2.0);
+				this.userData.hitPlate.position.y += 2.0;
+				this.userData.hitPlate.blocksLOS = true;
+				this.userData.hitPlate.addEventListener("cursorup", fireMissile);
+				this.userData.base = jumpStart.spawnInstance("models/missile_base", {"parent": this});
+				this.userData.doorA = jumpStart.spawnInstance("models/missile_door_a", {"parent": this});
+				this.userData.doorB = jumpStart.spawnInstance("models/missile_door_b", {"parent": this});
+			}
+
+			jumpStart.addEventListener("ready", function()
+			{
+
+				function spawnMissileBase(x, z)
+				{
+					var missileBase = jumpStart.spawnInstance();
+					missileBase.addEventListener("spawn", missileBaseSpawn);
+
+					missileBase.addEventListener("cursorup", fireMissile);
+					missileBase.position.x += x;
+					missileBase.position.z += z;
+				}
+
+				spawnMissileBase(250, 250);
+				spawnMissileBase(-250, 250);
+				spawnMissileBase(250, -250);
+				spawnMissileBase(-250, -250);
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function fireMissile()
+			{
+				var base = this.parent;
+				var projectile = jumpStart.spawnInstance();
+				projectile.userData.body = jumpStart.spawnInstance("models/missile_body", {"parent": projectile});
+				projectile.userData.base = base;	// todo: this is not network friendly
+				projectile.addEventListener("remove", function()
+				{
+					this.userData.base.userData.hitPlate.scale.set(1, 1, 1);
+				});
+				projectile.userData.body.addEventListener("tick", spin);
+				projectile.position.copy(base.position);
+				projectile.translateY(30.0);
+
+				var earth = jumpStart.world.getObjectByName("earthContainer");
+
+				projectile.userData.slerpSeekTarget = earth;
+				projectile.addEventListener("tick", slerpSeek);
+				projectile.addEventListener("tick", incoming);
+
+				this.scale.set(0.0001, 0.0001, 0.0001);
+			}
+
+			function slerpSeek()
+			{
+				var dist = this.position.distanceTo(this.userData.slerpSeekTarget.position);
+
+				var currentQuaternion = this.quaternion.clone();
+				this.lookAt(this.userData.slerpSeekTarget.position);
+				this.rotateX(Math.PI/2.0);
+				var targetQuaternion = this.quaternion.clone();
+				this.quaternion.copy(currentQuaternion);
+
+				if( dist > 250.0 )
+					this.quaternion.slerp(targetQuaternion, 0.2 * jumpStart.deltaTime);
+				else
+					this.quaternion.slerp(targetQuaternion, 0.6 * jumpStart.deltaTime);
+			}
+
+			function incoming()
+			{
+				var dist = this.position.distanceTo(this.userData.slerpSeekTarget.position);
+
+//				if( dist > 250.0 )
+					this.translateY(20.0 * jumpStart.deltaTime);
+				if( dist <= 250.0 )
+				{
+				//	this.translateY(60.0 * jumpStart.deltaTime);
+					var scaleFactor = dist / 250.0;
+					this.userData.body.scale.set(scaleFactor, scaleFactor, scaleFactor);
+					//this.userData.body.scale.multiplyScalar(0.99);
+				}
+
+				if( dist < 60.0 )
+					jumpStart.removeInstance(this);
+			}
+		</script>
+	</head>
+
+	<body>
+	</body>
+</html>

@@ -212,10 +212,12 @@ function JumpStartAppMenu(appID, appURL, scene)
 				var geometry = new THREE.BoxGeometry(options.width, options.height, 0);
 
 				var plane = new THREE.Mesh(geometry, material);
+				/*
 				plane.addEventListener("cursorup", function()
 				{
 					createContainer.call(this);
 				}.bind(this));
+				*/
 
 				plane.position.x = (this.enclosure.scaledWidth / 2.0) - (this.itemHeight / 2.0);
 				plane.position.y = (this.enclosure.scaledHeight / 2.0) - (this.itemHeight / 2.0);
@@ -245,6 +247,7 @@ function JumpStartAppMenu(appID, appURL, scene)
 
 			var upArrow = spawnArrow.call(this, "up");
 			this.upArrow = upArrow;
+			/*
 			upArrow.addEventListener("cursordown", function(e)
 			{
 				var max = 5;
@@ -275,9 +278,11 @@ function JumpStartAppMenu(appID, appURL, scene)
 					}
 				}
 			}.bind(this));
+			*/
 
 			var downArrow = spawnArrow.call(this, "down");
 			this.downArrow = downArrow;
+			/*
 			downArrow.addEventListener("cursordown", function(e)
 			{
 				var max = 5;
@@ -307,6 +312,7 @@ function JumpStartAppMenu(appID, appURL, scene)
 					}
 				}
 			}.bind(this));
+			*/
 
 			var x;
 			for( x in this.apps )
@@ -439,10 +445,12 @@ function JumpStartAppMenu(appID, appURL, scene)
 
 			if( !!!shallow || !shallow )
 			{
+				/*
 				plane.addEventListener("cursorup", function()
 				{
 					window.location = app.url;
 				}.bind(this));
+				*/
 
 				this.items.push(plane);
 
@@ -451,10 +459,12 @@ function JumpStartAppMenu(appID, appURL, scene)
 			}
 			else
 			{
+				/*
 				plane.addEventListener("cursorup", function()
 				{
 					createContainer.call(this);
 				}.bind(this));
+				*/
 
 				this.scene.add(plane);
 			}

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Hover Blaster</title>
+		<script src="engine/misc/appMenu.js"></script>
+		<script src="engine/misc/JumpStart.js"></script>
+		<script src="assets/HoverBlaster/misc/hoverBlasterTable.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "HoverBlaster",
+				"multiuserOnly": true,
+				"enclosureOnly": true,
+				"sceneScale": 1.0,
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": false}
+			});
+			
+			jumpStart.addEventListener("precache", function()
+			{
+				jumpStart.precacheSound("sounds/bonus");
+				jumpStart.precacheSound("sounds/coin_collect");
+				jumpStart.precacheSound("sounds/damage1");
+				jumpStart.precacheSound("sounds/damage2");
+				jumpStart.precacheSound("sounds/damage3");
+				jumpStart.precacheSound("sounds/explosion0");
+				jumpStart.precacheSound("sounds/explosion1");
+				jumpStart.precacheSound("sounds/laser1");
+				jumpStart.precacheSound("sounds/laser2");
+				jumpStart.precacheSound("sounds/shatter");
+
+				// Async
+				jumpStart.loadModels(["models/button", "models/buttonFrame", "models/vivewand", "models/board", "models/rocks", "models/rocks_broken", "models/missile", "models/road", "models/hawk", "models/player_laser", "models/missilefull", "models/manualgun_base", "models/manualgun_base_broken", "models/explosion", "models/dome", "models/coin", "models/manualgun_tower", "models/manualgun_barrels", "models/enemy_laser", "models/thai"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			function placeholderSpawn()
+			{
+				console.log("placeholder spawn: " + this.name);
+				var board = jumpStart.spawnInstance("models/board");
+				board.position.copy(this.position);
+				board.rotateY(Math.PI);
+				this.userData.board = board;
+
+				var dome = jumpStart.spawnInstance("models/dome", {"parent": board});
+				dome.scale.multiplyScalar(0.95);
+				//dome.userData.board = board;
+
+				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});//);//, {"parent": this});
+				//buttonFrame.position.copy(this.position);
+				//buttonFrame.quaternion.copy(this.quaternion);
+				buttonFrame.scale.set(0.6, 0.6, 0.6);
+				buttonFrame.position.z += 122.0;
+				buttonFrame.position.y += -60.0;
+				this.userData.buttonFrame = buttonFrame;
+
+				var button = jumpStart.spawnInstance("models/button", {"parent": buttonFrame});
+				button.blocksLOS = true;
+				button.addEventListener("cursorenter", buttonEnter);
+				button.addEventListener("cursorexit", buttonExit);
+				button.addEventListener("cursordown", buttonDown);
+				button.userData.table = this;
+				this.userData.button = button;
+
+				//button
+			}
+
+			function buttonEnter()
+			{
+				//console.log("hilite");
+				//if( hasCannon || cannon.syncData.isActive )
+				//	this.setColor(new THREE.Color("rgb(50%, 50%, 50%)"));
+				//else
+					this.setColor(new THREE.Color("#5599ff"));
+
+				jumpStart.playSound("sounds/ping");
+			}
+
+			function buttonExit()
+			{
+				this.setColor(new THREE.Color("rgb(100%, 100%, 100%)"));
+				jumpStart.playSound("sounds/pingoff", 0.2);
+			}
+
+			function buttonDown()
+			{
+				//this.blocksLOS = false;
+				this.setColor(new THREE.Color("rgb(50%, 50%, 50%)"));
+				spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion(), this);
+				//this.userData.table.position.x += 260.0;
+				jumpStart.removeInstance(this.userData.table);
+			}
+
+			function spawnHoverBlasterPlaceholder(position, quaternion)
+			{
+				var rando = parseInt(Math.random()*10) + "" + parseInt(Math.random()) + "" + parseInt(Math.random()) + "";
+				var table = jumpStart.spawnInstance(null);
+				table.position.y += 90.0;
+				table.name = "Table " + rando;
+				table.addEventListener("spawn", placeholderSpawn);
+				table.addEventListener("remove", placeholderRemove);
+				//table.addEventListener("networkRemove", placeholderNetworkRemove);
+				table.sync();
+			}
+/*
+			function placeholderNetworkRemove()
+			{
+				// the hiarchy will not be retained over the network
+				jumpStart.removeInstance(this.userData.buttonFrame);
+			}*/
+
+			function placeholderRemove()
+			{
+				console.log("placeholder removed" + this.name);
+				if( this.userData.button )
+					this.userData.button.blocksLOS = false;
+				
+				//console.log("removed");
+				//this.position.x += 260.0;
+				//this.userData.button.blocksLOS = false;
+				jumpStart.removeInstance(this.userData.board);
+			}
+
+			function spawnHoverBlasterTable(position, quaternion, button)
+			{
+				var table = jumpStart.spawnInstance(null);
+				//table.syncData.isActive = false;
+				//table.syncData.playerId = jumpStart.localUser.userId;
+				table.position.y += 90.0;
+				
+				// This behavior requires each instance have a unique name.
+				var rando = parseInt(Math.random()*10) + "" + parseInt(Math.random()) + "" + parseInt(Math.random()) + "";
+				table.name = "Table " + rando;
+				table.applyBehavior("hoverBlasterTable");
+				/*
+				table.addEventListener("spawn", function()
+				{
+					this.applyBehavior("autoRemoval");	// FIXME: This behavior doesn't like being applied during initialize.
+
+					this.sync();
+				});
+*/
+				table.applyBehavior("autoRemoval");
+				table.syncData.hoverBlasterTable.isActive = true;
+				table.sync();
+
+				// removal test
+				/*
+				// TODO: improve cleanup function for table to remove active lasers
+				setTimeout(function()
+				{
+					jumpStart.removeInstance(table);
+				}, 4000)
+				*/
+			}
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				//spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
+				spawnHoverBlasterPlaceholder(new THREE.Vector3(), new THREE.Quaternion());
+				return true;
+			});
+
+			var popup;
+			jumpStart.addEventListener("ready", function()
+			{
+			//	var ceiling = jumpStart.enclosureBoundary("ceiling");
+			//	ceiling.scale.multiplyScalar(1.4);
+/*
+				ceiling.addEventListener("cursordown", function()
+				{
+					console.log("CLICK DETECTED!");
+				});
+			*/
+
+				//var north = jumpStart.enclosureBoundary("north");
+				//north.scale.multiplyScalar(1.4);
+
+				//var south = jumpStart.enclosureBoundary("south");
+				//south.scale.multiplyScalar(1.4);
+
+				//var east = jumpStart.enclosureBoundary("east");
+				//east.scale.multiplyScalar(1.4);
+
+				//var west = jumpStart.enclosureBoundary("west");
+				//west.scale.multiplyScalar(1.4);
+/*
+				var floor = jumpStart.enclosureBoundary("floor");
+				floor.blocksLOS = true;
+				floor.addEventListener("cursordown", function()
+				{
+					//spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
+					spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
+					this.scale.set(0.0001, 0.0001, 0.0001);
+				});
+*/
+//				console.log("System ready...");
+				if( jumpStart.isAltspace )
+				{
+					window.altspace.open("http://www.jumpstartsdk.com/live/assets/HoverBlaster/misc/menu.html", "_experience", {"hidden": true, "icon": "http://www.jumpstartsdk.com/live/assets/HoverBlaster/misc/menuicon.png"}).then(function(_popup)
+						{
+							popup = _popup;
+						});
+				}
+
+				return true;
+			});
+
+		</script>
+	</head>
+
+	<body>
+		<!--<iframe id="music" style="display: none;"></iframe>-->
+	</body>
+</html>
