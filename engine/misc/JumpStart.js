@@ -435,13 +435,16 @@ function JumpStart(options, appBehaviors)
 					{
 						this.syncData.physics = {
 							"force": (!!options.force) ? options.force.clone() : new THREE.Vector3(),
-							"rotation": (!!options.rotation) ? options.rotation.clone() : new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random())
+							"rotation": (!!options.rotation) ? options.rotation.clone() : new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random()),
+							"physicsScale": (!!options.physicsScale) ? options.physicsScale : 1.0
 						};
 					}
 					else
 					{
+						// turn values into vectors (is this obsolete?)
 						this.syncData.physics.force = new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z);
 						this.syncData.physics.rotation = new THREE.Vector3(this.syncData.physics.rotation.x, this.syncData.physics.rotation.y, this.syncData.physics.rotation.z);
+						//this.syncData.physics.physicsScale = this.syncData.physics
 					}
 
 					this.userData.physics = {
@@ -480,7 +483,7 @@ function JumpStart(options, appBehaviors)
 			},
 			"tickBehavior": function()
 			{
-				this.userData.physics.velocity.y -= 9.8 * jumpStart.deltaTime;
+				this.userData.physics.velocity.y -= 9.8 * jumpStart.deltaTime * this.syncData.physics.physicsScale;
 
 				// Terminal velocity because we have no air drag
 				var termVel = 50.0;
@@ -489,9 +492,9 @@ function JumpStart(options, appBehaviors)
 					this.userData.physics.velocity.multiplyScalar(0.9);
 
 				// Update the rotation
-				this.rotateX((this.userData.physics.rotVelocity.x * 5.0) * jumpStart.deltaTime);
-				this.rotateY((this.userData.physics.rotVelocity.y * 5.0) * jumpStart.deltaTime);
-				this.rotateZ((this.userData.physics.rotVelocity.z * 5.0) * jumpStart.deltaTime);
+				this.rotateX((this.userData.physics.rotVelocity.x * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
+				this.rotateY((this.userData.physics.rotVelocity.y * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
+				this.rotateZ((this.userData.physics.rotVelocity.z * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
 
 				// Bounce us off of walls
 				var maximums = {
@@ -502,7 +505,7 @@ function JumpStart(options, appBehaviors)
 
 				//this.updateMatrixWorld();	// FIX ME: This was needed for some reason, but it messes with the physics behavior on network clients.
 				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
-				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(jumpStart.deltaTime * 100.0);
+				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(100.0 * jumpStart.deltaTime * this.syncData.physics.physicsScale);
 				//.multiplyScalar(jumpStart.options.sceneScale)
 				//deltaPos.multiplyScalar(1 / jumpStart.options.sceneScale);
 				pos.add(deltaPos);
@@ -760,7 +763,16 @@ function JumpStart(options, appBehaviors)
 						// FIX ME: This destroys the entire URI query.
 						var pathName = document.location.pathname;
 						pathName = pathName.substring(pathName.lastIndexOf("/") + 1);
-						window.history.replaceState(null, document.title, pathName + "?room=" + this.firebase.roomRef.key());
+						window.location.href = pathName + "?room=" + this.firebase.roomRef.key();
+						//window.history.replaceState(null, document.title, pathName + "?room=" + this.firebase.roomRef.key());
+						//window.history.pushState(null, null, pathName + "?room=" + this.firebase.roomRef.key());
+						//var dummy = {"stuff": pathName + "?room=" + this.firebase.roomRef.key()};
+						//setTimeout(function()
+						//{
+							//window.history.pushState(null, null, this.stuff);
+							//window.history.replaceState(null, document.title, this.stuff);
+							//window.history.replaceState(null, document.title, pathName + "?room=" + this.firebase.roomRef.key());
+						//}.bind(dummy), 2000);
 
 						// ASYNC, continues in jumpStart.onRoomStateChange when isLocallyInitializing is TRUE && isFirstCheck
 						this.firebase.isLocallyInitializing = true;
@@ -1160,7 +1172,7 @@ function JumpStart(options, appBehaviors)
 				if ( !this.isAltspace )
 				{
 					this.renderer = new THREE.WebGLRenderer({ alpha: true });
-					this.renderer.setClearColor( 0x00ff00, 0.3 );
+					this.renderer.setClearColor( 0x000000, 0 );
 					this.renderer.setSize( window.innerWidth, window.innerHeight );
 
 					this.DOMReady().then(function() { document.body.appendChild( this.renderer.domElement ); }.bind(this));
@@ -1319,6 +1331,21 @@ function JumpStart(options, appBehaviors)
 		}
 	}
 }
+
+JumpStart.prototype.getMaterial = function(sceneObject)
+{
+	var max = sceneObject.children.length;
+	var i, child;
+	for( i = 0; i < max; i++ )
+	{
+		child = sceneObject.children[i];
+		if( !!!child.material || !!!child.material.map )
+			child = null;
+	}
+
+	if( !!child )
+		return child.material;
+};
 
 JumpStart.prototype.addBehavior = function(behavior)
 {
@@ -2093,7 +2120,7 @@ JumpStart.prototype.onTick = function()
 
 	if( !this.isInitialized )
 		return;
-
+///*
 	// do gamepad input
 	if( this.isAltspace )
 	{
@@ -2106,7 +2133,7 @@ JumpStart.prototype.onTick = function()
 		//console.log("dos");
 		this.gamepads = (!!navigator.getGamepads) ? navigator.getGamepads() : this.gamepads = navigator.webkitGetGamepads();
 	}
-	
+//*/	
 	// Detect a gamepad
 	if( this.activeGamepadIndex === -1 )
 	{
@@ -2115,8 +2142,11 @@ JumpStart.prototype.onTick = function()
 		{
 			gamepad = this.gamepads[gamepadIndex];
 
+			//console.log(typeof this.previousGamepadStates[gamepadIndex]);
 			if( typeof this.previousGamepadStates[gamepadIndex] === "undefined" )
+			{
 				this.previousGamepadStates[gamepadIndex] = {"buttons": []};
+			}
 
 			previousGamepadState = this.previousGamepadStates[gamepadIndex];
 
@@ -2124,16 +2154,21 @@ JumpStart.prototype.onTick = function()
 			{
 				for( buttonIndex in gamepad.buttons )
 				{
+				//	if( gamepad.mapping === "steamvr" && gamepad.buttons[buttonIndex].value !== 0 )
+					//	console.log(gamepad.buttons[buttonIndex].value);
+
 					if( typeof previousGamepadState.buttons[buttonIndex] === "undefined" )
 					{
 						previousGamepadState.buttons[buttonIndex] = {};
 					}
 					else if( previousGamepadState.buttons[buttonIndex].value !== gamepad.buttons[buttonIndex].value )
 					{
+					//	console.log("try 2 set!!!");
 						if( this.activeGamepadIndex === -1 )
 						{
 							this.activeGamepadIndex = gamepadIndex;
 							this.gamepad = this.gamepads[this.activeGamepadIndex];
+						//	console.log("SET SET SET SET!!!");
 						}
 					}
 
@@ -2526,9 +2561,15 @@ JumpStart.prototype.processCursorMove = function()
 
 JumpStart.prototype.isWorldPosInsideOfEnclosure = function(worldPos)
 {
+	//if( !this.isAltspace )	// FIXME: fix this parody!
+	//{
+	//	return true;
+	//}
+
 	var x;
 	for( x in worldPos )
 	{
+		//if( worldPos[x] + this.world.position[x] > this.enclosure.scaledWidth/2.0 || worldPos[x] + this.world.position[x] < -this.enclosure.scaledWidth/2.0 )
 		if( worldPos[x] + this.world.position[x] > this.enclosure.scaledWidth/2.0 || worldPos[x] + this.world.position[x] < -this.enclosure.scaledWidth/2.0 )
 			return false;
 	}
@@ -2677,20 +2718,30 @@ JumpStart.prototype.removeInstance = function(instance)
 		instance.listeners.remove[listenerName].call(instance);
 
 	// remove all children
+	var goodChildren = new Array();
 	var i, child;
 	for( i = 0; i < instance.children.length; i++ )
+		goodChildren.push(instance.children[i]);
+
+	for( i = 0; i < goodChildren.length; i++ )
 	{
-		child = instance.children[i];
-		if( !!child.jumpStart )
-			child.parent.remove(instance);
+		child = goodChildren[i];
+		if( child.hasOwnProperty("blocksLOS") )
+		{
+			//console.log("Traverse remove this child");
+			this.removeInstance(child);
+		}
+		else
+		{
+			this.scene.remove(child);
+			if( child.parent )
+				child.parent.remove(child);
+		}
 	}
 
-	if( !instance.parent )
-		console.log("whaaat no parent");
-	else
+	this.scene.remove(instance);
+	if( instance.parent )
 		instance.parent.remove(instance);
-	//console.log(instance);
-	//this.scene.remove(instance);
 
 	if( instance.syncKey && this.syncedObjects.hasOwnProperty(instance.syncKey))
 	{

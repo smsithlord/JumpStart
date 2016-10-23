@@ -13,6 +13,10 @@
 				"enclosureOnly": true,
 				"sceneScale": 1.0,
 				"scaleWithEnclosure": false,
+				"camera":
+				{
+					"position": {"x": 0.0, "y": 250.0, "z": 250.0}
+				},
 				"debug": {"showCursorPlanes": false}
 			});
 			
@@ -30,7 +34,7 @@
 				jumpStart.precacheSound("sounds/shatter");
 
 				// Async
-				jumpStart.loadModels(["models/button", "models/buttonFrame", "models/vivewand", "models/board", "models/rocks", "models/rocks_broken", "models/missile", "models/road", "models/hawk", "models/player_laser", "models/missilefull", "models/manualgun_base", "models/manualgun_base_broken", "models/explosion", "models/dome", "models/coin", "models/manualgun_tower", "models/manualgun_barrels", "models/enemy_laser", "models/thai"]).then( function()
+				jumpStart.loadModels(["models/button", "models/buttonFrame", "models/vivewand", "models/board", "models/rocks", "models/rocks_broken", "models/missile", "models/road", "models/hawk", "models/player_laser", "models/missilefull", "models/manualgun_base", "models/manualgun_base_broken", "models/explosion", "models/dome", "models/coin", "models/manualgun_tower", "models/manualgun_barrels", "models/enemy_laser", "models/thai", "models/chopper", "models/chopper_blades", "models/chopper2_blades", "models/chopper_blades_back", "models/chopper2_blades_back", "models/chopper2", "models/bomber", "models/bomb"]).then( function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -43,6 +47,18 @@
 			function placeholderSpawn()
 			{
 				console.log("placeholder spawn: " + this.name);
+				if( !jumpStart.isAltspace )
+				{
+					var pos = jumpStart.options.camera.position.clone().add(jumpStart.worldOffset.clone().multiplyScalar(jumpStart.options.sceneScale));
+					jumpStart.camera.position.copy(pos);
+
+					var lookAtSpot = jumpStart.worldOffset.clone().multiplyScalar(jumpStart.options.sceneScale);
+					lookAtSpot.y += 50;
+
+					jumpStart.camera.lookAt(lookAtSpot);
+					jumpStart.camera.rotateX(-0.3);
+				}
+				/*
 				var board = jumpStart.spawnInstance("models/board");
 				board.position.copy(this.position);
 				board.rotateY(Math.PI);
@@ -50,14 +66,17 @@
 
 				var dome = jumpStart.spawnInstance("models/dome", {"parent": board});
 				dome.scale.multiplyScalar(0.95);
-				//dome.userData.board = board;
+				*/
 
-				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});//);//, {"parent": this});
-				//buttonFrame.position.copy(this.position);
-				//buttonFrame.quaternion.copy(this.quaternion);
+				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});
 				buttonFrame.scale.set(0.6, 0.6, 0.6);
+				/*
 				buttonFrame.position.z += 122.0;
-				buttonFrame.position.y += -60.0;
+				buttonFrame.position.y += -10.0;
+				*/
+				buttonFrame.position.z += 160.0;
+				buttonFrame.position.y += -10.0;
+				buttonFrame.rotateX(-Math.PI / 2.0);
 				this.userData.buttonFrame = buttonFrame;
 
 				var button = jumpStart.spawnInstance("models/button", {"parent": buttonFrame});
@@ -66,9 +85,179 @@
 				button.addEventListener("cursorexit", buttonExit);
 				button.addEventListener("cursordown", buttonDown);
 				button.userData.table = this;
+				button.userData.shipType = "models/chopper";
 				this.userData.button = button;
 
-				//button
+				var demo_chopper = jumpStart.spawnInstance("models/chopper", {"parent": buttonFrame});
+				demo_chopper.position.z = 50.0;
+				demo_chopper.rotation.x = Math.PI / 2.0;
+
+				demo_chopper.userData.maxHeightOffset = 4.0;
+				demo_chopper.userData.heightDirection = 1.0;
+				demo_chopper.addEventListener("tick", function()
+				{
+					if( !!!this.userData.initialHeight )
+					{
+						this.userData.initialHeight = this.position.z;
+
+						if( Math.random() > 0.5 )
+							this.userData.heightDirection *= -1.0;
+
+						var offset = this.userData.maxHeightOffset * Math.random();
+						if( Math.random() > 0.5 )
+							offset *= -1.0;
+
+						this.position.z += offset;
+					}
+
+					//var targetPos = this.position.clone();
+					var targetZ = this.userData.initialHeight;
+					targetZ += this.userData.maxHeightOffset * this.userData.heightDirection;
+
+					//var targetZ = targetPos.z;
+					this.position.z += 6.0 * jumpStart.deltaTime * this.userData.heightDirection;
+
+					if( (this.userData.heightDirection == 1.0 && targetZ - this.position.z < 0.1) || (this.userData.heightDirection == -1.0 && targetZ - this.position.z > 0.1))
+					{
+						this.position.z = targetZ;
+						this.userData.heightDirection *= -1.0;
+					}
+				});
+
+				var blades = jumpStart.spawnInstance("models/chopper_blades", {"parent": demo_chopper});
+				blades.position.y = 8.81;
+				blades.position.z = 2.888;
+				blades.addEventListener("tick", function()
+				{
+					this.rotateY(-5.0 * jumpStart.deltaTime);
+				});
+
+				var bladesBack = jumpStart.spawnInstance("models/chopper_blades_back", {"parent": demo_chopper});
+				bladesBack.position.z = -27.848;
+				bladesBack.position.y = 3.982;
+				bladesBack.addEventListener("tick", function()
+				{
+					this.rotateX(-8.0 * jumpStart.deltaTime);
+				});
+
+				var buttonFrame2 = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});
+				buttonFrame2.scale.set(0.6, 0.6, 0.6);
+				buttonFrame2.position.x = 50.0;
+				buttonFrame2.position.z = 160.0;
+				buttonFrame2.position.y = -10.0;
+				buttonFrame2.rotateX(-Math.PI / 2.0);
+
+				var button2 = jumpStart.spawnInstance("models/button", {"parent": buttonFrame2});
+				button2.blocksLOS = true;
+				button2.addEventListener("cursorenter", buttonEnter);
+				button2.addEventListener("cursorexit", buttonExit);
+				button2.addEventListener("cursordown", buttonDown);
+				button2.userData.table = this;
+				button2.userData.shipType = "models/hawk";
+
+				var demo_hawk = jumpStart.spawnInstance("models/hawk", {"parent": buttonFrame2});
+				demo_hawk.position.z = 50.0;
+				demo_hawk.rotation.x = Math.PI / 2.0;
+
+				demo_hawk.userData.maxHeightOffset = 4.0;
+				demo_hawk.userData.heightDirection = 1.0;
+				demo_hawk.addEventListener("tick", function()
+				{
+					if( !!!this.userData.initialHeight )
+					{
+						this.userData.initialHeight = this.position.z;
+
+						if( Math.random() > 0.5 )
+							this.userData.heightDirection *= -1.0;
+
+						var offset = this.userData.maxHeightOffset * Math.random();
+						if( Math.random() > 0.5 )
+							offset *= -1.0;
+
+						this.position.z += offset;
+					}
+
+					//var targetPos = this.position.clone();
+					var targetZ = this.userData.initialHeight;
+					targetZ += this.userData.maxHeightOffset * this.userData.heightDirection;
+
+					//var targetZ = targetPos.z;
+					this.position.z += 6.0 * jumpStart.deltaTime * this.userData.heightDirection;
+
+					if( (this.userData.heightDirection == 1.0 && targetZ - this.position.z < 0.1) || (this.userData.heightDirection == -1.0 && targetZ - this.position.z > 0.1))
+					{
+						this.position.z = targetZ;
+						this.userData.heightDirection *= -1.0;
+					}
+				});
+
+				var buttonFrame3 = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});
+				buttonFrame3.scale.set(0.6, 0.6, 0.6);
+				buttonFrame3.position.x = -50.0;
+				buttonFrame3.position.z = 160.0;
+				buttonFrame3.position.y = -10.0;
+				buttonFrame3.rotateX(-Math.PI / 2.0);
+
+				var button3 = jumpStart.spawnInstance("models/button", {"parent": buttonFrame3});
+				button3.blocksLOS = true;
+				button3.addEventListener("cursorenter", buttonEnter);
+				button3.addEventListener("cursorexit", buttonExit);
+				button3.addEventListener("cursordown", buttonDown);
+				button3.userData.table = this;
+				button3.userData.shipType = "models/chopper2";
+
+				var demo_chopper2 = jumpStart.spawnInstance("models/chopper2", {"parent": buttonFrame3});
+				demo_chopper2.position.z = 50.0;
+				demo_chopper2.rotation.x = Math.PI / 2.0;
+
+				demo_chopper2.userData.maxHeightOffset = 4.0;
+				demo_chopper2.userData.heightDirection = 1.0;
+				demo_chopper2.addEventListener("tick", function()
+				{
+					if( !!!this.userData.initialHeight )
+					{
+						this.userData.initialHeight = this.position.z;
+
+						if( Math.random() > 0.5 )
+							this.userData.heightDirection *= -1.0;
+
+						var offset = this.userData.maxHeightOffset * Math.random();
+						if( Math.random() > 0.5 )
+							offset *= -1.0;
+
+						this.position.z += offset;
+					}
+
+					//var targetPos = this.position.clone();
+					var targetZ = this.userData.initialHeight;
+					targetZ += this.userData.maxHeightOffset * this.userData.heightDirection;
+
+					//var targetZ = targetPos.z;
+					this.position.z += 6.0 * jumpStart.deltaTime * this.userData.heightDirection;
+
+					if( (this.userData.heightDirection == 1.0 && targetZ - this.position.z < 0.1) || (this.userData.heightDirection == -1.0 && targetZ - this.position.z > 0.1))
+					{
+						this.position.z = targetZ;
+						this.userData.heightDirection *= -1.0;
+					}
+				});
+
+				var blades2 = jumpStart.spawnInstance("models/chopper2_blades", {"parent": demo_chopper2});
+				blades2.position.y = 12.696;
+				blades2.position.z = -5.285;
+				blades2.addEventListener("tick", function()
+				{
+					this.rotateY(-10.0 * jumpStart.deltaTime);
+				});
+
+				var bladesBack2 = jumpStart.spawnInstance("models/chopper2_blades_back", {"parent": demo_chopper2});
+				bladesBack2.position.z = -32.696;
+				bladesBack2.position.y = 6.939;
+				bladesBack2.position.x = 1.217;
+				bladesBack2.addEventListener("tick", function()
+				{
+					this.rotateX(-8.0 * jumpStart.deltaTime);
+				});
 			}
 
 			function buttonEnter()
@@ -79,20 +268,27 @@
 				//else
 					this.setColor(new THREE.Color("#5599ff"));
 
-				jumpStart.playSound("sounds/ping");
+				//jumpStart.playSound("sounds/ping");
 			}
 
 			function buttonExit()
 			{
 				this.setColor(new THREE.Color("rgb(100%, 100%, 100%)"));
-				jumpStart.playSound("sounds/pingoff", 0.2);
+				//jumpStart.playSound("sounds/pingoff", 0.2);
 			}
 
 			function buttonDown()
 			{
+//				if( !jumpStart.isAltspace )
+//					jumpStart.camera.rotateX(Math.PI / 9.0);
+				//console.log(jumpStart.gamepads);
+				//var gamepad = jumpStart.gamepads[jumpStart.activeGamepadIndex];
+				//console.log(jumpStart.activeGamepadIndex);
+				//jumpStart.playSound("sounds/pingoff", 0.2);
 				//this.blocksLOS = false;
+
 				this.setColor(new THREE.Color("rgb(50%, 50%, 50%)"));
-				spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion(), this);
+				spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion(), this, this.userData.shipType);
 				//this.userData.table.position.x += 260.0;
 				jumpStart.removeInstance(this.userData.table);
 			}
@@ -127,12 +323,13 @@
 				jumpStart.removeInstance(this.userData.board);
 			}
 
-			function spawnHoverBlasterTable(position, quaternion, button)
+			function spawnHoverBlasterTable(position, quaternion, button, shipType)
 			{
 				var table = jumpStart.spawnInstance(null);
 				//table.syncData.isActive = false;
 				//table.syncData.playerId = jumpStart.localUser.userId;
 				table.position.y += 90.0;
+				table.userData.shipType = shipType;
 				
 				// This behavior requires each instance have a unique name.
 				var rando = parseInt(Math.random()*10) + "" + parseInt(Math.random()) + "" + parseInt(Math.random()) + "";
@@ -150,6 +347,52 @@
 				table.syncData.hoverBlasterTable.isActive = true;
 				table.sync();
 
+				if( !jumpStart.gamepad )
+				{
+					var planeOptions2 = {
+							"width": 400.0,
+							"height": 170.0
+						};
+
+					var lookPlane2 = jumpStart.spawnCursorPlane(planeOptions2);
+					lookPlane2.blocksLOS = true;
+					lookPlane2.position.copy(table.position);
+					lookPlane2.quaternion.copy(table.quaternion);
+					lookPlane2.rotateX(-Math.PI / 6.0);
+					lookPlane2.translateZ(90.0);
+					lookPlane2.userData.table = table;
+/*
+					document.addEventListener("keydown", function(e)
+					{
+						var ship = table.userData.hoverBlasterTable.ship;
+						if( e.keyCode === 16 || e.shiftKey )
+							ship.userData.shiftDown = true;
+					}.bind(table), true);
+
+					document.addEventListener("keyup", function(e)
+					{
+						var ship = table.userData.hoverBlasterTable.ship;
+						if( e.keyCode === 16 || e.shiftKey )
+							ship.userData.shiftDown = false;
+					}.bind(table), true);
+*/
+
+					lookPlane2.addEventListener("cursordown", function()
+					{
+						var table = this.userData.table;
+						var ship = table.userData.hoverBlasterTable.ship;
+						ship.userData.fireCooldown = 0.2;
+						jumpStart.behaviors.hoverBlasterTable.fireLaser.call(ship);
+					});
+				}
+/*
+				lookPlane.addEventListener("tick", function()
+				{
+					console.log(jumpStart.localUser.cursorHit.point);
+				});
+*/
+				//*/
+
 				// removal test
 				/*
 				// TODO: improve cleanup function for table to remove active lasers
@@ -166,6 +409,76 @@
 				spawnHoverBlasterPlaceholder(new THREE.Vector3(), new THREE.Quaternion());
 				return true;
 			});
+
+			jumpStart.addEventListener("userdisconnect", function(e)
+			{
+				var playersContainer = document.getElementById("players").getElementsByClassName("playersContainer")[0];
+				if( !!!playersContainer )
+					return;
+
+				var divs = playersContainer.getElementsByTagName("div");
+				var i;
+				for( i = 0; i < divs.length; i++ )
+				{
+					if( divs[i].playerId === e.id )
+					{
+						playersContainer.removeChild(divs[i]);
+						break;
+					}
+				}
+			});
+
+			jumpStart.addEventListener("userconnect", function(e)
+			{
+				var playersContainer = document.getElementById("players").getElementsByClassName("playersContainer")[0];
+				if( !!!playersContainer )
+					return;
+
+				var playerSlate = document.createElement("div");
+				playerSlate.playerId = e.id;
+				if( e.displayName === "WebUser" )
+					playerSlate.innerHTML = e.id;
+				else
+					playerSlate.innerHTML = e.displayName;
+
+				playersContainer.appendChild(playerSlate);
+			});
+
+			if( !jumpStart.isAltspace )
+			{
+				jumpStart.addEventListener("tick", function()
+				{
+					var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
+					if( !table )
+						return;
+
+					var ship = table.userData.hoverBlasterTable.ship;
+
+					if( !ship )
+						return;
+
+					var oldPos = jumpStart.camera.position.clone();
+					var oldQuaternion = jumpStart.camera.quaternion.clone();
+
+					jumpStart.camera.position.copy(ship.getWorldPosition());
+					jumpStart.camera.quaternion.copy(ship.getWorldQuaternion());
+					jumpStart.camera.rotateY(Math.PI);
+					jumpStart.camera.translateZ(160.0);
+					jumpStart.camera.translateY(140.0);
+					jumpStart.camera.rotateX(-0.5);
+
+					var targetPos = jumpStart.camera.position.clone();
+					var targetQuaternion = jumpStart.camera.quaternion.clone();
+
+					jumpStart.camera.position.copy(oldPos);
+					jumpStart.camera.quaternion.copy(oldQuaternion);
+
+					jumpStart.camera.position.lerp(targetPos, 0.05);
+					jumpStart.camera.quaternion.slerp(targetQuaternion, 0.05);
+					//console.log(ship);
+				//	scene.camera.position.copy()
+				});
+			}
 
 			var popup;
 			jumpStart.addEventListener("ready", function()
@@ -217,5 +530,74 @@
 
 	<body>
 		<!--<iframe id="music" style="display: none;"></iframe>-->
+
+		<script>
+var ytplayerready = false;
+
+  </script>
+  <div id="players" style="position: absolute; top: 0; right: 0; border: 2px solid #000; background-color: rgba(0, 0, 150, 0.3); font-weight: bold; font-size: 30px;">
+  	Players:<br />
+  	<div class="playersContainer">
+  	</div>
+  </div>
+
+    <div id="player" width="100%" height="100%" style="width: 100%; height: 100%; z-index: -1; position: absolute; top: 0; left: 0; display: none;"></div>
+
+    <script>
+    if( !jumpStart.isAltspace )
+    {
+    	document.getElementById("player").style.display = "block";
+      // 2. This code loads the IFrame Player API code asynchronously.
+      var tag = document.createElement('script');
+
+      tag.src = "https://www.youtube.com/iframe_api";
+      var firstScriptTag = document.getElementsByTagName('script')[0];
+      firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+      // 3. This function creates an <iframe> (and YouTube player)
+      //    after the API code downloads.
+  	}
+     // var player;
+      function onYouTubeIframeAPIReady() {
+        var player = new YT.Player('player', {
+          height: '100%',
+          width: '100%',
+          videoId: "tdnKOnSdGbc",
+          iv_load_policy: 3,
+          suggestedQuality: 'hd720',
+          events: {
+            'onReady': onPlayerReady,
+            'onStateChange': onPlayerStateChange
+          },
+          playerVars: {
+            enablejsapi : 1,
+            iv_load_policy: 3,
+            loop : 1,
+            playlist: "tdnKOnSdGbc",
+          	controls: 0,
+          	showinfo: 0
+          }
+        });
+      }
+//&vq=" + vq + "&iv_load_policy=3&enablejsapi=1&autoplay=1&playerapiid=ytplayer&version=3",
+      // 4. The API will call this function when the video player is ready.
+      function onPlayerReady(event) {
+        event.target.playVideo();
+      }
+
+      // 5. The API calls this function when the player's state changes.
+      //    The function indicates that when playing a video (state=1),
+      //    the player should play for six seconds and then stop.
+    //  var done = false;
+      function onPlayerStateChange(event) {
+     //   if (event.data == YT.PlayerState.PLAYING && !done) {
+       //   setTimeout(stopVideo, 6000);
+      //    done = true;
+    //    }
+      }
+      function stopVideo() {
+        player.stopVideo();
+      }
+    </script>
 	</body>
 </html>

@@ -85,8 +85,31 @@ jumpStartBehavior({
 							//else
 							//	g_turbo = 1.0;
 
-							ship.userData.fireCooldown = 0.2;
-							jumpStart.behaviors.hoverBlasterTable.fireLaser.call(ship);
+							if( e.value > 0.9 )
+							{
+								if( !!!ship.userData.bomber && ship.userData.bombCooldown <= 0 )
+								{
+									var bomber = jumpStart.spawnInstance("models/bomber", {"parent": ship.parent});
+									bomber.scale.set(0.1, 0.1, 0.1);
+									//bomber.scale.set(0.7, 0.7, 0.7);
+									bomber.position.copy(ship.position);
+									bomber.quaternion.copy(ship.quaternion);
+									bomber.translateZ(-100.0);
+									bomber.translateY(40.0);
+									if( bomber.position.y < 160.0 )
+										bomber.position.y = 160.0;
+
+									bomber.addEventListener("spawn", jumpStart.behaviors.hoverBlasterTable.bomberSpawn);
+									bomber.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.bomberRemove);
+									bomber.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.bomberTick);
+									bomber.sync();
+								}
+							}
+							else
+							{
+								ship.userData.fireCooldown = 0.2;
+								jumpStart.behaviors.hoverBlasterTable.fireLaser.call(ship);
+							}
 						}
 					}
 					else if( !!ship && ship.userData.pressStartText && ship.userData.pressStartText.scale.x === 1 )
@@ -125,8 +148,32 @@ jumpStartBehavior({
 							//else
 							//	g_turbo = 1.0;
 
-							ship.userData.fireCooldown = 0.2;
-							jumpStart.behaviors.hoverBlasterTable.fireLaser.call(ship);
+							if( e.value > 0.9 )
+							{
+								if( !!!ship.userData.bomber && ship.userData.bombCooldown <= 0 )
+								{
+									ship.userData.bombCooldown = 8.0;
+									var bomber = jumpStart.spawnInstance("models/bomber", {"parent": ship.parent});
+									bomber.scale.set(0.1, 0.1, 0.1);
+									//bomber.scale.set(0.7, 0.7, 0.7);
+									bomber.position.copy(ship.position);
+									bomber.quaternion.copy(ship.quaternion);
+									bomber.translateZ(-100.0);
+									bomber.translateY(40.0);
+									if( bomber.position.y < 160.0 )
+										bomber.position.y = 160.0;
+
+									bomber.addEventListener("spawn", jumpStart.behaviors.hoverBlasterTable.bomberSpawn);
+									bomber.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.bomberRemove);
+									bomber.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.bomberTick);
+									bomber.sync();
+								}
+							}
+							else
+							{
+								ship.userData.fireCooldown = 0.2;
+								jumpStart.behaviors.hoverBlasterTable.fireLaser.call(ship);
+							}
 						}
 					}
 					else if( !!ship && ship.userData.pressStartText )
@@ -312,6 +359,8 @@ jumpStartBehavior({
 				"timeline": {}
 			};
 
+			jumpStart.playSound("sounds/bomberready", 0.3);
+			jumpStart.playSound("sounds/bomberin", 0.3);
 			jumpStart.behaviors.hoverBlasterTable.resetTimeline.call(this, 0, "STAGE 1");
 			jumpStart.behaviors.hoverBlasterTable.generateStage.call(this, 0);
 
@@ -361,6 +410,7 @@ jumpStartBehavior({
 			console.log("Generate stage ID for " + id);
 			if( id === 0 )
 			{
+				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
 				//this.syncData.hoverBlasterTable.timeline.info.music = "UBP7xH348cI";
 				
 				var length = 1.0;
@@ -428,6 +478,7 @@ jumpStartBehavior({
 			}
 			else if( id === 1 )
 			{
+				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
 				var length = 2.0;
 				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
@@ -518,6 +569,7 @@ jumpStartBehavior({
 			}
 			else if( id === 2 )
 			{
+				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
 				var length = 2.0;
 				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
@@ -641,6 +693,306 @@ jumpStartBehavior({
 			}
 			else if( id === 3 )
 			{
+				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
+				var length = 2.0;
+				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+	//			if( !!this.userData.hoverBlasterTable )
+	//				offsetZ = this.userData.hoverBlasterTable.rot;
+				
+				// generate a random stage length units long
+				// rocks
+				var z, rotZ, entity;
+				for( z = 0; z < length; z += 0.05 )
+				{
+					rotZ = Math.PI * 0.2 * Math.random();
+					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 0.0,
+						"offsetX": rotZ,
+						"template": "rocks"
+					};
+
+					var safeZ = (z + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
+				}
+
+				// guns
+				for( z = 0; z < length; z += 0.2 )
+				{
+					rotZ = Math.PI * 0.2 * Math.random();
+					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 0.0,
+						"offsetX": rotZ,
+						"template": "gun"
+					};
+
+					var safeZ = (z + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
+				}
+
+				// crazies
+				var safeZ;
+				for( z = 0; z < length; z += 0.3 )
+				{
+					rotZ = Math.PI * 0.4 * Math.random();
+					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					var rotY = Math.PI * 0.4 * Math.random();
+					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": rotZ,
+						"rotY": rotY,
+						"template": "crazy"
+					};
+
+					var safeZ = (z + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+
+					//rotZ = Math.PI * 0.4 * Math.random();
+					//rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					var rotY = Math.PI * 0.4 * Math.random();
+					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": -rotZ,
+						"rotY": rotY,
+						"template": "crazy"
+					};
+
+					safeZ = (z + 0.1 + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+
+					var rotY = Math.PI * 0.4 * Math.random();
+					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": -rotZ,
+						"rotY": rotY,
+						"template": "crazy"
+					};
+
+					safeZ = (z + 0.1 + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+/*
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": -rotZ,
+						"template": "crazy"
+					};
+
+					safeZ = (z + 0.1 + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					*/
+				}
+
+				entity = {
+					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"offsetY": 0.0,
+					"offsetX": 0.1,
+					"template": "clearText"
+				};
+
+				var safeZ = (length + offsetZ + 0.25).toString().replace(".", "o");
+				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+			}
+			else if( id === 4 )
+			{
+				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
+				var length = 2.0;
+				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+	//			if( !!this.userData.hoverBlasterTable )
+	//				offsetZ = this.userData.hoverBlasterTable.rot;
+				
+				// generate a random stage length units long
+				// rocks
+				var z, rotZ, entity;
+				for( z = 0; z < length; z += 0.05 )
+				{
+					rotZ = Math.PI * 0.2 * Math.random();
+					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 0.0,
+						"offsetX": rotZ,
+						"template": "rocks"
+					};
+
+					var safeZ = (z + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
+				}
+
+				// guns
+				for( z = 0; z < length; z += 0.2 )
+				{
+					rotZ = Math.PI * 0.2 * Math.random();
+					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 0.0,
+						"offsetX": rotZ,
+						"template": "gun"
+					};
+
+					var safeZ = (z + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
+				}
+
+				// crazies
+				var safeZ;
+				for( z = 0; z < length; z += 0.3 )
+				{
+					rotZ = Math.PI * 0.4 * Math.random();
+					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					var rotY = Math.PI * 0.4 * Math.random();
+					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": rotZ,
+						"rotY": rotY,
+						"template": "crazy"
+					};
+
+					var safeZ = (z + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+
+					//rotZ = Math.PI * 0.4 * Math.random();
+					//rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					var rotY = Math.PI * 0.4 * Math.random();
+					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": -rotZ,
+						"rotY": rotY,
+						"template": "crazy"
+					};
+
+					safeZ = (z + 0.1 + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+
+					var rotY = Math.PI * 0.4 * Math.random();
+					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": -rotZ,
+						"rotY": rotY,
+						"template": "crazy"
+					};
+
+					safeZ = (z + 0.1 + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+
+					var rotY = Math.PI * 0.4 * Math.random();
+					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
+
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": -rotZ,
+						"rotY": rotY,
+						"template": "crazy"
+					};
+
+					safeZ = (z + 0.1 + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+/*
+					entity = {
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 10.0,
+						"offsetX": -rotZ,
+						"template": "crazy"
+					};
+
+					safeZ = (z + 0.1 + offsetZ).toString().replace(".", "o");
+					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					*/
+				}
+
+				entity = {
+					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"offsetY": 0.0,
+					"offsetX": 0.1,
+					"template": "clearText"
+				};
+
+				var safeZ = (length + offsetZ + 0.25).toString().replace(".", "o");
+				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
+
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+			}
+			else if( id === "3never" )
+			{
+				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.3;
 				var length = 2.0;
 				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
@@ -729,9 +1081,9 @@ jumpStartBehavior({
 
 				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
 			}
-			else if( id === 4 )
+			else if( id === 5 )
 			{
-				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.6;
+				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.4;
 
 				var length = 2.0;
 				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
@@ -1287,8 +1639,18 @@ jumpStartBehavior({
 		},
 		"tickBehavior": function()
 		{
+//			if( !!this.syncData.hoverBlasterTable.timeline.info.previous )
+//			{
+//				console.log(this.syncData.hoverBlasterTable.timeline.info.previous);
+//				console.log(this.syncData.hoverBlasterTable.timeline[this.syncData.hoverBlasterTable.timeline.info.previous]);
+//			}
+
 			if( this.userData.hoverBlasterTable.currentStage !== this.syncData.hoverBlasterTable.timeline.info.id )
 			{
+				console.log("TIMELINE RESET DETECTED!!");
+				//this.userData.hoverBlasterTable.rot = Math.PI / 2.0;
+				//this.userData.hoverBlasterTable.initialRot = 0;
+				//this.rotation.x = 0;
 				this.userData.hoverBlasterTable.initialRot = this.userData.hoverBlasterTable.rot;
 				this.userData.hoverBlasterTable.spentTimeline = [];
 				this.userData.hoverBlasterTable.currentStage = this.syncData.hoverBlasterTable.timeline.info.id;
@@ -1306,7 +1668,8 @@ jumpStartBehavior({
 			// ALWAYS update rotation
 			var rotSpeed = (!!this.syncData.hoverBlasterTable.timeline.info) ? this.syncData.hoverBlasterTable.timeline.info.rotSpeed : this.syncData.hoverBlasterTable.rotSpeed;
 			this.userData.hoverBlasterTable.rot += rotSpeed * jumpStart.deltaTime;
-			if( this.userData.hoverBlasterTable.rot > (Math.PI / numSegments) * this.userData.hoverBlasterTable.totalPlates )
+
+			if( this.userData.hoverBlasterTable.rot > (Math.PI / (numSegments)) * this.userData.hoverBlasterTable.totalPlates )
 			{
 				var delta = ((Math.PI / numSegments) * this.userData.hoverBlasterTable.totalPlates) + (5.0 * Math.PI / numSegments);
 				this.userData.hoverBlasterTable.totalPlates++;
@@ -1315,6 +1678,15 @@ jumpStartBehavior({
 				if( this.userData.hoverBlasterTable.plates.length < 15 )
 				{
 					plate = jumpStart.spawnInstance("models/road", {"parent": this});
+					plate.userData.table = this;
+					plate.userData.rotOffset = this.rotation.x;
+
+					var plateMaterial = jumpStart.getMaterial(plate);
+					plateMaterial.transparent = true;
+					plateMaterial.opacity = 0.87;
+					plateMaterial.needsUpdate = true;
+				//	console.log(plateMaterial);
+
 					this.userData.hoverBlasterTable.plates.push(plate);
 				}
 				else
@@ -1325,9 +1697,14 @@ jumpStartBehavior({
 				}
 
 				plate.rotation.x = (Math.PI / 4.0) - delta;
+			//	if( plate.rotation.x > Math.PI * 2.0 )
+			//		plate.rotation.x /= (Math.PI * 2.0);
+			//	console.log(plate.rotation.x / (Math.PI * 2.0));
 			}
 
 			this.rotation.x = this.userData.hoverBlasterTable.rot;
+			//if( this.rotation.x > Math.PI * 2.0 )
+			//		this.rotation.x /= Math.PI * 2.0;
 			//this.updateMatrix();
 
 			// only proceed if active
@@ -1356,6 +1733,7 @@ jumpStartBehavior({
 				{
 					// if we are the table owner, sync the change (when needed)
 					zAmount = jumpStart.behaviors.hoverBlasterTable.getAmountZ.call(this);
+					//console.log(indexValue <= previousValue);
 					if( this.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID && indexValue >= previousValue && indexValue <= zAmount )
 					{
 						this.syncData.hoverBlasterTable.timeline.info.previous = index;
@@ -1369,8 +1747,8 @@ jumpStartBehavior({
 						for( x in frame )
 						{
 							entry = frame[x];
-
-							if( !!this.userData.hoverBlasterTable.ship.syncData.killed && !!!this.userData.hoverBlasterTable.ship.syncData.killed[entry.id] )
+//console.log(!!this.userData.hoverBlasterTable.ship.syncData.killed);
+							if( !!!this.userData.hoverBlasterTable.ship.syncData.killed || !!!this.userData.hoverBlasterTable.ship.syncData.killed[entry.id] )
 							{
 								if( entry.template === "rocks" )
 									jumpStart.behaviors.hoverBlasterTable.spawnRocks.call(this, entry);//entry.offsetX);
@@ -1429,7 +1807,7 @@ jumpStartBehavior({
 			var rot = this.userData.rotOffset + table.userData.hoverBlasterTable.rot;
 			var max = Math.PI - (Math.PI / numSegments);
 
-			if( max - rot < 0.3 )
+			if( max - rot < 0 )
 				this.userData.fading = true;
 			else if( this.scale.x < 1.0 )
 			{
@@ -1489,6 +1867,24 @@ jumpStartBehavior({
 
 			if( table.syncData.hoverBlasterTable.ownerID !== jumpStart.localUser.userID )
 				return;
+
+			var weaponExplosions = table.userData.hoverBlasterTable.weaponExplosions;
+			//console.log(weaponExplosions);
+			var x, explosion;
+			for( x in weaponExplosions )
+			{
+				explosion = weaponExplosions[x];
+				//console.log(explosion.scale.x);
+				if( explosion.getWorldPosition().distanceTo(this.getWorldPosition()) < 30.0 * explosion.scale.x * jumpStart.options.sceneScale )
+				{
+					//jumpStart.behaviors.hoverBlasterTable.spawnExplosion(laser.position, 0.3, table);
+					//jumpStart.removeInstance(laser);
+					
+					//if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
+					causeDamage.call(this, explosion.userData.power);
+					console.log("cause dammmgg");
+				}
+			}
 
 			// check for ship collision
 			var thisPosition = this.getWorldPosition();
@@ -1657,7 +2053,10 @@ jumpStartBehavior({
 			parent.updateMatrixWorld();
 			var laser = jumpStart.spawnInstance("models/enemy_laser", {"parent": parent});
 			laser.userData.table = parent.userData.table;
+			laser.userData.table.userData.hoverBlasterTable.enemyLasers[laser.uuid] = laser;
+			laser.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.enemyLaserRemove);
 			laser.quaternion.copy(parent.quaternion);
+
 			var position = this.getWorldPosition();
 			position.multiplyScalar(1 / jumpStart.options.sceneScale);
 			THREE.SceneUtils.detach(laser, this, jumpStart.scene);
@@ -1665,8 +2064,8 @@ jumpStartBehavior({
 			laser.translateX(offset.x);
 			laser.translateY(offset.y);
 			laser.translateZ(offset.z);
-			laser.scale.set(0.2, 0.2, 1.0);
-			laser.userData.power = 10.0;
+			laser.scale.set(0.5, 0.5, 1.0);
+			laser.userData.power = 20.0;	// must all be the same power cuz of how healthbar works
 			laser.addEventListener("tick", function()
 			{
 				var table = this.userData.table;
@@ -1767,6 +2166,117 @@ jumpStartBehavior({
 				}
 			});
 		},
+		"bomberRemove": function()
+		{
+			var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
+			if( !table || !table.userData.hoverBlasterTable.ship )
+				return;
+
+			if( table.userData.hoverBlasterTable.ship )
+				table.userData.hoverBlasterTable.ship.userData.bomber = null;
+		},
+		"bomberTick": function()
+		{
+			//var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
+			//if( !table )
+			//	return;
+
+			if( this.scale.x < 0.7 && !!!this.behaviors.shrinkRemove )
+				this.scale.add(new THREE.Vector3(1, 1, 1).multiplyScalar(jumpStart.deltaTime));
+
+			var table = this.userData.table;
+
+			this.translateZ(200.0 * jumpStart.deltaTime);
+
+			this.userData.dropDelay -= jumpStart.deltaTime;
+			if( this.userData.dropDelay <= 0 )
+			{
+				this.userData.dropDelay = 0.2;
+
+				if( this.userData.payload > 0 )
+				{
+					this.userData.payload--;
+
+					var bomb = jumpStart.spawnInstance(null, {"parent": jumpStart.world});
+					bomb.userData.table = table;
+					bomb.position.copy(this.position);
+					bomb.quaternion.copy(this.quaternion);
+					bomb.lookAt(new THREE.Vector3(0, 0, 0));
+
+					var bombVisual = jumpStart.spawnInstance("models/bomb", {"parent": bomb});
+					//bombVisual.position.copy(this.position);
+					//bombVisual.quaternion.copy(this.quaternion);
+
+					//THREE.SceneUtils.attach(bombVisual, jumpStart.scene, bomb);
+
+					bombVisual.rotateX(Math.PI / 2.0);
+
+					bomb.addEventListener("tick", function()
+					{
+						var table = this.userData.table;
+
+						this.translateZ(80.0 * jumpStart.deltaTime);
+						this.rotateZ(6.0 * jumpStart.deltaTime);
+						
+						if( this.position.length() > 600.0 || this.position.distanceTo(table.position) < 120.0 )
+						{
+							//jumpStart.behaviors.hoverBlasterTable.spawnExplosion(this.position, 0.7, table);
+							var explosion = jumpStart.behaviors.hoverBlasterTable.spawnExplosion(this.position, 0.7, table);
+							explosion.userData.power = 200.0;
+							//explosion.radus =
+							explosion.scale.multiplyScalar(2.0);
+							table.userData.hoverBlasterTable.weaponExplosions[explosion.uuid] = explosion;
+							//explosion.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.weaponExplosionRemove);
+
+							var enemyLasers = table.userData.hoverBlasterTable.enemyLasers;
+							var x, laser;
+							for( x in enemyLasers )
+							{
+								laser = enemyLasers[x];
+								if( laser.getWorldPosition().distanceTo(this.getWorldPosition()) < 40.0 * jumpStart.options.sceneScale )
+								{
+									//jumpStart.behaviors.hoverBlasterTable.spawnExplosion(laser.position, 0.3, table);
+									jumpStart.removeInstance(laser);
+									
+									//if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
+									//	causeDamage.call(this, laser.userData.power);
+								}
+							}
+
+							jumpStart.removeInstance(this);
+						}
+					});
+				}
+			}
+
+			//if( this.position.length() > 600.0 || this.position.distanceTo(table.position) < 115.0 )
+			//if( this.ownerID === jumpStart.localUser.userID && (this.position.distanceTo(table.position) < table.userData.hoverBlasterTable.radius || (this.position.distanceTo(table.position) > table.userData.hoverBlasterTable.radius * 2.0 && this.userData.payload === 0)))// * jumpStart.options.sceneScale )
+			if( this.position.distanceTo(table.position) < table.userData.hoverBlasterTable.radius || (this.position.distanceTo(table.position) > table.userData.hoverBlasterTable.radius * 2.0 && this.userData.payload === 0))// * jumpStart.options.sceneScale )
+			{
+				if( !!!this.behaviors.shrinkRemove )
+					this.applyBehavior("shrinkRemove");
+			//	jumpStart.removeInstance(this);
+			}
+		},
+		"bomberSpawn": function()
+		{
+			var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
+			if( !table )
+				return;
+
+			var ship = table.userData.hoverBlasterTable.ship;
+			if( !!ship )
+			{
+				ship.userData.bombCooldown = 8.0;
+				ship.userData.bomber = this;
+			}
+
+			jumpStart.playSound("sounds/bomberin", 0.3);
+
+			this.userData.dropDelay = 0.7;
+			this.userData.payload = 4;
+			this.userData.table = table;
+		},
 		"spawnExplosion": function(position, scale, table)
 		{
 			//var soundFile = ( typeof sound === "undefined" ) ? "legacy/v1/sounds/SpacePilot/explosion0" : sound;
@@ -1815,7 +2325,7 @@ jumpStartBehavior({
 				this.rotateX(15.0 * jumpStart.deltaTime);
 			});
 
-			//return explosion;
+			return explosion;
 		},
 		"gunTick": function()
 		{
@@ -1913,56 +2423,57 @@ jumpStartBehavior({
 					this.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 					this.applyBehavior("shrinkRemove", {"speed": 3.0});
 
-					var params = {
-						size: 12.0,
-						height: 1,
-						font: "helvetiker",
-						curveSegments: 1
-					};
-
 					if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
 					{
+						var index = 7;
+						while( index > 0 )
+						{
+							var bar = ship.userData.healthBar.userData["bar" + index];
+							if( !!bar )
+								break;
+
+							index--;
+						}
+
+						if( index < 7)
+						{
+							index++;
+							// health bar
+							function spawnBar(ship)
+							{
+								var geometry = new THREE.SphereGeometry( 3, 5, 5 );
+								var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+								var barObject = new THREE.Mesh( geometry, material );
+								var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
+								return bar;
+							}
+
+							var bar = spawnBar(ship);
+/*
+							var healthBarPositions = [
+								null,
+								new THREE.Vector3(0, 0, -25.8),
+								new THREE.Vector3(0, 7.5, -23.8),
+								new THREE.Vector3(0, 11.0, -18.0),
+								new THREE.Vector3(0, 7.7, -10.3),
+								new THREE.Vector3(0, 5.5, -3.0),
+								new THREE.Vector3(0, 5.5, 5.0),
+								new THREE.Vector3(0, 5.5, 12.0)
+							];
+*/
+							//console.log(index);
+							//console.log(ship.userData.healthBar.userData["bar" + index]);
+							bar.position.copy(ship.userData.healthBarPositions[index]);
+							ship.userData.healthBar.userData["bar" + index] = bar;
+
+							//ship.userData.healthBar = healthBar;
+
+							ship.userData.health += 40.0;
+						}
+						
 						ship.syncData.coins++;
 						ship.sync({"syncData": true});
 					}
-
-					var geometry = new THREE.TextGeometry(ship.syncData.coins, params);
-					var material = new THREE.MeshBasicMaterial({color:'yellow'});
-					var mesh = new THREE.Mesh(geometry, material);
-
-					geometry.computeBoundingBox();
-					var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
-
-					var text = jumpStart.spawnInstance(null)
-					text.userData.table = table;
-					var worldPos = this.getWorldPosition();
-					jumpStart.world.worldToLocal(worldPos);
-					text.position.copy(worldPos);
-					text.position.y += 10.0;
-//					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
-
-					var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
-					var offset = new THREE.Vector3().copy(displacement);
-					offset.multiply(textMesh.scale);
-					textMesh.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
-
-					text.userData.life = 1.5;
-					text.addEventListener("tick", function()
-					{
-						this.userData.life -= jumpStart.deltaTime;
-
-						if( this.userData.life <= 0 )
-						{
-							//jumpStart.removeInstance(this);
-							this.removeEventListener("tick", arguments.callee);
-							this.applyBehavior("shrinkRemove");
-							return;
-						}
-
-						this.position.y += 10.0 * jumpStart.deltaTime;
-						if( jumpStart.isAltspace )
-							this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
-					});
 
 					//if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
 					//	ship.syncData.coins++;
@@ -1979,7 +2490,7 @@ jumpStartBehavior({
 				coin.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 				coin.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipHitCollect);
 				//coin.addEventListener("tick", coinTick);
-				//coin.addEventListener("spawn", coinSpawn);
+				//coin.addEventListener("1, coinSpawn);
 				//coin.addEventListener("remove", coinRemove);							
 				//coin.sync();
 //*/
@@ -2192,7 +2703,7 @@ jumpStartBehavior({
 			crazy.userData.table = this;
 			crazy.userData.hitRadius = 10.0;
 			crazy.userData.health = 100.0;
-			crazy.userData.dumbTime = 2.0;
+			crazy.userData.dumbTime = 3.0;
 			crazy.position.z -= this.userData.hoverBlasterTable.radius;
 			crazy.position.y = this.position.y + 20.0;
 			crazy.rotation.x = -Math.PI / 2.0;
@@ -2273,11 +2784,12 @@ jumpStartBehavior({
 			displacementRay.lookAt(crazyPos);
 
 			var geometry = new THREE.SphereGeometry( 10, 5, 8, 0, Math.PI);
-			var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+			//var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+			var material = new THREE.MeshBasicMaterial( {color: 0x000000} );
 			var shadowObject = new THREE.Mesh( geometry, material );
 			var shadow = jumpStart.spawnInstance(null, {"object": shadowObject, "parent": displacementRay});
-			shadow.scale.z = 0.3;
-			shadow.position.z = this.userData.hoverBlasterTable.radius;
+			shadow.scale.z = 0.01;//0.3;
+			shadow.position.z = this.userData.hoverBlasterTable.radius - 0.5;
 			displacementRay.userData.shadow = shadow;
 			crazy.userData.displacementRay = displacementRay;
 		},
@@ -2330,7 +2842,7 @@ jumpStartBehavior({
 			{
 				laser = jumpStart.spawnInstance("models/player_laser");
 				laser.userData.table = table;
-				laser.userData.power = 20.0;
+				laser.userData.power = 20.0;	// must all be the same power cuz of how healthbar works
 				laser.position.copy(this.position);
 				laser.quaternion.copy(this.quaternion);
 
@@ -2338,7 +2850,7 @@ jumpStartBehavior({
 				laser.translateX(laserOffset.x * this.scale.x);
 				laser.translateY(laserOffset.y * this.scale.x);
 				laser.translateZ(laserOffset.z * this.scale.x);
-				laser.scale.set(0.2, 0.2, 1.0);
+				laser.scale.set(0.5, 0.5, 1.0);
 				laser.scale.multiplyScalar(this.scale.x);
 				laser.userData.age = 1.0;
 
@@ -2384,6 +2896,16 @@ jumpStartBehavior({
 				return;
 			}
 		},
+		"weaponExplosionRemove": function()
+		{
+			var table = this.userData.table;
+			delete table.userData.hoverBlasterTable.weaponExplosions[this.uuid];
+		},
+		"enemyLaserRemove": function()
+		{
+			var table = this.userData.table;
+			delete table.userData.hoverBlasterTable.enemyLasers[this.uuid];
+		},
 		"laserRemove": function()
 		{
 			var table = this.userData.table;
@@ -2399,6 +2921,65 @@ jumpStartBehavior({
 			{
 				this.userData.oldDead = this.syncData.dead;
 				jumpStart.behaviors.hoverBlasterTable.gameOverNotify.call(table);
+			}
+
+			if( this.userData.oldCoins !== this.syncData.coins )
+			{
+				this.userData.oldCoins = this.syncData.coins;
+				
+				var params = {
+					size: 12.0,
+					height: 1,
+					font: "helvetiker",
+					curveSegments: 1
+				};
+
+				var geometry = new THREE.TextGeometry(ship.syncData.coins, params);
+				var material = new THREE.MeshBasicMaterial({color:'yellow'});
+				var mesh = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				var text = jumpStart.spawnInstance(null)
+				text.userData.table = table;
+				var worldPos = this.getWorldPosition();
+				jumpStart.world.worldToLocal(worldPos);
+				text.position.copy(worldPos);
+				text.position.y += 10.0;
+//					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
+
+				var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
+				var offset = new THREE.Vector3().copy(displacement);
+				offset.multiply(textMesh.scale);
+				textMesh.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				text.userData.life = 1.5;
+				text.addEventListener("tick", function()
+				{
+					this.userData.life -= jumpStart.deltaTime;
+
+					if( this.userData.life <= 0 )
+					{
+						//jumpStart.removeInstance(this);
+						this.removeEventListener("tick", arguments.callee);
+						this.applyBehavior("shrinkRemove");
+						return;
+					}
+
+					this.position.y += 10.0 * jumpStart.deltaTime;
+					if( jumpStart.isAltspace )
+						this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
+				});
+			}
+
+			if( this.userData.hasOwnProperty("bombCooldown") )
+			{
+				var oldCooldown = this.userData.bombCooldown;
+				this.userData.bombCooldown -= jumpStart.deltaTime;
+
+				if( oldCooldown > 0 && this.userData.bombCooldown <= 0 )
+					jumpStart.playSound("sounds/bomberready", 0.3);
 			}
 			//console.log("tick of ship");
 			//var table = this.userData.table;
@@ -2594,6 +3175,49 @@ jumpStartBehavior({
 					//	}
 					}
 				}
+				else
+				{
+				//	console.log(jumpStart.localUser.cursorHit.point);
+
+					// position
+				//	var currentPosition = this.position.clone();
+
+					//console.log(this.userData.positionRay);
+					if( jumpStart.localUser.cursorHit )
+					{
+						var oldPos = this.position.clone();
+						var oldQuaternion = this.quaternion.clone();
+
+						var pos = jumpStart.world.worldToLocal(jumpStart.localUser.cursorHit.point);
+						if( pos.x > 70.0 )
+							pos.x = 70.0;
+						else if( pos.x < -70.0 )
+							pos.x = -70.0;
+
+						if( pos.y > 180.0 )
+							pos.y = 180.0;
+						else if( pos.y < 90.0 )
+							pos.y = 90.0;
+
+						var oldRayQuaternion = this.userData.positionRay.quaternion.clone();
+						this.userData.positionRay.lookAt(pos);
+						var targetRayQuaternion = this.userData.positionRay.quaternion.clone();
+						this.userData.positionRay.quaternion.copy(oldRayQuaternion);
+						this.userData.positionRay.quaternion.slerp(targetRayQuaternion, 0.02);
+
+						this.position.copy(this.userData.positionRay.position);
+						this.quaternion.copy(this.userData.positionRay.quaternion);
+
+						if( this.userData.shiftDown )
+							this.translateZ(180.0);
+						else
+							this.translateZ(140.0);
+
+						this.rotateX(Math.PI / 2.0);
+						this.rotateY(Math.PI);
+						this.rotateX(Math.PI / 6.5);
+					}
+				}
 			}
 			else
 			{
@@ -2622,181 +3246,259 @@ jumpStartBehavior({
 			table.userData.hoverBlasterTable.ship = this;
 			this.userData.table = table;
 			this.userData.oldShotsFired = this.syncData.shotsFired;
+			jumpStart.removeInstance(table.userData.hoverBlasterTable.dome);
+			table.userData.hoverBlasterTable.dome = null;
 //			if( table.syncData.hoverBlasterTable !== jumpStart.localUser.userID )
 //			{
 //				this.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipTick);
 //			}
 
 			this.userData.oldDead = this.syncData.dead;
+			this.userData.oldCoins = this.syncData.coins;
 
 			ship = this;
+			ship.userData.bombCooldown = 8.0;
 			//ship.userData.table = this;
-				ship.userData.radius = 10.0;
-				ship.userData.shields = 1.0;
-				ship.userData.health = 100.0;
-				ship.userData.fireCooldown = 0;
-				ship.scale.multiplyScalar(0.4);	// FIXME: native scale the ship OBJ
-				ship.translateY(180.0);
-				ship.rotateY(Math.PI);
-				ship.translateZ(-100.0);
-				ship.rotateX(Math.PI / -12.0);
+			ship.userData.radius = 10.0;
+			ship.userData.shields = 1.0;
+			ship.userData.health = 100.0;
+			ship.userData.fireCooldown = 0;
+			ship.scale.multiplyScalar(0.4);	// FIXME: native scale the ship OBJ
+			ship.translateY(180.0);
+			ship.rotateY(Math.PI);
+			ship.translateZ(-100.0);
+			ship.rotateX(Math.PI / -12.0);
 
-				// health bar
-				function spawnBar(ship)
+			// health bar
+			function spawnBar(ship)
+			{
+				var geometry = new THREE.SphereGeometry( 3, 5, 5 );
+				var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+				var barObject = new THREE.Mesh( geometry, material );
+				var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
+				return bar;
+			}
+
+			var healthBar = jumpStart.spawnInstance(null, {"parent": ship});
+			var bar = spawnBar(ship);
+
+			if( ship.modelFile == "models/hawk" )
+			{
+				ship.userData.healthBarPositions = [
+				null,
+				new THREE.Vector3(0, 0, -25.8),
+				new THREE.Vector3(0, 7.5, -23.8),
+				new THREE.Vector3(0, 11.0, -18.0),
+				new THREE.Vector3(0, 7.7, -10.3),
+				new THREE.Vector3(0, 5.5, -3.0),
+				new THREE.Vector3(0, 5.5, 5.0),
+				new THREE.Vector3(0, 5.5, 12.0)
+				];
+			}
+			else
+			{
+				ship.userData.healthBarPositions = [
+				null,
+				new THREE.Vector3(-30, -10, -23),
+				new THREE.Vector3(-20, -10, -33),
+				new THREE.Vector3(-10, -10, -37),
+				new THREE.Vector3(0, -10, -40),
+				new THREE.Vector3(10, -10, -37),
+				new THREE.Vector3(20, -10, -33),
+				new THREE.Vector3(30, -10, -23)
+				];
+			}
+
+			bar.position.copy(ship.userData.healthBarPositions[1]);
+			healthBar.userData.bar1 = bar;
+
+			bar = spawnBar(ship);
+			bar.position.copy(ship.userData.healthBarPositions[2]);
+			healthBar.userData.bar2 = bar;
+
+			bar = spawnBar(ship);
+			bar.position.copy(ship.userData.healthBarPositions[3]);
+			healthBar.userData.bar3 = bar;			
+
+			bar = spawnBar(ship);
+			bar.position.copy(ship.userData.healthBarPositions[4]);
+			healthBar.userData.bar4 = bar;
+
+			bar = spawnBar(ship);
+			bar.position.copy(ship.userData.healthBarPositions[5]);
+			healthBar.userData.bar5 = bar;
+
+			bar = spawnBar(ship);
+			bar.position.copy(ship.userData.healthBarPositions[6]);
+			healthBar.userData.bar6 = bar;
+
+			bar = spawnBar(ship);
+			bar.position.copy(ship.userData.healthBarPositions[7]);
+			healthBar.userData.bar7 = bar;			
+
+			ship.userData.healthBar = healthBar;
+
+			//var worldPos = this.position.clone();
+			//jumpStart.world.localToWorld(worldPos);
+
+			var positionRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
+			positionRay.position.copy(table.position);
+
+//displacementRay.rotateX(Math.PI * -0.1);
+			var shipPos = ship.getWorldPosition();
+			positionRay.lookAt(shipPos);
+
+//displacementRay.rotateX(Math.PI * -0.1);
+/*
+			var geometry = new THREE.SphereGeometry( 10, 5, 8, 0, Math.PI);
+			var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+			var shadowObject = new THREE.Mesh( geometry, material );
+			*/
+
+			var shadow = jumpStart.spawnInstance(null, {"parent": positionRay});
+			shadow.position.z = table.userData.hoverBlasterTable.radius;
+			positionRay.userData.shadow = shadow;
+			
+			ship.userData.positionRay = positionRay;
+
+			ship.addEventListener("remove", function()
+			{
+				jumpStart.removeInstance(this.userData.displacementRay);
+			});
+
+			var displacementRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
+			displacementRay.position.copy(table.position);
+
+			var crazyPos = ship.getWorldPosition();
+			displacementRay.lookAt(crazyPos);
+
+			var geometry = new THREE.SphereGeometry( 10, 5, 8, 0, Math.PI);
+			//var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+			var material = new THREE.MeshBasicMaterial( {color: 0x000000} );
+			var shadowObject = new THREE.Mesh( geometry, material );
+			var shadow = jumpStart.spawnInstance(null, {"object": shadowObject, "parent": displacementRay});
+			shadow.scale.z = 0.01;//0.3;
+			shadow.position.z = table.userData.hoverBlasterTable.radius - 0.5;
+			displacementRay.userData.shadow = shadow;
+			ship.userData.displacementRay = displacementRay;
+
+			var sight = jumpStart.spawnInstance("models/player_laser", {"parent": ship});
+			sight.scale.set(0.1, 0.1, 10.0);
+			sight.translateZ(200.0);
+			ship.userData.sight = sight;
+			//table.userData.hoverBlasterTable.ship = ship;
+/*
+			var wand = jumpStart.spawnInstance("models/vivewand", {"parent": ship});
+			wand.rotateX(Math.PI / -4.0);
+			wand.translateZ(-40.0);
+			wand.translateY(-8.0);
+			wand.userData.direction = 1.0;
+			wand.userData.maxScaleDelta = 0.3;
+			wand.addEventListener("tick", function()
+			{
+				var delta = 1.0 * jumpStart.deltaTime * this.userData.direction;
+				this.scale.add(new THREE.Vector3(delta, delta, delta));
+				if( this.scale.x > 1.0 + this.userData.maxScaleDelta || this.scale.x < 1.0 - this.userData.maxScaleDelta )
 				{
-					var geometry = new THREE.SphereGeometry( 3, 5, 5 );
-					var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
-					var barObject = new THREE.Mesh( geometry, material );
-					var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
-					return bar;
+					var val = 1.0 + this.userData.maxScaleDelta * this.userData.direction;
+					this.scale.set(val, val, val);
+					this.userData.direction *= -1.0;
 				}
-
-				var healthBar = jumpStart.spawnInstance(null, {"parent": ship});
-				var bar = spawnBar(ship);
-				bar.position.set(0, 0, -25.8);
-				healthBar.userData.bar1 = bar;
-
-				bar = spawnBar(ship);
-				bar.position.set(0, 7.5, -23.8);
-				healthBar.userData.bar2 = bar;
-
-				bar = spawnBar(ship);
-				bar.position.set(0, 11.0, -18.0);
-				healthBar.userData.bar3 = bar;			
-
-				bar = spawnBar(ship);
-				bar.position.set(0, 7.7, -10.3);
-				healthBar.userData.bar4 = bar;
-
-				bar = spawnBar(ship);
-				bar.position.set(0, 5.5, -3.0);
-				healthBar.userData.bar5 = bar;
-
-				bar = spawnBar(ship);
-				bar.position.set(0, 5.5, 5.0);
-				healthBar.userData.bar6 = bar;
-
-				bar = spawnBar(ship);
-				bar.position.set(0, 5.5, 12.0);
-				healthBar.userData.bar7 = bar;			
-
-				ship.userData.healthBar = healthBar;
-
-				//var worldPos = this.position.clone();
-				//jumpStart.world.localToWorld(worldPos);
-
-				var positionRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
-				positionRay.position.copy(table.position);
-
-	//displacementRay.rotateX(Math.PI * -0.1);
-				var shipPos = ship.getWorldPosition();
-				positionRay.lookAt(shipPos);
-
-	//displacementRay.rotateX(Math.PI * -0.1);
-	/*
-				var geometry = new THREE.SphereGeometry( 10, 5, 8, 0, Math.PI);
-				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
-				var shadowObject = new THREE.Mesh( geometry, material );
-				*/
-
-				var shadow = jumpStart.spawnInstance(null, {"parent": positionRay});
-				shadow.position.z = table.userData.hoverBlasterTable.radius;
-				positionRay.userData.shadow = shadow;
-				
-				ship.userData.positionRay = positionRay;
-
-				ship.addEventListener("remove", function()
+				if( jumpStart.activeGamepadIndex > -1 )
 				{
-					jumpStart.removeInstance(this.userData.displacementRay);
+					if( jumpStart.gamepad.mapping === "steamvr" )
+					{
+						var pos = jumpStart.gamepad.position;
+						var rot = jumpStart.gamepad.rotation;
+						//var gamepadMatrix = new THREE.Matrix4().set(pos.x, pos.y, pos.z, 0, rot.x, rot.y, rot.z, 0, 1, 1, 1, 0, 0, 0, 0, 0);
+						//this.matrix.copy(gamepadMatrix);
+						var position = new THREE.Vector3(jumpStart.gamepad.position.x, jumpStart.gamepad.position.y, jumpStart.gamepad.position.z);
+
+						jumpStart.world.worldToLocal(position);
+
+						var wandPos = this.getWorldPosition();
+						jumpStart.world.worldToLocal(wandPos);
+
+						if( position.distanceTo(wandPos) < 10.0 )
+							ship.userData.pressStartText.scale.set(1, 1, 1);
+						else
+							ship.userData.pressStartText.scale.set(0.0001, 0.0001, 0.0001);
+					}
+					//else
+						//console.log("Select Ship");
+				}
+			});
+			ship.userData.wand = wand;
+
+			// create the "PULL TRIGGER" 3D text object
+			var params = {
+				size: 12.0,
+				height: 1,
+				font: "helvetiker",
+				curveSegments: 1
+			};
+			var geometry = new THREE.TextGeometry("PULL TRIGGER", params);
+			var material = new THREE.MeshBasicMaterial({color:'white'});
+			var mesh = new THREE.Mesh(geometry, material);
+			geometry.computeBoundingBox();
+			var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+			var pressStartText = jumpStart.spawnInstance(null, {"object": mesh, "parent": ship})
+			var offset = new THREE.Vector3().copy(displacement);
+			offset.multiply(pressStartText.scale);
+			pressStartText.position.set(offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+			pressStartText.rotateY(Math.PI);
+			pressStartText.translateY(25.0);
+			pressStartText.scale.set(0.0001, 0.0001, 0.0001);
+			ship.userData.pressStartText = pressStartText;
+*/
+
+			if( this.modelFile === "models/chopper" )
+			{
+				var blades = jumpStart.spawnInstance("models/chopper_blades", {"parent": ship});
+				blades.position.y = 8.81;
+				blades.position.z = 2.888;
+				blades.addEventListener("tick", function()
+				{
+					this.rotateY(-5.0 * jumpStart.deltaTime);
 				});
 
-				var displacementRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
-				displacementRay.position.copy(table.position);
-
-				var crazyPos = ship.getWorldPosition();
-				displacementRay.lookAt(crazyPos);
-
-				var geometry = new THREE.SphereGeometry( 10, 5, 8, 0, Math.PI);
-				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
-				var shadowObject = new THREE.Mesh( geometry, material );
-				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject, "parent": displacementRay});
-				shadow.scale.z = 0.3;
-				shadow.position.z = table.userData.hoverBlasterTable.radius;
-				displacementRay.userData.shadow = shadow;
-				ship.userData.displacementRay = displacementRay;
-
-				var sight = jumpStart.spawnInstance("models/player_laser", {"parent": ship});
-				sight.scale.set(0.1, 0.1, 10.0);
-				sight.translateZ(200.0);
-				ship.userData.sight = sight;
-				//table.userData.hoverBlasterTable.ship = ship;
-	/*
-				var wand = jumpStart.spawnInstance("models/vivewand", {"parent": ship});
-				wand.rotateX(Math.PI / -4.0);
-				wand.translateZ(-40.0);
-				wand.translateY(-8.0);
-				wand.userData.direction = 1.0;
-				wand.userData.maxScaleDelta = 0.3;
-				wand.addEventListener("tick", function()
+				var bladesBack = jumpStart.spawnInstance("models/chopper_blades_back", {"parent": ship});
+				bladesBack.position.z = -27.848;
+				bladesBack.position.y = 3.982;
+				bladesBack.addEventListener("tick", function()
 				{
-					var delta = 1.0 * jumpStart.deltaTime * this.userData.direction;
-					this.scale.add(new THREE.Vector3(delta, delta, delta));
-					if( this.scale.x > 1.0 + this.userData.maxScaleDelta || this.scale.x < 1.0 - this.userData.maxScaleDelta )
-					{
-						var val = 1.0 + this.userData.maxScaleDelta * this.userData.direction;
-						this.scale.set(val, val, val);
-						this.userData.direction *= -1.0;
-					}
-					if( jumpStart.activeGamepadIndex > -1 )
-					{
-						if( jumpStart.gamepad.mapping === "steamvr" )
-						{
-							var pos = jumpStart.gamepad.position;
-							var rot = jumpStart.gamepad.rotation;
-							//var gamepadMatrix = new THREE.Matrix4().set(pos.x, pos.y, pos.z, 0, rot.x, rot.y, rot.z, 0, 1, 1, 1, 0, 0, 0, 0, 0);
-							//this.matrix.copy(gamepadMatrix);
-							var position = new THREE.Vector3(jumpStart.gamepad.position.x, jumpStart.gamepad.position.y, jumpStart.gamepad.position.z);
-
-							jumpStart.world.worldToLocal(position);
-
-							var wandPos = this.getWorldPosition();
-							jumpStart.world.worldToLocal(wandPos);
-
-							if( position.distanceTo(wandPos) < 10.0 )
-								ship.userData.pressStartText.scale.set(1, 1, 1);
-							else
-								ship.userData.pressStartText.scale.set(0.0001, 0.0001, 0.0001);
-						}
-						//else
-							//console.log("Select Ship");
-					}
+					this.rotateX(-8.0 * jumpStart.deltaTime);
 				});
-				ship.userData.wand = wand;
+			}
+			else if( this.modelFile === "models/chopper2" )
+			{
+				var blades = jumpStart.spawnInstance("models/chopper2_blades", {"parent": ship});
+				blades.position.y = 12.696;
+				blades.position.z = -5.285;
+				blades.addEventListener("tick", function()
+				{
+					this.rotateY(-10.0 * jumpStart.deltaTime);
+				});
 
-				// create the "PULL TRIGGER" 3D text object
-				var params = {
-					size: 12.0,
-					height: 1,
-					font: "helvetiker",
-					curveSegments: 1
-				};
-				var geometry = new THREE.TextGeometry("PULL TRIGGER", params);
-				var material = new THREE.MeshBasicMaterial({color:'white'});
-				var mesh = new THREE.Mesh(geometry, material);
-				geometry.computeBoundingBox();
-				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
-				var pressStartText = jumpStart.spawnInstance(null, {"object": mesh, "parent": ship})
-				var offset = new THREE.Vector3().copy(displacement);
-				offset.multiply(pressStartText.scale);
-				pressStartText.position.set(offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
-				pressStartText.rotateY(Math.PI);
-				pressStartText.translateY(25.0);
-				pressStartText.scale.set(0.0001, 0.0001, 0.0001);
-				ship.userData.pressStartText = pressStartText;
-	*/
+				var bladesBack = jumpStart.spawnInstance("models/chopper2_blades_back", {"parent": ship});
+				bladesBack.position.z = -32.696;
+				bladesBack.position.y = 6.939;
+				bladesBack.position.x = 1.217;
+				bladesBack.addEventListener("tick", function()
+				{
+					this.rotateX(-8.0 * jumpStart.deltaTime);
+				});
+			}
 		},
 		"spawnBehavior": function(isInitialSync)
 		{
+			//console.log("Gamepads");
+			//console.log(jumpStart.gamepads);
+			//console.log(altspace.getGamepads());
+			//var gamepadIndex, gamepad, previousGamepadState, buttonIndex;
+			//	for( gamepadIndex in this.gamepads )
+			//gamepad = this.gamepads[gamepadIndex];
+
 			if( !!!this.userData.hoverBlasterTable )
 				this.userData.hoverBlasterTable = {};
 
@@ -2804,33 +3506,42 @@ jumpStartBehavior({
 			this.userData.hoverBlasterTable.initialRot = -1;
 			this.userData.hoverBlasterTable.rocks = [];
 			this.userData.hoverBlasterTable.guns = [];
-			this.userData.hoverBlasterTable.rot = Math.PI;
+			this.userData.hoverBlasterTable.rot = Math.PI - 0.3;
+			//this.userData.hoverBlasterTable.rotateX(this.userData.hoverBlasterTable.rot);
 			this.userData.hoverBlasterTable.plates = [];
 			this.userData.hoverBlasterTable.initialTimeline = this.syncData.hoverBlasterTable.timeline.info.previous;
 			this.userData.hoverBlasterTable.spentTimeline = [];
 			this.userData.hoverBlasterTable.totalPlates = 0;
 			this.userData.hoverBlasterTable.lasers = {};
+			this.userData.hoverBlasterTable.enemyLasers = {};
+			this.userData.hoverBlasterTable.weaponExplosions = {};
 			this.userData.hoverBlasterTable.rocks = [];
 			this.userData.hoverBlasterTable.currentStage = this.syncData.hoverBlasterTable.timeline.info.id;
 			this.userData.hoverBlasterTable.board = null;
 			this.userData.hoverBlasterTable.ship = null;
 
-			var board = jumpStart.spawnInstance("models/board");
+			var board = jumpStart.spawnInstance(null);//models/hawk");
 			board.position.copy(this.position);
+
 			//board.quaternion.copy(this.quaternion);
 			board.rotateY(Math.PI);	// so the well-lit side faces the player
+			//board.rotateX(-Math.PI / 1.5);
 			this.userData.hoverBlasterTable.board = board;
 
 			var dome = jumpStart.spawnInstance("models/dome", {"parent": board});
 			dome.scale.multiplyScalar(0.95);
 			dome.userData.board = board;
+			this.userData.hoverBlasterTable.dome = dome;
+
+			jumpStart.behaviors.hoverBlasterTable.tableRef = this;
 
 			if( this.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
 			{
-				var ship = jumpStart.spawnInstance("models/hawk");
+				var ship = jumpStart.spawnInstance(this.userData.shipType);
+
 				ship.syncData.dead = false;
 				ship.syncData.tableName = this.name;
-				ship.syncData.killed = {};
+				ship.syncData.killed = {"none": true};
 				ship.syncData.shotsFired = 0;
 				ship.syncData.coins = 0;
 				ship.addEventListener("spawn", jumpStart.behaviors.hoverBlasterTable.shipSpawn);
@@ -2845,7 +3556,7 @@ jumpStartBehavior({
 
 				// capture gamepad input
 				//var table = this;
-				jumpStart.behaviors.hoverBlasterTable.tableRef = this;
+				//jumpStart.behaviors.hoverBlasterTable.tableRef = this;
 				jumpStart.addEventListener("gamepadbutton", jumpStart.behaviors.hoverBlasterTable.tableButtonListener);
 				//*/
 			}

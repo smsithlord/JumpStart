@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>RC Deathmatch</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "RCDM",
+				"multiuserOnly": true,
+				"sceneScale": 1.0,
+				"enclosureOnly": true,
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			var g_pumpkins = {};
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModels(["models/pixel", "models/cauldron", "models/water", "models/player_laser", "models/pumpkin1", "models/pumpkin2", "models/pumpkin3", "models/pumpkin4", "models/pumpkin5", "models/pumpkinbomb", "models/claw", "models/chopper", "models/chopper_blades", "models/chopper_blades_back", "models/button", "models/buttonFrame"]).then( function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				console.log("initing");
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			var g_localPlayerShip = null;
+
+			function shipRemove()
+			{
+				jumpStart.removeInstance(this.userData.rope.userData.hook);
+				jumpStart.removeInstance(this.userData.rope);
+
+				jumpStart.removeInstance(this.userData.text);
+				jumpStart.removeInstance(this.userData.shadow);
+			}
+
+			function shipSpawn()
+			{
+				this.userData.shotsFired = this.syncData.shotsFired;
+				this.userData.fireDelay = 0.0;
+				this.userData.hookDelay = 0.0;
+
+				var rope = jumpStart.spawnInstance("models/pixel");
+				rope.userData.maxDist = 60.0;
+				rope.scale.set(1.0, 1.0, 100.0);
+				rope.userData.ship = this;
+				rope.position.copy(this.position);
+				this.userData.rope = rope;
+				var hook = jumpStart.spawnInstance("models/claw");
+				hook.addEventListener("remove", function()
+				{
+					jumpStart.removeInstance(this.userData.shadow);
+				});
+
+				// shadow
+				var geometry = new THREE.SphereGeometry( hook.boundingSphere.radius, 5, 8, 0, Math.PI);
+				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+				//var material = new THREE.MeshBasicMaterial( {color: 0x000000} );
+				var shadowObject = new THREE.Mesh( geometry, material );
+				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject});
+				shadow.scale.z = 0.1;
+				shadow.rotateX(-Math.PI / 2.0);
+
+				hook.userData.shadow = shadow;
+				shadow.userData.hook = hook;
+				shadow.addEventListener("tick", function()
+				{
+					this.position.copy(this.userData.hook.position);
+					//this.position.y -= 30.0;
+					this.position.y = 0.0;
+					//this.rotateX(Math.PI);
+				});
+
+				rope.userData.hook = hook;
+				rope.addEventListener("tick", function()
+				{
+					var ship = this.userData.ship;
+
+					this.position.copy(ship.position);
+
+					var pumpkin = this.userData.pumpkin;
+					if( !!!pumpkin )
+						pumpkin = this.userData.hook;
+
+					if( !!pumpkin )
+					{
+						//var pumpkin = this.userData.pumpkin;
+
+						this.lookAt(pumpkin.position);
+						var offset = this.userData.ship.position.clone().sub(pumpkin.position);
+
+						var oldPos = pumpkin.position.clone();
+						var oldDist = oldPos.distanceTo(this.position);
+
+						pumpkin.position.x += offset.x * 0.03;
+						pumpkin.position.z += offset.z * 0.03;
+
+						var zScale = this.position.distanceTo(pumpkin.position) * 2.0;
+						//if( zScale > this.userData.maxDist * 2.0 )
+							zScale = this.userData.maxDist * 2.0;
+						this.scale.z = zScale;
+
+						this.lookAt(pumpkin.position);
+						pumpkin.position.copy(this.position);
+						pumpkin.quaternion.copy(this.quaternion);
+						pumpkin.translateZ(zScale / 2.0);
+
+						if( pumpkin.position.y > this.position.y )
+							pumpkin.position.y = this.position.y;
+
+						if( pumpkin.position.y < pumpkin.boundingSphere.radius )
+							pumpkin.position.y = pumpkin.boundingSphere.radius;
+
+						pumpkin.position.y -= 1.0 * jumpStart.deltaTime;
+
+						if( pumpkin.position.y < pumpkin.boundingSphere.radius )
+							pumpkin.position.y = pumpkin.boundingSphere.radius;
+
+						if( pumpkin.position.distanceTo(this.position) > oldDist && pumpkin.position.y === pumpkin.boundingSphere.radius )
+						{
+							pumpkin.position.copy(oldPos);
+							this.lookAt(pumpkin.position);
+							zScale = this.position.distanceTo(pumpkin.position) * 2.0;
+							this.scale.z = zScale;
+							pumpkin.quaternion.copy(this.quaternion);
+						}
+
+						if( pumpkin !== this.userData.hook )
+						{
+							// hook is holding a pumpkin
+							this.userData.hook.position.copy(pumpkin.position);
+							this.userData.hook.quaternion.copy(pumpkin.quaternion);
+
+							this.userData.hook.translateZ(-pumpkin.boundingSphere.radius + this.userData.hook.boundingSphere.radius / 2.0);
+						}
+						//else
+						//{
+							//this.userData.hook.position.copy(pumpkin.position);
+							this.userData.hook.quaternion.copy(ship.userData.rope.quaternion);
+							this.userData.hook.rotateX(-Math.PI / 2.0);
+						//}
+
+						if(pumpkin === this.userData.hook && ship.userData.hookDelay === 0)
+						{
+							// check if a pumpkin is within range
+							var nearestDist;
+							var nearestPumpkin;
+							var x, realPumpkin, dist;
+							for( x in g_pumpkins )
+							{
+								realPumpkin = g_pumpkins[x];
+								dist = realPumpkin.position.distanceTo(this.userData.hook.position);
+								if( !!!nearestDist || dist < nearestDist )
+								{
+									nearestDist = dist;
+									nearestPumpkin = realPumpkin;
+								}
+							}
+
+							if( !!nearestPumpkin && nearestDist - nearestPumpkin.boundingSphere.radius < this.userData.hook.boundingSphere.radius)
+							{
+								if( !!nearestPumpkin.behaviors.physics )
+								{
+									nearestPumpkin.unapplyBehavior("physics");
+								}
+
+								var rope = ship.userData.rope;
+								rope.userData.pumpkin = nearestPumpkin;
+							}
+						}
+					}
+				});
+
+				var params = {
+					size: 10.0,
+					height: 1,
+					font: "helvetiker",
+					curveSegments: 1
+				};
+
+				var geometry = new THREE.TextGeometry(this.syncData.ownerName, params);
+				var material = new THREE.MeshBasicMaterial({color:'white'});
+				var mesh = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				var text = jumpStart.spawnInstance(null);
+				text.position.copy(this.position);
+				text.quaternion.copy(this.quaternion);
+				text.position.y += 35.0;
+				text.userData.ship = this;
+				this.userData.text = text;
+				text.addEventListener("tick", function()
+				{
+					this.position.copy(this.userData.ship.position);
+					this.position.y += 35.0;
+
+					var lookPos;
+					if( jumpStart.isAltspace )
+						lookPos = jumpStart.localUser.skeleton.getJoint("Eye").position.clone();
+					else
+						lookPos = jumpStart.camera.position.clone();
+
+					this.lookAt(jumpStart.world.worldToLocal(lookPos));
+				});
+
+				var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
+				var offset = new THREE.Vector3().copy(displacement);
+				offset.multiply(textMesh.scale);
+				textMesh.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				// shadow
+				var geometry = new THREE.SphereGeometry( 20, 5, 8, 0, Math.PI);
+				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+				//var material = new THREE.MeshBasicMaterial( {color: 0x000000} );
+				var shadowObject = new THREE.Mesh( geometry, material );
+				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject});
+				shadow.scale.z = 0.3;
+				shadow.rotateX(-Math.PI / 2.0);
+
+				this.userData.shadow = shadow;
+				shadow.userData.ship = this;
+				shadow.addEventListener("tick", function()
+				{
+					this.position.copy(this.userData.ship.position);
+					//this.position.y -= 30.0;
+					this.position.y = 0.0;
+					//this.rotateX(Math.PI);
+				});
+
+				if( this.modelFile === "models/chopper" )
+				{
+					var blades = jumpStart.spawnInstance("models/chopper_blades", {"parent": this});
+					blades.position.y = 8.81;
+					blades.position.z = 2.888;
+					blades.addEventListener("tick", function()
+					{
+						this.rotateY(-5.0 * jumpStart.deltaTime);
+					});
+
+					var bladesBack = jumpStart.spawnInstance("models/chopper_blades_back", {"parent": this});
+					bladesBack.position.z = -27.848;
+					bladesBack.position.y = 3.982;
+					bladesBack.addEventListener("tick", function()
+					{
+						this.rotateX(-8.0 * jumpStart.deltaTime);
+					});
+				}
+			}
+
+			function buttonDown()
+			{
+				if( !jumpStart.gamepad )
+					return;
+
+				var preventAxis = [];
+				var numAxes = jumpStart.gamepad.axes.length;
+				for( var i= 0; i < numAxes; i++ )
+					preventAxis.push(true);
+
+				var preventButtons = [];
+				var numButtons = jumpStart.gamepad.buttons.length;
+				for( var i= 0; i < numButtons; i++ )
+					preventButtons.push(true);
+
+				if( jumpStart.isAltspace && typeof jumpStart.gamepad.preventDefault === "function" )
+					jumpStart.gamepad.preventDefault(preventAxis, preventButtons);
+
+				g_localPlayerShip = jumpStart.spawnInstance("models/chopper");
+				g_localPlayerShip.syncData.shotsFired = 0;
+				g_localPlayerShip.position.copy(this.parent.position);
+				g_localPlayerShip.rotateY(Math.PI);
+				//g_localPlayerShip.quaternion.copy
+				g_localPlayerShip.translateY(150.0);
+				g_localPlayerShip.blocksLOS = true;
+				g_localPlayerShip.syncData.ownerName = jumpStart.localUser.displayName;
+				g_localPlayerShip.addEventListener("spawn", shipSpawn);
+				g_localPlayerShip.addEventListener("tick", function()
+				{
+					var ship = this;
+					if( !!jumpStart.gamepad && ship.ownerID === jumpStart.localUser.userID )
+					{
+						if( this.userData.fireDelay > 0 )
+							this.userData.fireDelay -= jumpStart.deltaTime;
+
+						if( this.userData.fireDelay < 0 )
+							this.userData.fireDelay = 0.0;
+
+						if( this.userData.hookDelay > 0 )
+							this.userData.hookDelay -= jumpStart.deltaTime;
+
+						if( this.userData.hookDelay < 0 )
+							this.userData.hookDelay = 0.0;
+
+						var oldPos = ship.position.clone();
+						var oldQuaternion = ship.quaternion.clone();
+						var oldRotation = ship.rotation.clone();
+
+						/*
+						var upButton = jumpStart.gamepad.buttons[7];
+						if( upButton.value > 0 )
+							ship.position.y += (500.0 * upButton.value * jumpStart.deltaTime);
+
+						var downButton = jumpStart.gamepad.buttons[6];
+						if( downButton.value > 0 )
+							ship.position.y += (500.0 * -downButton.value * jumpStart.deltaTime);
+
+						var strafeAxisValue = jumpStart.gamepad.axes[0];
+						if( Math.abs(strafeAxisValue) > 0.1 )
+							ship.translateX(700.0 * -strafeAxisValue * jumpStart.deltaTime);
+						*/
+
+						/*
+						var spinLeftButton = jumpStart.gamepad.buttons[4];
+						if( spinLeftButton.value > 0 )
+							ship.rotateY(15.0 * spinLeftButton.value * jumpStart.deltaTime);
+
+						var spinRightButton = jumpStart.gamepad.buttons[5];
+						if( spinRightButton.value > 0 )
+							ship.rotateY(15.0 * -spinRightButton.value * jumpStart.deltaTime);
+
+						var rollAxisValue = jumpStart.gamepad.axes[2];
+						if( Math.abs(rollAxisValue) > 0.1 )
+							ship.rotateZ(30.0 * rollAxisValue * jumpStart.deltaTime);
+						*/
+
+						var fireButton;
+						var hookButton;
+						if( jumpStart.gamepad.mapping === "steamvr" )
+						{
+							var yawAxisValue = jumpStart.gamepad.axes[0];
+							if( Math.abs(yawAxisValue) > 0.1 )
+								ship.rotateY(10.0 * -yawAxisValue * jumpStart.deltaTime);
+
+							var pitchAxisValue = jumpStart.gamepad.axes[1];
+							if( Math.abs(pitchAxisValue) > 0.1 )
+								ship.rotateX(10.0 * pitchAxisValue * jumpStart.deltaTime);
+
+							var otherGamepad = jumpStart.gamepads.find(function(t)
+							{
+								return ( t.mapping === "steamvr" && t !== jumpStart.gamepad );
+							});
+
+							var rollAxisValue = otherGamepad.axes[0];
+							if( Math.abs(rollAxisValue) > 0 )
+								ship.rotateZ(10.0 * rollAxisValue * jumpStart.deltaTime);
+
+							var movementAxisValue = otherGamepad.axes[1];
+							ship.translateZ((300.0 + (100.0 * movementAxisValue)) * jumpStart.deltaTime);
+
+							fireButton = jumpStart.gamepad.buttons[0];
+
+							//console.log(jumpStart.gamepad.axes);
+							//jumpStart.gamepad.axes
+							//var movementAxisValue = jumpStart.gamepad.axes[1];
+							//ship.translateZ((300.0 + (100.0 * -movementAxisValue)) * jumpStart.deltaTime);
+/*
+							var rollLeftButton = jumpStart.gamepad.buttons[4];
+							if( rollLeftButton.value > 0 )
+								ship.rotateZ(10.0 * -rollLeftButton.value * jumpStart.deltaTime);
+
+							var rollRightButton = jumpStart.gamepad.buttons[5];
+							if( rollRightButton.value > 0 )
+								ship.rotateZ(10.0 * rollRightButton.value * jumpStart.deltaTime);
+
+							var yawAxisValue = jumpStart.gamepad.axes[2];
+							if( Math.abs(yawAxisValue) > 0.1 )
+								ship.rotateY(10.0 * -yawAxisValue * jumpStart.deltaTime);
+
+							var pitchAxisValue = jumpStart.gamepad.axes[3];
+							if( Math.abs(pitchAxisValue) > 0.1 )
+								ship.rotateX(10.0 * -pitchAxisValue * jumpStart.deltaTime);
+							*/
+						}
+						else
+						{
+							var movementAxisValue = jumpStart.gamepad.axes[1];
+							ship.translateZ((300.0 + (100.0 * -movementAxisValue)) * jumpStart.deltaTime);
+
+							var rollLeftButton = jumpStart.gamepad.buttons[4];
+							if( rollLeftButton.value > 0 )
+								ship.rotateZ(10.0 * -rollLeftButton.value * jumpStart.deltaTime);
+
+							var rollRightButton = jumpStart.gamepad.buttons[5];
+							if( rollRightButton.value > 0 )
+								ship.rotateZ(10.0 * rollRightButton.value * jumpStart.deltaTime);
+
+							var yawAxisValue = jumpStart.gamepad.axes[2];
+							if( Math.abs(yawAxisValue) > 0.1 )
+								ship.rotateY(10.0 * -yawAxisValue * jumpStart.deltaTime);
+
+							var pitchAxisValue = jumpStart.gamepad.axes[3];
+							if( Math.abs(pitchAxisValue) > 0.1 )
+								ship.rotateX(10.0 * -pitchAxisValue * jumpStart.deltaTime);
+
+							fireButton = jumpStart.gamepad.buttons[7];
+							hookButton = jumpStart.gamepad.buttons[6];
+						}
+
+						var targetPos = ship.position.clone();
+						var targetQuaternion = ship.quaternion.clone();
+
+						ship.position.copy(oldPos);
+						ship.quaternion.copy(oldQuaternion);
+
+						ship.position.lerp(targetPos, 0.1);
+						ship.quaternion.slerp(targetQuaternion, 0.1);
+
+						if( ship.userData.fireDelay === 0 && fireButton.value > 0.2 )
+						{
+							ship.userData.fireDelay = 1.0;
+							ship.syncData.shotsFired++;
+							ship.sync({"syncData": true});
+						}
+
+						if( ship.userData.hookDelay === 0 && hookButton.value > 0.2 )
+						{
+							ship.userData.hookDelay = 1.0;
+							if( !!!ship.userData.rope.userData.pumpkin )
+							{
+								/*
+								// attach pumpkin to the rope now.
+								var nearestDist;
+								var nearestPumpkin;
+								var x, pumpkin, dist;
+								for( x in g_pumpkins )
+								{
+									pumpkin = g_pumpkins[x];
+									dist = pumpkin.position.distanceTo(ship.position);
+									if( !!!nearestDist || dist < nearestDist )
+									{
+										nearestDist = dist;
+										nearestPumpkin = pumpkin;
+									}
+								}
+
+								if( !!nearestPumpkin )
+								{
+									if( !!nearestPumpkin.behaviors.physics )
+									{
+										nearestPumpkin.unapplyBehavior("physics");
+									}
+
+									var rope = ship.userData.rope;
+									rope.userData.pumpkin = nearestPumpkin;
+								}
+								*/
+							}
+							else
+							{
+								ship.userData.rope.userData.pumpkin.applyBehavior("physics", {"physicsScale": 0.5});
+								ship.userData.rope.userData.pumpkin = null;
+								ship.userData.hookDelay = 1.0;
+							}
+						}
+
+						if( ship.userData.shotsFired !== ship.syncData.shotsFired )
+						{
+							ship.userData.shotsFired = ship.syncData.shotsFired;
+
+							var laser = jumpStart.spawnInstance("models/player_laser");
+							laser.position.copy(this.position);
+							laser.quaternion.copy(this.quaternion);
+							laser.translateZ(40.0);
+							laser.addEventListener("tick", function()
+							{
+								this.translateZ(100.0 * jumpStart.deltaTime);
+
+								if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+									jumpStart.removeInstance(this);
+							});
+						}
+
+						if( !jumpStart.isWorldPosInsideOfEnclosure(ship.position) )
+							jumpStart.removeInstance(ship);
+					}
+				});
+				g_localPlayerShip.applyBehavior("autoSync");
+				g_localPlayerShip.applyBehavior("lerpSync", {"speed": 40.0});
+				g_localPlayerShip.applyBehavior("autoRemoval");
+				g_localPlayerShip.addEventListener("remove", shipRemove);
+				g_localPlayerShip.addEventListener("remove", function()
+				{
+					//jumpStart.removeInstance(this.userData.text);
+					//jumpStart.removeInstance(this.userData.shadow);
+					//jumpStart.removeEventListener("gamepadbutton", rcButtonListener);
+
+					if( !!jumpStart.gamepad && typeof jumpStart.gamepad.preventDefault === "function" )
+					{
+						var preventAxis = [];
+						var numAxes = jumpStart.gamepad.axes.length;
+						for( var i= 0; i < numAxes; i++ )
+							preventAxis.push(false);
+
+						var preventButtons = [];
+						var numButtons = jumpStart.gamepad.buttons.length;
+						for( var i= 0; i < numButtons; i++ )
+							preventButtons.push(false);
+
+						jumpStart.gamepad.preventDefault(preventAxis, preventButtons);
+					}
+
+					if( !!this.userData.rope.userData.pumpkin )
+						this.userData.rope.userData.pumpkin.applyBehavior("physics", {"physicsScale": 0.5});
+
+					createButton();
+				});
+				g_localPlayerShip.sync();
+
+				jumpStart.removeInstance(this.parent);
+			}
+
+			function createButton()
+			{
+				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame");
+				buttonFrame.scale.set(0.6, 0.6, 0.6);
+				buttonFrame.rotateX(-Math.PI / 2.0);
+				buttonFrame.position.z += 150.0;
+
+				var button = jumpStart.spawnInstance("models/button", {"parent": buttonFrame});
+				button.blocksLOS = true;
+				button.addEventListener("cursordown", buttonDown);
+				//button.userData.table = this;
+				button.userData.shipType = "models/chopper";
+			}
+
+			function spawnPumpkin(model, x, z)
+			{
+				var pumpkin = jumpStart.spawnInstance(model);
+				pumpkin.position.y += pumpkin.boundingSphere.radius * 0.5;
+				pumpkin.position.x = x;
+				pumpkin.position.z = z;
+
+				// shadow
+				var geometry = new THREE.SphereGeometry( pumpkin.boundingSphere.radius, 5, 8, 0, Math.PI);
+				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+				//var material = new THREE.MeshBasicMaterial( {color: 0x000000} );
+				var shadowObject = new THREE.Mesh( geometry, material );
+				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject});
+				shadow.scale.z = 0.2;
+				shadow.rotateX(-Math.PI / 2.0);
+
+				pumpkin.userData.shadow = shadow;
+				shadow.userData.pumpkin = pumpkin;
+
+				pumpkin.addEventListener("tick", function()
+				{
+					if( this.behaviors.physics && this.position.y < this.boundingSphere.radius )
+					{
+						this.position.y = this.boundingSphere.radius;
+						this.unapplyBehavior("physics");
+					}
+
+					this.userData.shadow.position.copy(this.position);
+					this.userData.shadow.position.y = 0.0;
+				});
+
+				pumpkin.addEventListener("spawn", function()
+				{
+					g_pumpkins[this.uuid] = this;
+				});
+			}
+
+			jumpStart.addEventListener("ready", function()
+			{
+				//jumpStart.addEventListener("gamepadbutton", rcButtonListener);
+				createButton();
+
+				function makeWater()
+				{
+					water.scale.x = 0.47;
+					water.scale.z = 0.47;
+					this.position.y = 90.0;
+					this.position.x -= 2.0;
+					this.position.z -= 2.0;
+					this.addEventListener("tick", function()
+					{
+						var amount = 1.0 * jumpStart.deltaTime;
+						if( !!this.userData.reverseWaterSpin )
+						{
+							amount *= 0.8;
+							this.rotateY(amount);
+						}
+						else
+							this.rotateY(-amount);
+					});
+
+					if( !!this.userData.reverseWaterSpin )
+					{
+						this.scale.y *= 0.7;	// Don't want the waves to be 100% identical at the half-way mark.
+						makeThrob.call(this, {"maxScale": 0.5, "minScale": 0.05, "direction": 1.0, "rate": 0.5, "axes": "y"});
+					}
+					else
+						makeThrob.call(this, {"maxScale": 0.5, "minScale": 0.05, "direction": -1.0, "rate": 0.5, "axes": "y"});	
+				}
+
+				var cauldron = jumpStart.spawnInstance("models/cauldron");
+
+				// shadow
+				var geometry = new THREE.SphereGeometry( cauldron.boundingSphere.radius, 5, 8, 0, Math.PI);
+				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+				//var material = new THREE.MeshBasicMaterial( {color: 0x000000} );
+				var shadowObject = new THREE.Mesh( geometry, material );
+				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject});
+				shadow.scale.z = 0.05;
+				shadow.rotateX(-Math.PI / 2.0);
+				cauldron.userData.shadow = shadow;
+				shadow.userData.cauldron = cauldron;
+
+				makeThrob.call(shadow, {"maxScale": 1.0, "minScale": 0.95, "direction": 1.0, "rate": 0.1, "axes": "xy"});
+
+				//var pool = jumpStart.spawnInstance("models/pool", {"parent": goal});
+				var water = jumpStart.spawnInstance("models/water", {"parent": cauldron});
+				makeWater.call(water);
+				water = jumpStart.spawnInstance("models/water", {"parent": cauldron});
+				water.rotation.y = Math.PI * 1.2;
+				water.userData.reverseWaterSpin = true;
+				makeWater.call(water);
+
+				var pumpkin = spawnPumpkin("models/pumpkin1", 164.0, 164.0);
+				pumpkin = spawnPumpkin("models/pumpkin2", -164.0, 164.0);
+				pumpkin = spawnPumpkin("models/pumpkin3", -164.0, -164.0);
+				pumpkin = spawnPumpkin("models/pumpkin4", 164.0, -164.0);
+				pumpkin = spawnPumpkin("models/pumpkin5", -164.0, 0);
+				pumpkin = spawnPumpkin("models/pumpkinbomb", 164.0, 0);
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function makeThrob(options)
+			{
+				// Throb
+				// FIX ME: This should be a behavior, and needs to have info split between userData and syncData to do so.
+
+				options = {
+					"rate": (!!options.rate) ? options.rate : 25.0,
+					"maxScale": (!!options.maxScale) ? options.maxScale : 14.0,
+					"minScale": (!!options.minScale) ? options.minScale : 8.0,
+					"direction": (!!options.direction) ? options.direction : 1.0,
+					"axes": (!!options.axes) ? options.axes : "xyz"
+				};
+				this.userData.throb = options;
+
+				this.addEventListener("tick", function()
+				{
+					var i;
+					var axes = this.userData.throb.axes;
+					var amount = this.userData.throb.rate * jumpStart.deltaTime * this.userData.throb.direction;
+					if( this.scale[axes[0]] + amount > this.userData.throb.maxScale )
+					{
+						this.userData.throb.direction = -1.0;
+
+						for( i = 0; i < axes.length; i++ )
+							this.scale[axes[i]] = this.userData.throb.maxScale;
+					}
+					else if( this.scale[axes[0]] + amount < this.userData.throb.minScale )
+					{
+						this.userData.throb.direction = 1.0;
+
+						for( i = 0; i < axes.length; i++ )
+							this.scale[axes[i]] = this.userData.throb.minScale;
+					}
+					else
+					{
+						for( i = 0; i < axes.length; i++ )
+							this.scale[axes[i]] += amount;
+					}
+				});
+			}
+
+			function rcButtonListener(e)
+			{
+				/*
+				var ship = g_localPlayerShip;
+				if( !!ship && ship.ownerID === jumpStart.localUser.userID )
+				{
+					var preventAxis = [];
+					var numAxes = jumpStart.gamepad.axes.length;
+					for( var i= 0; i < numAxes; i++ )
+						preventAxis.push(true);
+
+					var preventButtons = [];
+					var numButtons = jumpStart.gamepad.buttons.length;
+					for( var i= 0; i < numButtons; i++ )
+						preventButtons.push(true);
+
+					if( jumpStart.isAltspace && typeof jumpStart.gamepad.preventDefault === "function" )
+						jumpStart.gamepad.preventDefault(preventAxis, preventButtons);
+				}
+				*/
+			}
+		</script>
+	</head>
+
+	<body style="background-color: transparent;">
+	</body>
+</html>
