@@ -3,6 +3,22 @@
 	<head>
 		<title>RC Deathmatch</title>
 		<script src="engine/misc/JumpStart.js"></script>
+		<script src="assets/RCDM/misc/rcdm.js"></script>
+		<script src="assets/RCDM/misc/graspable.js"></script>
+		<script src="assets/RCDM/misc/rcdmChopper.js"></script>
+		<script src="assets/RCDM/misc/rcdmChopper2.js"></script>
+		<script src="assets/RCDM/misc/rcdmChopper3.js"></script>
+		<script src="assets/RCDM/misc/rcdmChopper4.js"></script>
+		<script src="assets/RCDM/misc/rcdmChopper5.js"></script>
+		<script src="assets/RCDM/misc/rcdmBomber.js"></script>
+		<script src="assets/RCDM/misc/rcdmPlane.js"></script>
+		<script src="assets/RCDM/misc/rcdmPlane2.js"></script>
+		<script src="assets/RCDM/misc/rcdmPlane3.js"></script>
+		<script src="assets/RCDM/misc/rcdmPlane4.js"></script>
+		<script src="assets/RCDM/misc/rcdmPlane5.js"></script>
+		<script src="assets/RCDM/misc/rcdmPlane6.js"></script>
+		<script src="assets/RCDM/misc/rcdmPlane7.js"></script>
+		<script src="assets/RCDM/misc/rcdmStartButton.js"></script>
 
 		<script>
 			loadJumpStart({
@@ -18,8 +34,338 @@
 
 			jumpStart.addEventListener("precache", function()
 			{
+				var vehicleType = {
+					"id": "rcdmChopper",
+					"name": "Rambo",
+					"clawOffset": new THREE.Vector3(0, -10, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/chopper"
+						},
+						"blades":
+						{
+							"modelFile": "models/chopper_blades",
+							"offset": new THREE.Vector3(0, 8.81, 2.88),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -5.0
+						},
+						"backBlades":
+						{
+							"modelFile": "models/chopper_blades_back",
+							"offset": new THREE.Vector3(0, 3.982, -27.848),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -8.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmChopper2",
+					"name": "Hummingbird",
+					"clawOffset": new THREE.Vector3(0, -10, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/chopper2"
+						},
+						"blades":
+						{
+							"modelFile": "models/chopper2_blades",
+							"offset": new THREE.Vector3(0, 12.696, -5.285),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -5.0
+						},
+						"backBlades":
+						{
+							"modelFile": "models/chopper2_blades_back",
+							"offset": new THREE.Vector3(1.217, 6.939, -32.696),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -5.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmChopper3",
+					"name": "Heavy Lifter",
+					"clawOffset": new THREE.Vector3(0, -10, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/chopper3"
+						},
+						"blades":
+						{
+							"modelFile": "models/chopper3_blades",
+							"offset": new THREE.Vector3(0, 8.259, 0),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -6.0
+						},
+						"blades2":
+						{
+							"modelFile": "models/chopper3_blades2",
+							"offset": new THREE.Vector3(0, 14.927, -0.108),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": 6.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmChopper4",
+					"name": "Crazyhorse",
+					"clawOffset": new THREE.Vector3(0, -3.0, 0.0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/chopper4"
+						},
+						"blades":
+						{
+							"modelFile": "models/chopper4_blades",
+							"offset": new THREE.Vector3(-0.008, 10.571, 8.571),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -6.0
+						},
+						"blades2":
+						{
+							"modelFile": "models/chopper4_blades2",
+							"offset": new THREE.Vector3(0.003, 13.063, -16.794),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": 6.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmChopper5",
+					"name": "Doofus",
+					"clawOffset": new THREE.Vector3(0, -4.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/chopper5"
+						},
+						"blades":
+						{
+							"modelFile": "models/chopper5_blades",
+							"offset": new THREE.Vector3(0, 9.625, -0.218),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -5.0
+						},
+						"backBlades":
+						{
+							"modelFile": "models/chopper5_blades_back",
+							"offset": new THREE.Vector3(0.453, 6.154, -23.274),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -8.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmBomber",
+					"name": "Bada Boomer",
+					"clawOffset": new THREE.Vector3(0, -4.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/bomber"
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmPlane",
+					"name": "Stuntman",
+					"clawOffset": new THREE.Vector3(0, -1.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/plane"
+						},
+						"blades":
+						{
+							"modelFile": "models/plane_blades",
+							"offset": new THREE.Vector3(0, -1.638, 14.963),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmPlane2",
+					"name": "Hercules",
+					"clawOffset": new THREE.Vector3(0, -10.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/plane2"
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmPlane3",
+					"name": "Sully",
+					"clawOffset": new THREE.Vector3(0, -8.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/plane3"
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmPlane4",
+					"name": "Ace",
+					"clawOffset": new THREE.Vector3(0, -6.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/plane4"
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmPlane5",
+					"name": "Teardrop",
+					"clawOffset": new THREE.Vector3(0, -6.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/plane5"
+						},
+						"blades":
+						{
+							"modelFile": "models/plane5_blades",
+							"offset": new THREE.Vector3(22.101, 1.93, 11.906),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						},
+						"blades2":
+						{
+							"modelFile": "models/plane5_blades2",
+							"offset": new THREE.Vector3(-22.101, 1.93, 11.906),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmPlane6",
+					"name": "Panther",
+					"clawOffset": new THREE.Vector3(0, -10.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/plane6"
+						},
+						"blades":
+						{
+							"modelFile": "models/plane6_blades",
+							"offset": new THREE.Vector3(32.495, 2.294, 15.416),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						},
+						"blades2":
+						{
+							"modelFile": "models/plane6_blades2",
+							"offset": new THREE.Vector3(17.778, 3.537, 15.416),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						},
+						"blades3":
+						{
+							"modelFile": "models/plane6_blades3",
+							"offset": new THREE.Vector3(-17.778, 3.537, 15.416),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						},
+						"blades4":
+						{
+							"modelFile": "models/plane6_blades4",
+							"offset": new THREE.Vector3(-32.495, 2.294, 15.416),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
+				vehicleType = {
+					"id": "rcdmPlane7",
+					"name": "Toxie",
+					"clawOffset": new THREE.Vector3(0, -13.0, 0),
+					"parts":
+					{
+						"body":
+						{
+							"modelFile": "models/plane7"
+						},
+						"blades":
+						{
+							"modelFile": "models/plane7_blades",
+							"offset": new THREE.Vector3(43.046, -1.815, 12.422),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						},
+						"blades2":
+						{
+							"modelFile": "models/plane7_blades2",
+							"offset": new THREE.Vector3(27.915, -6.182, 15.777),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						},
+						"blades3":
+						{
+							"modelFile": "models/plane7_blades3",
+							"offset": new THREE.Vector3(-27.904, -6.192, 15.781),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						},
+						"blades4":
+						{
+							"modelFile": "models/plane7_blades4",
+							"offset": new THREE.Vector3(-43.007, -1.821, 12.476),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -7.0
+						}
+					}
+				};
+				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
+
 				// Async
-				jumpStart.loadModels(["models/pixel", "models/cauldron", "models/water", "models/player_laser", "models/pumpkin1", "models/pumpkin2", "models/pumpkin3", "models/pumpkin4", "models/pumpkin5", "models/pumpkinbomb", "models/claw", "models/chopper", "models/chopper_blades", "models/chopper_blades_back", "models/button", "models/buttonFrame"]).then( function()
+				//jumpStart.loadModels(["models/pixel", "models/cauldron", "models/water", "models/player_laser", "models/pumpkin1", "models/pumpkin2", "models/pumpkin3", "models/pumpkin4", "models/pumpkin5", "models/pumpkinbomb", "models/claw", "models/chopper", "models/chopper_blades", "models/chopper_blades_back", "models/button", "models/buttonFrame"]).then( function()
+				jumpStart.loadModels(["models/cauldron", "models/water", "models/player_laser", "models/pumpkin1", "models/pumpkin2", "models/pumpkin3", "models/pumpkin4", "models/pumpkin5", "models/pumpkinbomb", "models/button", "models/buttonFrame"]).then( function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -32,6 +378,25 @@
 			jumpStart.addEventListener("initialize", function()
 			{
 				console.log("initing");
+
+				var pumpkin = spawnPumpkin("models/pumpkin1", 164.0, 164.0);
+				pumpkin.sync();
+
+				pumpkin = spawnPumpkin("models/pumpkin2", -164.0, 164.0);
+				pumpkin.sync();
+
+				pumpkin = spawnPumpkin("models/pumpkin3", -164.0, -164.0);
+				pumpkin.sync();
+
+				pumpkin = spawnPumpkin("models/pumpkin4", 164.0, -164.0);
+				pumpkin.sync();
+
+				pumpkin = spawnPumpkin("models/pumpkin5", -164.0, 0);
+				pumpkin.sync();
+
+				pumpkin = spawnPumpkin("models/pumpkinbomb", 164.0, 0);
+				pumpkin.name = "da bomb";
+				pumpkin.sync();
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
@@ -528,16 +893,40 @@
 
 			function createButton()
 			{
-				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame");
-				buttonFrame.scale.set(0.6, 0.6, 0.6);
-				buttonFrame.rotateX(-Math.PI / 2.0);
-				buttonFrame.position.z += 150.0;
+				var custom = {
+					"vehicleTypeName": "rcdmChopper",
+					"parts": {
+						"blades": {
+							"modelFile": "models/chopper2_blades"/*,
+							"offset": new THREE.Vector3(0, 8.81, 2.88),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -50.0*/
+						}
+					},
+					"claw": {
+						"wireModel": "models/wire",
+						"bodyModel": "models/claw",
+						"offset": new THREE.Vector3(0, -7.0, 0),
+						"maxLength": 100.0
+					}
+				};
 
-				var button = jumpStart.spawnInstance("models/button", {"parent": buttonFrame});
-				button.blocksLOS = true;
-				button.addEventListener("cursordown", buttonDown);
-				//button.userData.table = this;
-				button.userData.shipType = "models/chopper";
+				var randomVehicleTypeName = jumpStart.behaviors.rcdm.getRandomVehicleTypeName();
+
+				var button = jumpStart.spawnInstance(null);
+				button.applyBehavior("rcdmStartButton", {"custom": {"vehicleTypeName": randomVehicleTypeName}});
+
+				button.rotateX(-Math.PI / 2.0);
+				//button.position.z += 150.0;
+				button.ignoreSync.transform.scale = true;
+
+				var sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				button.position.x += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+				sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+				button.position.z += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+
+				//button.applyBehavior("autoRemoval");
+				//button.sync();
 			}
 
 			function spawnPumpkin(model, x, z)
@@ -547,34 +936,30 @@
 				pumpkin.position.x = x;
 				pumpkin.position.z = z;
 
-				// shadow
-				var geometry = new THREE.SphereGeometry( pumpkin.boundingSphere.radius, 5, 8, 0, Math.PI);
-				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
-				//var material = new THREE.MeshBasicMaterial( {color: 0x000000} );
-				var shadowObject = new THREE.Mesh( geometry, material );
-				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject});
-				shadow.scale.z = 0.2;
-				shadow.rotateX(-Math.PI / 2.0);
+				pumpkin.addEventListener("tick", pumpkinTick);
 
-				pumpkin.userData.shadow = shadow;
-				shadow.userData.pumpkin = pumpkin;
+				pumpkin.applyBehavior("graspable");
+				//pumpkin.applyBehavior("collidable");
+				pumpkin.applyBehavior("dropShadow");
+				pumpkin.applyBehavior("lerpSync");
+				pumpkin.sync();
+				return pumpkin;
+			}
 
-				pumpkin.addEventListener("tick", function()
+			function pumpkinTick()
+			{
+				if( !!this.behaviors.physics && this.behaviors.physics && this.position.y < this.boundingSphere.radius * 0.6 && this.userData.physics.velocity.length() < 2.0 )
 				{
-					if( this.behaviors.physics && this.position.y < this.boundingSphere.radius )
+					this.position.y = this.boundingSphere.radius * 0.5;
+
+					if( this.ownerID === jumpStart.localUser.userID )
 					{
-						this.position.y = this.boundingSphere.radius;
+						console.log("remove the shit");
 						this.unapplyBehavior("physics");
+						this.applyBehavior("lerpSync");
+						this.sync();
 					}
-
-					this.userData.shadow.position.copy(this.position);
-					this.userData.shadow.position.y = 0.0;
-				});
-
-				pumpkin.addEventListener("spawn", function()
-				{
-					g_pumpkins[this.uuid] = this;
-				});
+				}
 			}
 
 			jumpStart.addEventListener("ready", function()
@@ -632,13 +1017,6 @@
 				water.rotation.y = Math.PI * 1.2;
 				water.userData.reverseWaterSpin = true;
 				makeWater.call(water);
-
-				var pumpkin = spawnPumpkin("models/pumpkin1", 164.0, 164.0);
-				pumpkin = spawnPumpkin("models/pumpkin2", -164.0, 164.0);
-				pumpkin = spawnPumpkin("models/pumpkin3", -164.0, -164.0);
-				pumpkin = spawnPumpkin("models/pumpkin4", 164.0, -164.0);
-				pumpkin = spawnPumpkin("models/pumpkin5", -164.0, 0);
-				pumpkin = spawnPumpkin("models/pumpkinbomb", 164.0, 0);
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.run)

@@ -4,43 +4,28 @@ jumpStartBehavior({
 		"tableCount": 0,	// Needed because Altspace requires each dynamic texture be different
 		"applyBehavior": function(options)
 		{
-			this.syncData.moleWhackTable = {
-				"ownerName": jumpStart.localUser.displayName
+			console.log("Apply moleWhackTable");
+			if( !!options )
+			{
+				this.syncData.moleWhackTable = {
+					"ownerName": jumpStart.localUser.displayName
+				};
+
+				this.addEventListener("spawn", jumpStart.behaviors.moleWhackTable.spawnBehavior);
+				this.addEventListener("tick", jumpStart.behaviors.moleWhackTable.tickBehavior);
+			}
+
+			this.userData.moleWhackTable = {
+				"musicChannel": null,
+				"moles": [],
+				"gameDelay": 0,
+				"gameTimer": 0,
+				"moleJumpHandle0": null,
+				"moleJumpHandle1": null,
+				"moleJumpHandle2": null,
+				"smasher": null
 			};
 
-			this.addEventListener("spawn", jumpStart.behaviors.moleWhackTable.spawnBehavior);
-			this.addEventListener("tick", jumpStart.behaviors.moleWhackTable.tickBehavior);
-		},
-		"tickBehavior": function()
-		{
-			if( this.userData.moleWhackTable.gameDelay > 0 )
-			{
-				this.userData.moleWhackTable.gameDelay -= jumpStart.deltaTime;
-
-				if( this.userData.moleWhackTable.gameDelay <= 0 )
-					this.userData.moleWhackTable.gameDelay = 0;
-			}
-
-			var smasher = this.userData.moleWhackTable.smasher;
-			if( !!smasher && smasher.ownerID === jumpStart.localUser.userID )
-			{
-				var maxTime = 40.5;
-				if( this.userData.moleWhackTable.gameTimer < maxTime )
-				{
-					this.userData.moleWhackTable.gameTimer += jumpStart.deltaTime;
-
-					if( this.userData.moleWhackTable.gameTimer >= maxTime )
-						jumpStart.removeInstance(smasher);
-					else if( this.userData.moleWhackTable.gameTimer >= 20 && !this.userData.moleWhackTable.moleJumpHandle1 )
-						this.userData.moleWhackTable.moleJumpHandle1 = setInterval(jumpStart.behaviors.moleWhackTable.randomMole.bind(this), 500);
-					else if( this.userData.moleWhackTable.gameTimer >= 25 && !this.userData.moleWhackTable.moleJumpHandle2 )
-						this.userData.moleWhackTable.moleJumpHandle2 = setInterval(jumpStart.behaviors.moleWhackTable.randomMole.bind(this), 200);
-				}
-			}
-		},
-		"spawnBehavior": function(isInitialSync)
-		{
-			jumpStart.enclosureBoundary("east");
 			jumpStart.precacheSound("sounds/music");
 			jumpStart.precacheSound("sounds/ow");
 			jumpStart.precacheSound("sounds/join");
@@ -48,20 +33,17 @@ jumpStartBehavior({
 			jumpStart.precacheSound("sounds/swing");
 
 			jumpStart.behaviors.moleWhackTable.tableCount++;
-			this.userData.moleWhackTable = {};
-			this.userData.moleWhackTable.moles = [];
-			this.userData.moleWhackTable.gameDelay = 0;
-			this.userData.moleWhackTable.gameTimer = 0;
-			this.userData.moleWhackTable.moleJumpHandle0 = null;
-			this.userData.moleWhackTable.moleJumpHandle1 = null;
-			this.userData.moleWhackTable.moleJumpHandle2 = null;
 
 			var imageURL = "assets/MoleWhack/misc/nameBackground.jpg";
 
 			var table = this;
+			console.log(table.userData);
 			var imageElem = new Image();
+			imageElem.table = table;
 			imageElem.addEventListener("load", function(e)
 			{
+				var table = this.table;
+				console.log(table.userData);
 				var smasher = table.userData.moleWhackTable.smasher;//jumpStart.scene.getObjectByName("smasher");
 				var name = (!!smasher) ? smasher.syncData.ownerName : table.name;
 				var nameCard = jumpStart.spawnTextPlane({"backgroundImageElem": this, "width": 52.5, "height": 9, "fontSize": 4, "text": name, "color": "#ffffff"});
@@ -70,7 +52,7 @@ jumpStartBehavior({
 				nameCard.translateZ(-13.5);
 				nameCard.translateY(14.7);
 				table.userData.moleWhackTable.nameCard = nameCard;
-			});
+			}.bind(imageElem));
 			imageElem.src = imageURL;
 			this.userData.moleWhackTable.imageElem = imageElem;
 
@@ -114,6 +96,39 @@ jumpStartBehavior({
 					jumpStart.behaviors.moleWhackTable.spawnSmasher.call(table);
 			});
 			this.userData.moleWhackTable.coinDoor = coinDoor;
+			
+			return true;
+		},
+		"tickBehavior": function()
+		{
+			if( this.userData.moleWhackTable.gameDelay > 0 )
+			{
+				this.userData.moleWhackTable.gameDelay -= jumpStart.deltaTime;
+
+				if( this.userData.moleWhackTable.gameDelay <= 0 )
+					this.userData.moleWhackTable.gameDelay = 0;
+			}
+
+			var smasher = this.userData.moleWhackTable.smasher;
+			if( !!smasher && smasher.ownerID === jumpStart.localUser.userID )
+			{
+				var maxTime = 40.5;
+				if( this.userData.moleWhackTable.gameTimer < maxTime )
+				{
+					this.userData.moleWhackTable.gameTimer += jumpStart.deltaTime;
+
+					if( this.userData.moleWhackTable.gameTimer >= maxTime )
+						jumpStart.removeInstance(smasher);
+					else if( this.userData.moleWhackTable.gameTimer >= 20 && !this.userData.moleWhackTable.moleJumpHandle1 )
+						this.userData.moleWhackTable.moleJumpHandle1 = setInterval(jumpStart.behaviors.moleWhackTable.randomMole.bind(this), 500);
+					else if( this.userData.moleWhackTable.gameTimer >= 25 && !this.userData.moleWhackTable.moleJumpHandle2 )
+						this.userData.moleWhackTable.moleJumpHandle2 = setInterval(jumpStart.behaviors.moleWhackTable.randomMole.bind(this), 200);
+				}
+			}
+		},
+		"spawnBehavior": function(isInitialSync)
+		{
+			console.log("Spawn table");
 		},
 		"swingMySmasher": function()
 		{
@@ -395,31 +410,14 @@ jumpStartBehavior({
 					}
 				});
 
-				/*
-				var smasher = this;
-				setTimeout(function(){ jumpStart.removeInstance(smasher); }, 3000);
-				*/
-//				var smasher = this;
-//				this.addEventListener("tick", function()
-//				{
-//					jumpStart.removeInstance(smasher);
-//				});
 				return;
 			}
 
 			table.userData.moleWhackTable.smasher = this;
-
-//			if( !!table.userData.moleWhackTable.smasher && table.userData.moleWhackTable.smasher !== this && table.userData.moleWhackTable.smasher.ownerID === jumpStart.localUser.userID )
-//			{
-//				jumpStart.removeInstance(this);
-//				return;
-//			}
-
-//			this.userData.table = table;
 			this.userData.oldScore = -1;
 
-			if( this.ownerID !== jumpStart.localUser.userID )
-				return;
+			//if( this.ownerID !== jumpStart.localUser.userID )
+			//	return;
 
 			this.userData.table = table;
 
@@ -430,13 +428,16 @@ jumpStartBehavior({
 			this.userData.swingRot = 0;
 			this.userData.maxSwingRot = Math.PI / 3.0;
 
-			var hitPoint = jumpStart.spawnInstance(null, {"parent": this});
-			hitPoint.translateZ(-15.0);
-			this.userData.hitPoint = hitPoint;
+			if( this.ownerID === jumpStart.localUser.userID )
+			{
+				var hitPoint = jumpStart.spawnInstance(null, {"parent": this});
+				hitPoint.translateZ(-15.0);
+				this.userData.hitPoint = hitPoint;
+			}
 
 			table.userData.moleWhackTable.smasher = this;
 			jumpStart.playSound("sounds/join");
-			jumpStart.playSound("sounds/music");
+			table.userData.moleWhackTable.musicChannel = jumpStart.playSound("sounds/music");
 		},
 		"smasherRemove": function()
 		{
@@ -444,21 +445,34 @@ jumpStartBehavior({
 			if( !!!table )
 				table = jumpStart.scene.getObjectByName(this.syncData.tableName);
 
-			var nameCard = table.userData.moleWhackTable.nameCard;
-			if( nameCard )
-				jumpStart.updateTextPlane(nameCard, {"backgroundImageElem": table.userData.moleWhackTable.imageElem, "width": 52.5, "height": 9, "fontSize": 4, "text": "THANKS FOR PLAYING", "color": "#ffffff"});
-
-			var moles = table.userData.moleWhackTable.moles;
-			if( moles.length > 0 && (moles[0].ownerID !== this.ownerID || this.ownerID === jumpStart.localUser.userID) )
+			//var moles = table.userData.moleWhackTable.moles;
+			//if( moles.length > 0 && (moles[0].ownerID !== this.ownerID || this.ownerID === jumpStart.localUser.userID) )
+			//if( this.ownerID === jumpStart.localUser.userID )
 				jumpStart.behaviors.moleWhackTable.resetTable.call(table);
 		},
 		"resetTable": function()
 		{
-			var smasher = this.userData.moleWhackTable.smasher;
-			var maxTime = 40.5;
-			this.userData.moleWhackTable.gameTimer = maxTime;
-			delete this.userData.moleWhackTable["smasher"];
-			this.userData.moleWhackTable.gameDelay = 2.0;
+			console.log("rest table");
+			var table = this;
+			if( table.userData.moleWhackTable.musicChannel )
+			{
+				table.userData.moleWhackTable.musicChannel.source.stop();
+			}
+
+			table.userData.moleWhackTable.musicChannel = null;
+			table.userData.moleWhackTable.smasher = null;
+			table.userData.moleWhackTable.gameDelay = 0;
+			table.userData.moleWhackTable.gameTimer = 0;
+
+			var nameCard = table.userData.moleWhackTable.nameCard;
+			if( nameCard )
+				jumpStart.updateTextPlane(nameCard, {"backgroundImageElem": table.userData.moleWhackTable.imageElem, "width": 52.5, "height": 9, "fontSize": 4, "text": "THANKS FOR PLAYING", "color": "#ffffff"});
+
+			//var smasher = this.userData.moleWhackTable.smasher;
+			//var maxTime = 40.5;
+			//this.userData.moleWhackTable.gameTimer = maxTime;
+			//delete this.userData.moleWhackTable["smasher"];
+			//this.userData.moleWhackTable.gameDelay = 2.0;
 
 			if( this.userData.moleWhackTable.moleJumpHandle0 )
 				clearInterval(this.userData.moleWhackTable.moleJumpHandle0);
@@ -478,7 +492,7 @@ jumpStartBehavior({
 				jumpStart.removeInstance(this.userData.moleWhackTable.moles[i]);
 
 			this.userData.moleWhackTable.moles = [];
-			this.userData.moleWhackTable.smasher = null;
+			//this.userData.moleWhackTable.smasher = null;
 		},
 		"smasherTick": function()
 		{

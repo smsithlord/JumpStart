@@ -88,6 +88,7 @@
 				var button = jumpStart.spawnInstance("models/button");
 				button.name = "button";
 				button.blocksLOS = true;
+				jumpStart.makeCollide(button);
 				button.rotation.x = -Math.PI / 2.0;
 				button.position.copy(cannon.position);
 				button.quaternion.copy(cannon.quaternion);
@@ -274,6 +275,11 @@
 				buttonFrame.position.copy(this.position);
 				buttonFrame.quaternion.copy(this.quaternion);
 
+				if( this.blocksLOS )
+					jumpStart.makeCollide(this);
+				else
+					jumpStart.makeNonCollide(this);
+
 				this.userData.buttonFrame = buttonFrame;
 			}
 
@@ -291,12 +297,15 @@
 
 			function buttonDown()
 			{
+				console.log("yaaaar");
 				//this.scale.set(0.0001, 0.0001, 0.0001);
 				//this.userData.buttonFrame.scale.set(0.0001, 0.0001, 0.0001);
 
 				var cannon = jumpStart.scene.getObjectByName("cannon");
+				console.log(cannon);
 				cannon.ownerID = jumpStart.localUser.userID;
 				cannon.syncData.ownerName = jumpStart.localUser.displayName;
+				//cannon.updateMatrixWorld();
 				cannon.sync();
 
 				var barrel = cannon.userData.barrel;
@@ -321,7 +330,14 @@
 				{
 					grip = grips[i];
 					if( grip !== this )
+					{
 						grip.blocksLOS = state;
+
+						if( state )
+							jumpStart.makeCollide(grip);
+						else
+							jumpStart.makeNonCollide(grip);
+					}
 				}
 			}
 
@@ -486,7 +502,9 @@
 											stuntman.applyBehavior("physics", {"force": force});
 											stuntman.addEventListener("tick", function()
 											{
-												if( this.position.y === 0 )
+												var tempRad = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
+
+												if( this.position.y === tempRad )
 												{
 													this.unapplyBehavior("physics");
 													this.removeEventListener("tick", arguments.callee);
@@ -613,6 +631,7 @@
 						barrelGrip.userData.isGripped = false;
 						barrelGrip.translateZ(150.0);
 						barrelGrip.blocksLOS = true;
+						jumpStart.makeCollide(barrelGrip);
 						barrelGrip.addEventListener("cursorenter", function()
 						{
 							if( !!!this.userData.arrows )
@@ -632,6 +651,7 @@
 						barrelGrip.addEventListener("cursorup", function()
 						{
 							this.blocksLOS = true;
+							jumpStart.makeCollide(this);
 							this.userData.isGripped = false;
 
 							if( jumpStart.hoveredObject !== this )
@@ -650,10 +670,12 @@
 						{
 							this.userData.isGripped = true;
 							this.blocksLOS = false;
+							jumpStart.makeNonCollide(this);
 							if( !!!this.userData.dragPlane )
 							{
 								var plane = jumpStart.spawnCursorPlane();
 								plane.blocksLOS = true;
+								jumpStart.makeCollide(plane);
 
 								var quaternion = new THREE.Quaternion().setFromRotationMatrix(this.matrixWorld);
 								plane.quaternion.copy(quaternion);
@@ -695,6 +717,7 @@
 						baseGrip.userData.isGripped = false;
 						baseGrip.position.z = -150.0;
 						baseGrip.blocksLOS = true;
+						jumpStart.makeCollide(baseGrip);
 						baseGrip.addEventListener("cursorenter", function()
 						{
 							if( !!!this.userData.arrows )
@@ -714,6 +737,7 @@
 						baseGrip.addEventListener("cursorup", function()
 						{
 							this.blocksLOS = true;
+							jumpStart.makeCollide(this);
 							this.userData.isGripped = false;
 
 							if( jumpStart.hoveredObject !== this )
@@ -732,10 +756,13 @@
 						{
 							this.userData.isGripped = true;
 							this.blocksLOS = false;
+							jumpStart.makeNonCollide(this);
+
 							if( !!!this.userData.dragPlane )
 							{
 								var plane = jumpStart.spawnCursorPlane();
 								plane.blocksLOS = true;
+								jumpStart.makeCollide(plane);
 
 								var quaternion = new THREE.Quaternion().setFromRotationMatrix(this.matrixWorld);
 								plane.quaternion.copy(quaternion);
@@ -786,6 +813,7 @@
 						var fuseGrip = jumpStart.spawnInstance("models/barrelGripOff", {"parent": barrel});
 						cannon.userData.fuseGrip = fuseGrip;
 						fuseGrip.blocksLOS = true;
+						jumpStart.makeCollide(fuseGrip);
 						fuseGrip.position.copy(firstFuse.position);
 						fuseGrip.quaternion.copy(firstFuse.quaternion);
 						fuseGrip.translateZ(firstFuse.scale.z / 2.0);

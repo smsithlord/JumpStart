@@ -1,7 +1,7 @@
 // Global objects
 function JumpStart(options, appBehaviors)
 {
-	this.version = "0.2.0";
+	this.version = "0.2.1";
 	this.shouldSimulateLag = false;
 	this.tickLag = 0.0;	// for simulating bad performance.
 
@@ -92,6 +92,9 @@ function JumpStart(options, appBehaviors)
 		"audioContext",	// For precaching sounds, etc.
 		"raycastArray",	// gets used locally every tick
 		"freshObjects", // a list of objects that were spawned in the current tick
+		"needsLocationUpdate",
+		"lastPushTime",
+		"lastRandChars",
 		"debug"	// Helper class
 		//"octree"	// Octree disabled for now
 	];
@@ -154,6 +157,9 @@ function JumpStart(options, appBehaviors)
 	this.pendingEvents = {};
 	this.pendingFirebaseEvents = {};
 	this.selfSyncingObject = false;
+	this.needsLocationUpdate = false;
+	this.lastPushTime = 0;
+	this.lastRandChars = [];
 	this.audioContext = new window.webkitAudioContext();	// Is webkit required? (probably??)
 	this.enclosureBoundaries = 
 	{
@@ -169,25 +175,31 @@ function JumpStart(options, appBehaviors)
 		{
 			"applyBehavior": function(options)
 			{
+				console.log("apply football pass");
+				console.log(options);
 				// REQUIRED: targetPosition, originalPosition
-				this.syncData.footballPass = 
+				if( !!options )
 				{
-					"targetPosition": options.targetPosition,
-					"originalPosition": options.originalPosition,
-					"height": (!!options.height) ? options.height : 100.0,
-					"speed": (!!options.speed) ? options.speed : "auto",
-					"callbackFuncName": (!!options.callbackFuncName) ? options.callbackFuncName : "defaultCallback"
+					this.syncData.footballPass = 
+					{
+						"targetPosition": options.targetPosition,
+						"originalPosition": options.originalPosition,
+						"height": (!!options.height) ? options.height : 100.0,
+						"speed": (!!options.speed) ? options.speed : "auto",
+						"callbackFuncName": (!!options.callbackFuncName) ? options.callbackFuncName : "defaultCallback"
+					}
+
+					var distance = this.syncData.footballPass.targetPosition.distanceTo(this.syncData.footballPass.originalPosition);
+					//var autoSpeed = 50.0 + (0.9 * distance);
+					if( this.syncData.footballPass.speed === "auto" )
+						this.syncData.footballPass.speed = 50.0 + (0.9 * distance);
+
+	//				var autoSpeed = 50.0 + (0.9 * distance);
+					this.syncData.footballPass.time = distance / this.syncData.footballPass.speed;
+
+					this.addEventListener("tick", jumpStart.behaviors.footballPass.tickBehavior);
 				}
 
-				var distance = this.syncData.footballPass.targetPosition.distanceTo(this.syncData.footballPass.originalPosition);
-				//var autoSpeed = 50.0 + (0.9 * distance);
-				if( this.syncData.footballPass.speed === "auto" )
-					this.syncData.footballPass.speed = 50.0 + (0.9 * distance);
-
-//				var autoSpeed = 50.0 + (0.9 * distance);
-				this.syncData.footballPass.time = distance / this.syncData.footballPass.speed;
-
-				this.addEventListener("tick", jumpStart.behaviors.footballPass.tickBehavior);
 				return true;
 			},
 			"defaultCallback": function()
@@ -297,8 +309,12 @@ function JumpStart(options, appBehaviors)
 			},
 			"applyBehavior": function(options)
 			{
-				this.addEventListener("spawn", jumpStart.behaviors.autoRemoval.spawnBehavior);
-				this.addEventListener("userdisconnect", jumpStart.behaviors.autoRemoval.onUserDisconnect);
+				if( !!options )
+				{
+					this.addEventListener("spawn", jumpStart.behaviors.autoRemoval.spawnBehavior);
+					this.addEventListener("userdisconnect", jumpStart.behaviors.autoRemoval.onUserDisconnect);
+				}
+
 				return true;
 			},
 			"unapplyBehavior": function()
@@ -332,24 +348,36 @@ function JumpStart(options, appBehaviors)
 		{
 			"applyBehavior": function(options)
 			{
-				this.userData.autoSync = {};
-				this.userData.autoSync.distanceTolerance = (!!options.distanceTolerance) ? options.distanceTolerance : 5.0;
-				this.userData.autoSync.minInterval = (!!options.minInterval) ? options.minInterval : 0.2;
-				this.addEventListener("tick", jumpStart.behaviors.autoSync.tickBehavior);
+				if( !!options )
+				{
+					this.syncData.autoSync = {
+						"distanceTolerance": (!!options.distanceTolerance) ? options.distanceTolerance : 5.0,
+						"minInterval": (!!options.minInterval) ? options.minInterval : 0.2
+					};
+
+					this.addEventListener("tick", jumpStart.behaviors.autoSync.tickBehavior);
+				}
+
+				this.userData.autoSync = {
+					"previousPosition": new THREE.Vector3(),
+					"previousQuaternion": new THREE.Quaternion(),
+					"previousTime": 0
+				};
+
 				return true;
 			},
 			"unapplyBehavior": function()
 			{
 				delete this.syncData["autoSync"];
-				delete this.userData["autoSync"];
+				//delete this.userData["autoSync"];
 				this.removeEventListener("tick", jumpStart.behaviors.autoSync.tickBehavior);
-				this.removeEventListener("spawn", jumpStart.behaviors.autoSync.spawnBehavior);
+				//this.removeEventListener("spawn", jumpStart.behaviors.autoSync.spawnBehavior);
 				return true;
 			},
 			"tickBehavior": function()
 			{
-				if( !!!this.userData.autoSync )
-					this.userData.autoSync = {};
+			//	if( !!!this.userData.autoSync )
+			//		this.userData.autoSync = {};
 
 				// Only auto-sync objects we own
 				if( this.ownerID !== jumpStart.localUser.userID )
@@ -359,12 +387,13 @@ function JumpStart(options, appBehaviors)
 				if( !!!this.userData.autoSync.previousPosition || !!!this.userData.autoSync.previousTime )
 					shouldSync = true;
 
-				if( !shouldSync && jumpStart.elapsedTime - this.userData.autoSync.previousTime > this.userData.autoSync.minInterval )
+				if( !shouldSync && jumpStart.elapsedTime - this.userData.autoSync.previousTime > this.syncData.autoSync.minInterval )
 				{
-					if( this.position.distanceTo(this.userData.autoSync.previousPosition) > this.userData.autoSync.distanceTolerance )
+					if( this.position.distanceTo(this.userData.autoSync.previousPosition) > this.syncData.autoSync.distanceTolerance )
 						shouldSync = true;
 					else
 					{
+						// FIXME: THIS WAY OF COMPARING 2 QUATERNIONS IS CRAP!!
 						var vector1 = new THREE.Vector3(0,0,Math.PI);
 						vector1.applyQuaternion(this.quaternion);
 
@@ -378,12 +407,6 @@ function JumpStart(options, appBehaviors)
 
 				if( shouldSync )
 				{
-					if( !!!this.userData.autoSync.previousPosition )
-					{
-						this.userData.autoSync.previousPosition = new THREE.Vector3();
-						this.userData.autoSync.previousQuaternion = new THREE.Quaternion();
-					}
-
 					this.userData.autoSync.previousPosition.copy(this.position);
 					this.userData.autoSync.previousQuaternion.copy(this.quaternion);
 					this.userData.autoSync.previousTime = jumpStart.elapsedTime;
@@ -391,124 +414,391 @@ function JumpStart(options, appBehaviors)
 				}
 			}
 		},
-		"shrinkRemove":
+		"shrinkRemove": // local behavior
 		{
 			"applyBehavior": function(options)
 			{
-				this.userData.shrinkRemove = {};
-				this.userData.shrinkRemove.speed = (!!options.speed) ? options.speed : 1.0;
-				this.userData.shrinkRemove.delay = (!!options.delay) ? options.delay : 0.0;
-				this.addEventListener("tick", jumpStart.behaviors.shrinkRemove.tickBehavior);
+				// determine if we are in "local" mode or not
+				var isLocalMode = false;
+				if( !!options && !!options.localMode )
+					isLocalMode = true;
+				else if( !!!options && this.syncData.localMode )
+					isLocalMode = true;
+
+				// build syncable data
+				var syncableData;
+				if( !!options )	// USE OPTIONS INSTEAD OF COMPARING USER ID CUZ OF REJOINING USERS
+				{
+					syncableData = {
+						"speed": (!!options.speed) ? options.speed : 1.0,
+						"delay": (!!options.delay) ? options.delay : 0.0,
+						"localMode": (!!options.localMode) ? options.localMode : false,
+						"ownerRemoveOnly": (!!options.ownerRemoveOnly) ? options.ownerRemoveOnly : true
+					};
+
+					this.syncData.shrinkRemove = syncableData;
+					this.addEventListener("tick", jumpStart.behaviors.shrinkRemove.tickBehavior);
+				}
+				else
+					syncableData = this.syncData.shrinkRemove;
+
+				this.userData.shrinkRemove = {
+					"remaining": syncableData.delay,
+					"waitingForNetwork": false,
+					"syncableData": (!isLocalMode) ? null : syncableData
+				};
+
+				/*
+				// local tick listeners are NOT synced
+				this.addEventListener("tick", function()
+				{
+					if( this.userData.shrinkRemove.remaining === 0 )
+						return;
+
+					var syncableData = (!!this.userData.shirnkRemove.syncableData) ? this.userData.shirnkRemove.syncableData : this.syncData.shrinkRemove;
+					if( !syncableData.localMode && this.scale.x <= 0.0001 && syncableData.ownerRemoveOnly && jumpStart.localUser.userID !== this.ownerID )
+						return;
+
+					this.userData.shrinkRemove.remaining -= jumpStart.deltaTime;
+					if( this.userData.shrinkRemove.remaining <= 0 )
+					{
+						this.userData.shrinkRemove.remaining = 0;
+
+						this.scale.x -= syncableData.speed * jumpStart.deltaTime;
+						this.scale.y -= syncableData.speed * jumpStart.deltaTime;
+						this.scale.z -= syncableData.speed * jumpStart.deltaTime;
+
+						if( this.scale.x <= 0.0001 && (syncableData.localMode || !syncableData.ownerRemoveOnly || jumpStart.localUser.userID === this.ownerID) )
+							jumpStart.removeInstance(this);
+					}
+				});
+				*/
+
 				return true;
 			},
 			"tickBehavior": function()
 			{
-				this.userData.shrinkRemove.delay -= jumpStart.deltaTime;
+				if( this.userData.shrinkRemove.waitingForNetwork )
+					return;
 
-				if( this.userData.shrinkRemove.delay <= 0 )
+				//if( this.userData.shrinkRemove.remaining === 0 )
+				//	return;
+
+				var syncableData = (!!this.userData.shrinkRemove.syncableData) ? this.userData.shrinkRemove.syncableData : this.syncData.shrinkRemove;
+				var isLocalMode = syncableData.localMode;
+
+				if( !syncableData.localMode && this.scale.x <= 0.0001 && syncableData.ownerRemoveOnly && jumpStart.localUser.userID !== this.ownerID )
+					return;
+
+				this.userData.shrinkRemove.remaining -= jumpStart.deltaTime;
+				if( this.userData.shrinkRemove.remaining <= 0 )
 				{
-					this.scale.x -= this.userData.shrinkRemove.speed * jumpStart.deltaTime;
-					this.scale.y -= this.userData.shrinkRemove.speed * jumpStart.deltaTime;
-					this.scale.z -= this.userData.shrinkRemove.speed * jumpStart.deltaTime;
+					this.userData.shrinkRemove.remaining = 0;
+
+					this.scale.x -= syncableData.speed * jumpStart.deltaTime;
+					this.scale.y -= syncableData.speed * jumpStart.deltaTime;
+					this.scale.z -= syncableData.speed * jumpStart.deltaTime;
 
 					if( this.scale.x <= 0.0001 )
-						jumpStart.removeInstance(this);
+					{
+						if( syncableData.localMode || !syncableData.ownerRemoveOnly || jumpStart.localUser.userID === this.ownerID )
+							jumpStart.removeInstance(this);
+						else
+							this.userData.shrinkRemove.waitingForNetwork = true;
+					}
+				}
+			},
+			"unapplyBehavior": function()
+			{
+				var syncableData = (!!this.userData.shirnkRemove.syncableData) ? this.userData.shirnkRemove.syncableData : this.syncData.shrinkRemove;
+				var isLocalMode = syncableData.localMode;
+
+				delete this.userData["shrinkRemove"];
+
+				if( isLocalMode )
+					delete this.syncData["shrinkRemove"];
+
+				this.removeEventListener("tick", jumpStart.behaviors.shrinkRemove.tickBehavior);
+				return true;
+			}
+		},
+		"dropShadow":
+		{
+			"applyBehavior": function(options)
+			{
+				if( !!options )
+				{
+					this.syncData.dropShadow = {
+						"scale": (!!options.scale) ? options.scale : 1.0,
+						"useParent": (!!options.useParent) ? options.useParent : false
+					};
+
+					this.addEventListener("spawn", jumpStart.behaviors.dropShadow.spawnBehavior);
+					this.addEventListener("tick", jumpStart.behaviors.dropShadow.tickBehavior);
+				}
+
+				return true;
+			},
+			"createShadow": function()
+			{
+				var target = (this.syncData.dropShadow.useParent) ? this.parent : this;
+
+				var geometry = new THREE.SphereGeometry( this.boundingSphere.radius * this.syncData.dropShadow.scale, 5, 8, 0, Math.PI);
+				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
+				var shadowObject = new THREE.Mesh( geometry, material );
+				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject});
+				shadow.scale.z = 0.1;
+				shadow.scale.x = target.scale.x;
+				shadow.scale.y = target.scale.y;
+				shadow.rotateX(-Math.PI / 2.0);
+				this.addEventListener("remove", jumpStart.generateRemoveWatcher(shadow));
+
+				this.userData.dropShadow = {
+					"shadow": shadow
+				};
+			},
+			"spawnBehavior": function(isInitialSync)
+			{
+				jumpStart.behaviors.dropShadow.createShadow.call(this);
+			},
+			"tickBehavior": function()
+			{
+				if( !!!this.userData.dropShadow )
+					jumpStart.behaviors.dropShadow.createShadow.call(this);
+
+				var target = (this.syncData.dropShadow.useParent) ? this.parent : this;
+				var shadow = this.userData.dropShadow.shadow;
+				shadow.position.copy(target.position);
+				shadow.position.y = 0.0;
+			},
+			"unapplyBehavior": function()
+			{
+				delete this.userData["dropShadow"];
+				delete this.syncData["dropShadow"];
+				return true;
+			}
+		},
+		"asyncModel": // local behavior
+		{
+			"applyBehavior": function(options)
+			{
+				this.userData.asyncModel = {
+					"modelFile": options.modelFile,
+					"callback": options.callback,
+					"useBubbleIn": (!!options.useBubbleIn) ? options.useBubbleIn : true
+				};
+
+				jumpStart.loadModelsEx([this.userData.asyncModel.modelFile], function(fileNames, request)
+				{
+					if( !!!jumpStart.objects[this.uuid] )
+						return;
+					
+					var visualObject = jumpStart.spawnInstance(this.userData.asyncModel.modelFile, {"parent": this});
+					if( this.userData.asyncModel.useBubbleIn )
+						visualObject.applyBehavior("bubbleIn", {"speed": 6.0});
+
+					this.boundingSphere = visualObject.boundingSphere;
+
+					if( !!this.userData.asyncModel.callback )
+						this.userData.asyncModel.callback();
+				}.bind(this));
+
+				return true;
+			},
+			"unapplyBehavior": function()
+			{
+				delete this.userData["aynscModel"];
+				return true;
+			}
+		},
+		"bubbleIn": // local behavior
+		{
+			"applyBehavior": function(options)
+			{
+				if( !!options )
+				{
+					this.syncData.bubbleIn = {
+						"speed": (!!options.speed) ? options.speed : 2.0,
+						"maxScale": (!!options.maxScale) ? options.maxScale : 1.0
+					};
+
+					this.addEventListener("tick", jumpStart.behaviors.bubbleIn.tickBehavior);
+				}
+
+				this.userData.bubbleIn = {
+					"scaleDirection": 1.0
+				};
+
+				this.scale.set(0.001, 0.001, 0.001);
+				return true;
+			},
+			"unapplyBehavior": function()
+			{
+				delete this.userData["bubbleIn"];
+				delete this.syncData["bubbleIn"];
+				//this.removeEventListener("tick", jumpStart.behaviors.shrinkRemove.tickBehavior);
+				return true;
+			},
+			"tickBehavior": function()
+			{
+				if( !this.syncData.bubbleIn )
+					return;
+
+				var ds = this.syncData.bubbleIn.speed * jumpStart.deltaTime * this.userData.bubbleIn.scaleDirection;
+				if( this.userData.bubbleIn.scaleDirection < 0 )
+					ds *= 0.5;
+
+				this.scale.x += ds;
+				this.scale.y += ds;
+				this.scale.z += ds;
+
+				if( this.userData.bubbleIn.scaleDirection > 0 && this.scale.x > this.syncData.bubbleIn.maxScale + 0.2 )
+					this.userData.bubbleIn.scaleDirection = -1.0;
+				else if( this.userData.bubbleIn.scaleDirection < 0 && this.scale.x <= this.syncData.bubbleIn.maxScale )
+				{
+					this.scale.set(this.syncData.bubbleIn.maxScale, this.syncData.bubbleIn.maxScale, this.syncData.bubbleIn.maxScale);
+					this.removeEventListener("tick", jumpStart.behaviors.bubbleIn.tickBehavior);
 				}
 			}
 		},
 		"physics": {
 			"applyBehavior": function(options)
 			{
-				//this.parent.updateMatrixWorld();
-//				this.updateMatrixWorld();
-
-				if( !!!options )
-					options = {};
-
-				if( !!!this.userData.physics )
+				console.log("Apply physics");
+				console.log(options);
+				console.log(this.syncData.physics);
+				this.updateMatrixWorld();
+				if( !!options )
 				{
-//					if( !!this.syncData.physics )
-//						console.log(this.syncData.physics.force);
-
-					// This is our 1st time applying ourselves
-					if( !!!this.syncData.physics )
-					{
-						this.syncData.physics = {
-							"force": (!!options.force) ? options.force.clone() : new THREE.Vector3(),
-							"rotation": (!!options.rotation) ? options.rotation.clone() : new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random()),
-							"physicsScale": (!!options.physicsScale) ? options.physicsScale : 1.0
-						};
-					}
-					else
-					{
-						// turn values into vectors (is this obsolete?)
-						this.syncData.physics.force = new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z);
-						this.syncData.physics.rotation = new THREE.Vector3(this.syncData.physics.rotation.x, this.syncData.physics.rotation.y, this.syncData.physics.rotation.z);
-						//this.syncData.physics.physicsScale = this.syncData.physics
-					}
-
-					this.userData.physics = {
-						"velocity": this.syncData.physics.force.clone(),
-						"rotVelocity": this.syncData.physics.rotation.clone()
+					this.syncData.physics = {
+						"force": (!!options.force) ? options.force.clone() : new THREE.Vector3(),
+						"rotation": (!!options.rotation) ? options.rotation.clone() : new THREE.Vector3((Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random(), (Math.PI / 2.0) * Math.random()),
+						"physicsScale": (!!options.physicsScale) ? options.physicsScale : 1.0
 					};
 
 					this.addEventListener("tick", jumpStart.behaviors.physics.tickBehavior);
-					this.addEventListener("spawn", jumpStart.behaviors.physics.spawnBehavior);
+					//this.addEventListener("spawn", jumpStart.behaviors.physics.spawnBehavior);
+				//	this.updateMatrixWorld();
 				}
-				else
-				{
-					// We are updating an exiting physics behavior with a new force & rotation
-					if( !!options.force )
-						this.syncData.physics.force.copy(options.force);
-					else
-						this.syncData.physics.force.set(0, 0, 0);
 
-					if( !!options.rotation )
-						this.syncData.physics.rotation.copy(options.rotation);
-					else
-						this.syncData.physics.rotation.set(0, 0, 0);
+				var force = this.syncData.physics.force;
+				var rotation = this.syncData.physics.rotation;
+				this.userData.physics = {
+					"velocity": new THREE.Vector3(force.x, force.y, force.z),
+					"rotVelocity": new THREE.Vector3(rotation.x, rotation.y, rotation.z)
+				};
 
-					this.userData.physics.velocity.copy(this.syncData.physics.force);
-				}
+				console.log(this.syncData.physics);
 
 				return true;
 			},
 			"unapplyBehavior": function()
 			{
+				console.log("unapply physics");
 				delete this.syncData["physics"];
 				delete this.userData["physics"];
 				this.removeEventListener("tick", jumpStart.behaviors.physics.tickBehavior);
-				this.removeEventListener("spawn", jumpStart.behaviors.physics.spawnBehavior);
+				//this.behaviors.physics = false;
+				//this.updateMatrixWorld();
+			//	this.removeEventListener("spawn", jumpStart.behaviors.physics.spawnBehavior);
+
+				//console.log(this.behaviors);
+				//if( this.syncData.vitalData && this.syncData.vitalData.behaviors )
+				//{
+				//	console.log("removing physics locally");
+				//	delete this.syncData.vitalData.behaviors["physics"];
+					//delete this.behaviors["physics"];
+			//	}
+
+				//delete this.behaviors["physics"];
 				return true;
-			},
+			},/*
+			"spawnBehavior": function()
+			{
+				// if we are a client & we are present when this object is spawned, we MISS its applybehavior msg...
+				// so trigger it from here.
+console.log("Spawning");
+				//if( !this.userData.hasOwnProperty("physics") )
+				//	jumpStart.behaviors.physics.applyBehavior.call(this, this.behaviors.physics);
+			},*/
 			"tickBehavior": function()
 			{
+				// 
+//				if( !!!this.userData.physics )
+//					return;
+				
+				// at rest
+				if( this.userData.physics.velocity.length() === 0 && this.userData.physics.rotVelocity.length() === 0 )
+					return;
+
+			//	console.log(this.userData.physics.rotVelocity);
 				this.userData.physics.velocity.y -= 9.8 * jumpStart.deltaTime * this.syncData.physics.physicsScale;
 
 				// Terminal velocity because we have no air drag
-				var termVel = 50.0;
+				var airDrag = 8.0;
+				var termVel = 16.0;
 				var velLen = this.userData.physics.velocity.length();
 				if( velLen > termVel )
-					this.userData.physics.velocity.multiplyScalar(0.9);
+				{
+					console.log("term");
+					var drag = this.userData.physics.velocity.clone();
+					drag.normalize();
+					drag.multiplyScalar(airDrag * jumpStart.deltaTime);
 
+					this.userData.physics.velocity.sub(drag);//.multiplyScalar(0.9)
+				}
+
+				//var termVel = 5000.0;
+				//var velLen = this.userData.physics.velocity.length();
+				//if( velLen > termVel )
+				//	this.userData.physics.velocity.multiplyScalar(0.9);
+
+//console.log(this.userData.physics.rotVelocity);
 				// Update the rotation
+				//console.log(this.rotation);
 				this.rotateX((this.userData.physics.rotVelocity.x * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
 				this.rotateY((this.userData.physics.rotVelocity.y * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
 				this.rotateZ((this.userData.physics.rotVelocity.z * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
+				//var testerQuaternion = this.quaternion.clone();
+				//console.log(this.rotation);
 
 				// Bounce us off of walls
+				var radius = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
 				var maximums = {
-					"x": jumpStart.enclosure.innerWidth / 2.0,
-					"y": (jumpStart.enclosure.innerHeight / 2.0),
-					"z": jumpStart.enclosure.innerDepth / 2.0
+					"x": (jumpStart.enclosure.innerWidth / 2.0) - radius,
+					"y": (jumpStart.enclosure.innerHeight / 2.0) - radius,
+					"z": (jumpStart.enclosure.innerDepth / 2.0) - radius
 				};
 
 				//this.updateMatrixWorld();	// FIX ME: This was needed for some reason, but it messes with the physics behavior on network clients.
 				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
-				var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(100.0 * jumpStart.deltaTime * this.syncData.physics.physicsScale);
+
+				var magicFactor = (jumpStart.isAltspace) ? 160.0 : 80.0;// * 1 / jumpStart.scene.scale;//80.0;
+				var deltaPos = this.userData.physics.velocity.clone();
+				//deltaPos.normalize();
+				deltaPos.multiplyScalar(magicFactor);// * jumpStart.deltaTime);
+				deltaPos.add(this.userData.physics.velocity);
+				deltaPos.multiplyScalar(jumpStart.deltaTime);
+				//var magicFactor = 1.0;
+				//var delta = magicFactor * jumpStart.deltaTime * this.syncData.physics.physicsScale;
+				//var deltaPos = this.userData.physics.velocity.clone();
+				//deltaPos.add(new THREE.Vector3(delta, delta, delta));
+				//var deltaPos = this.userData.physics.velocity.clone().multiplyScalar(100.0 * jumpStart.deltaTime * this.syncData.physics.physicsScale);
 				//.multiplyScalar(jumpStart.options.sceneScale)
 				//deltaPos.multiplyScalar(1 / jumpStart.options.sceneScale);
 				pos.add(deltaPos);
+
+				var hitMaximums = {
+					"x": false,
+					"y": false,
+					"z": false
+				};
+
+				var hitMinimums = {
+					"x": false,
+					"y": false,
+					"z": false
+				};
 
 				var x, max;
 				for( x in maximums )
@@ -517,32 +807,94 @@ function JumpStart(options, appBehaviors)
 					{
 						pos[x] = maximums[x];
 						this.userData.physics.velocity[x] *= -1.0;
+						hitMaximums[x] = true;
 					}
 					else if( pos[x] < -maximums[x] )
 					{
 						pos[x] = -maximums[x];
 						this.userData.physics.velocity[x] *= -1.0;
+						hitMinimums[x] = true;
 					}
 				}
 
+				var comeToRest = false;
+				if( hitMinimums.y )
+				{
+					this.userData.physics.velocity.y *= 0.6;
+					var oldVelY = this.userData.physics.velocity.y;
+
+					this.userData.physics.velocity.multiplyScalar(0.4);
+					this.userData.physics.velocity.y = oldVelY;
+
+					if( this.userData.physics.velocity.length() < 1.0 )
+					{
+						console.log("bring to rest");
+						comeToRest = true;
+					}
+				}
+//this.updateMatrixWorld();
+//console.log(pos);
 				pos.multiplyScalar(1 / jumpStart.options.sceneScale);
 				pos.sub(jumpStart.world.position);
+				//pos.add(jumpStart.worldOffset);
+				//pos = jumpStart.world.worldToLocal(pos);
+//console.log(pos);
+				//jumpStart.world.worldToLocal(pos);
+				
+				// reapply stuff here to get exact values that apps might depend on
+				for( x in hitMinimums )
+				{
+					if( hitMinimums[x] )
+					{
+						if( x === "y" )
+							pos[x] = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
+						else
+							pos[x] = -maximums[x];
+						//pos[x] = -Math.abs(jumpStart.worldOffset[x]);
+					}
+				}
 
+				for( x in hitMaximums )
+				{
+					if( hitMaximums[x] )
+					{
+						if( x === "y" )
+						{
+							var tempRad = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
+							pos[x] = (-2.0 * jumpStart.worldOffset.y) - tempRad;
+						}
+						else
+							pos[x] = maximums[x];
+						//pos[x] = Math.abs(jumpStart.worldOffset[x]);
+					}
+				}
+
+				if( comeToRest )
+				{
+					this.userData.physics.velocity.set(0, 0, 0);
+					this.userData.physics.rotVelocity.set(0, 0, 0);
+				}
+
+				//this.updateMatrixWorld();
 				this.position.copy(pos);
-				this.updateMatrixWorld();
+				//				this.quaternion.copy(testerQuaternion);
+				//this.updateMatrixWorld();
 			},
 			"spawnBehavior": function(isInitialSync)
 			{
-				this.updateMatrixWorld();
-				this.userData.physics = {
-					"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z),
-					"rotVelocity": new THREE.Vector3(this.syncData.physics.rotation.x, this.syncData.physics.rotation.y, this.syncData.physics.rotation.z)
-				};
+				//this.updateMatrixWorld();
+				//this.position.add(jumpStart.world.position);
+				//this.updateMatrixWorld();
+				//this.userData.physics = {
+				//	"enabled": true,
+				//	"velocity": new THREE.Vector3(this.syncData.physics.force.x, this.syncData.physics.force.y, this.syncData.physics.force.z),
+				//	"rotVelocity": new THREE.Vector3(this.syncData.physics.rotation.x, this.syncData.physics.rotation.y, this.syncData.physics.rotation.z)
+				//};
 			}
 		},
 		"lerpSync":
 		{
-			"syncPrep": function(options)
+			/*"syncPrep": function(options)
 			{
 				// The lerpSync behavior is special and always has the final word on object transform.
 				// We can't wait for our applyBehavior method to be called at the end of this jumpStart.onTick
@@ -563,13 +915,33 @@ function JumpStart(options, appBehaviors)
 				this.userData.lerpSync.amount = 1.0;
 
 				this.addEventListener("tick", jumpStart.behaviors.lerpSync.tickBehavior);
-			},
+			},*/
 			"applyBehavior": function(options)
 			{
-				this.syncData.lerpSync = {"speed": (!!options.speed) ? options.speed - 20 : 50.0};	// slower lerp speed to account for lag
+				// lerpsync should never be applied ontop of itself!!
+				if( !!this.userData.lerpSync )
+					return true;
 
-				if( !!!this.behaviors.lerpSync )
-					jumpStart.behaviors.lerpSync.syncPrep.call(this);
+				console.log("Apply lerpsync");
+				if( !!options )
+				{
+					this.syncData.lerpSync = {
+						"speed": (!!options.speed) ? options.speed : 50.0
+					};
+
+					this.addEventListener("tick", jumpStart.behaviors.lerpSync.tickBehavior);
+				}
+
+				this.userData.lerpSync = {
+					"targetPosition": new THREE.Vector3(),
+					"targetQuaternion": new THREE.Quaternion(),
+					"originalPosition": new THREE.Vector3(),
+					"originalQuaternion": new THREE.Quaternion(),
+					"time": 1.0,
+					"amount": 1.0
+				};
+
+				//this.addEventListener("tick", jumpStart.behaviors.lerpSync.tickBehavior);
 
 				return true;
 			},
@@ -582,9 +954,6 @@ function JumpStart(options, appBehaviors)
 			},
 			"tickBehavior": function()
 			{
-				if( !!!this.userData.lerpSync )
-					return;
-				
 				if( this.userData.lerpSync.amount < 1.0 )
 				{
 					this.userData.lerpSync.amount += jumpStart.deltaTime / this.userData.lerpSync.time;
@@ -699,6 +1068,7 @@ function JumpStart(options, appBehaviors)
 					this.world.name = "jumpStartWorld";
 					//this.world.position.add(this.worldOffset);
 					this.world.position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
+					//this.world.updateMatrixWorld();
 
 					var listenerName;
 					for( listenerName in this.listeners.initialize )
@@ -758,12 +1128,22 @@ function JumpStart(options, appBehaviors)
 						});
 
 						this.roomID = this.firebase.roomRef.key();
+						this.needsLocationUpdate = true;
 
 						// Update the URL
 						// FIX ME: This destroys the entire URI query.
+
+
+
+						/*
 						var pathName = document.location.pathname;
 						pathName = pathName.substring(pathName.lastIndexOf("/") + 1);
 						window.location.href = pathName + "?room=" + this.firebase.roomRef.key();
+						*/
+
+
+
+
 						//window.history.replaceState(null, document.title, pathName + "?room=" + this.firebase.roomRef.key());
 						//window.history.pushState(null, null, pathName + "?room=" + this.firebase.roomRef.key());
 						//var dummy = {"stuff": pathName + "?room=" + this.firebase.roomRef.key()};
@@ -796,6 +1176,7 @@ function JumpStart(options, appBehaviors)
 									this.world = this.spawnInstance(null, {"parent": this.scene});
 									this.world.name = "jumpStartWorld";
 									this.world.position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
+									//this.scene.updateMatrixWorld();
 									this.world.sync();
 
 									// Check for initialize listeners
@@ -928,7 +1309,7 @@ function JumpStart(options, appBehaviors)
 										if( this.isLocallyInitializing )
 											return;
 									}
-									else if( data.vitalData.ownerID === this.localUser.userID )
+									else if( !!!data.vitalData || data.vitalData.ownerID === this.localUser.userID )
 									{
 										if( !jumpStart.selfSyncingObject )
 											this.pendingUpdates[key].needsSpawn = true;
@@ -959,6 +1340,9 @@ function JumpStart(options, appBehaviors)
 											this.pendingUpdates[key] = {};
 
 										this.pendingUpdates[key].transform = snapshot.val();
+
+										//if( this.pendingUpdates[key].transform.name === "da bomb" )
+										//	console.log(this.pendingUpdates[key].transform);
 									}.bind(this));
 
 									this.firebase.roomRef.child("objects").child(key).child("vitalData").on("value", function(snapshot)
@@ -978,7 +1362,7 @@ function JumpStart(options, appBehaviors)
 
 										this.pendingUpdates[key].vitalData = snapshot.val();
 									}.bind(this));
-
+//console.log("adding " + key);
 									this.firebase.roomRef.child("objects").child(key).child("syncData").on("value", function(snapshot)
 									{
 										if( initialKeys.hasOwnProperty(key) || jumpStart.selfSyncingObject )
@@ -1331,6 +1715,47 @@ function JumpStart(options, appBehaviors)
 		}
 	}
 }
+
+JumpStart.prototype.generateRemoveWatcher = function(victim)
+{
+	return function(){jumpStart.removeInstance(victim);};
+};
+
+JumpStart.prototype.generateId = function()
+{
+	var PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
+
+	var now = new Date().getTime();
+	var duplicateTime = (now === this.lastPushTime);
+	this.lastPushTime = now;
+
+	var timeStampChars = new Array(8);
+	for (var i = 7; i >= 0; i--) {
+		timeStampChars[i] = PUSH_CHARS.charAt(now % 64);
+		// NOTE: Can't use << here because javascript will convert to int and lose the upper bits.
+		now = Math.floor(now / 64);
+	}
+	if (now !== 0) throw new Error('We should have converted the entire timestamp.');
+
+	var id = timeStampChars.join('');
+
+	if (!duplicateTime) {
+		for (i = 0; i < 12; i++) {
+			this.lastRandChars[i] = Math.floor(Math.random() * 64);
+		}
+	} else {
+		// If the timestamp hasn't changed since last push, use the same random number, except incremented by 1.
+		for (i = 11; i >= 0 && this.lastRandChars[i] === 63; i--) {
+			this.lastRandChars[i] = 0;
+		}
+		this.lastRandChars[i]++;
+	}
+	for (i = 0; i < 12; i++) {
+		id += PUSH_CHARS.charAt(this.lastRandChars[i]);
+	}
+	if(id.length != 20) throw new Error('Length should be 20.');
+	return id;
+};
 
 JumpStart.prototype.getMaterial = function(sceneObject)
 {
@@ -1733,6 +2158,14 @@ JumpStart.prototype.onReadyToReady = function()
 	// FIX ME: This should be an app option, not automatic.
 	this.scene.getObjectByName("jumpStartWorld").position.set(0, -this.enclosure.scaledHeight / 2.0, 0);
 
+	if( this.needsLocationUpdate )
+	{
+		var pathName = document.location.pathname;
+		pathName = pathName.substring(pathName.lastIndexOf("/") + 1);
+		window.location.href = pathName + "?room=" + this.roomID;
+		return;
+	}
+
 //	if( this.isAltspace )
 //		this.scene.add(this.localUser.skeleton);
 
@@ -1958,22 +2391,41 @@ JumpStart.prototype.extractData = function(data, targetData, maxDepth, currentDe
 JumpStart.prototype.doPendingUpdates = function()
 {
 	// Handle pending object updates
+	//console.log("tick");
+	var deadUpdates = [];
 	var x, y, data, instance, pendingApplyBehaviors, pendingUnapplyBehaviors;
+
+	var pendingUpdates = {};
 	for( x in this.pendingUpdates )
+		pendingUpdates[x] = this.pendingUpdates[x];
+
+	for( x in pendingUpdates )
 	{
-		data = this.pendingUpdates[x];
+		data = pendingUpdates[x];
+		//console.log(data);
 
 		pendingApplyBehaviors = [];
 		pendingUnapplyBehaviors = [];
 		if( !!data.needsSpawn )
+		{
 			instance = this.spawnInstance(null, {"networkData": data, "syncKey": x, "isInitialSync": !!data.isInitialSync});
+			if(!!data.transform)
+			{
+				// so things start with the correct transform on clients
+				instance.name = data.transform.name;
+				instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+				instance.quaternion.set(data.transform.quaternion.x, data.transform.quaternion.y, data.transform.quaternion.z, data.transform.quaternion.w);
+				instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
+			}
+		}
 		else
 		{
 			instance = this.syncedObjects[x];
 
 			if( !instance )
 			{
-				delete this.pendingUpdates[x];
+				//delete this.pendingUpdates[x];
+				//deadUpdates.push(x);
 				continue;
 			}
 
@@ -1983,9 +2435,15 @@ JumpStart.prototype.doPendingUpdates = function()
 			{
 				for( x in data.vitalData.behaviors )
 				{
-					if( !!!instance.behaviors || !!!instance.behaviors[x] )
+					if( !data.vitalData.behaviors[x] )
+						continue;
+
+					if( !!!instance.behaviors || !instance.behaviors.hasOwnProperty(x) || !instance.behaviors[x] )
+					{
+						console.log('inverse pushing' + x);
 						pendingApplyBehaviors.push(x);
-						//instance.applyBehavior(x);
+						//instance.applyBehavior(x, {}, data);
+					}
 				}
 			}
 
@@ -1993,16 +2451,26 @@ JumpStart.prototype.doPendingUpdates = function()
 			{
 				for( x in instance.behaviors )
 				{
-					if( !!data.vitalData && (!!!data.vitalData.behaviors || !!!data.vitalData.behaviors[x]) )
+//					if( instance.behaviors[x] )
+//						continue;
+
+//					if( !!data.vitalData && (!!!data.vitalData.behaviors || (!!!data.vitalData.behaviors[x] && !data.vitalData.behaviors[x])) && instance.behaviors[x] && instance.ownerID !== jumpStart.localUser.userID )
+//					if( !!data.vitalData && (!!!data.vitalData.behaviors || !!!data.vitalData.behaviors[x]))//&& instance.ownerID !== jumpStart.localUser.userID )
+					if( !!data.vitalData && (!!!data.vitalData.behaviors || (!!!data.vitalData.behaviors[x] && !data.vitalData.behaviors[x])) && instance.behaviors[x] && instance.ownerID !== jumpStart.localUser.userID )
+					{
+						console.log("Pushing " + x);
 						pendingUnapplyBehaviors.push(x);
+						//instance.unapplyBehavior(x);
+					}
 						//instance.unapplyBehavior(x);
 				}
 			}
 		}
-
+//console.log("doing da bomb update");
 		var deferredTransform = false;
-		if( data.hasOwnProperty("transform") )
+		if( !!data.transform )//hasOwnProperty("transform") )
 		{
+			console.log(data.transform);
 			instance.name = data.transform.name;
 
 			// There is only ONE case where transform updates would not be applied:
@@ -2011,14 +2479,21 @@ JumpStart.prototype.doPendingUpdates = function()
 				(!!data.vitalData && !!data.vitalData.behaviors && !!data.vitalData.behaviors.lerpSync) ||
 				(!!instance.behaviors.lerpSync && (!!!data.vitalData || !!data.vitalData.behaviors.lerpSync))
 			 )
+			{
 				deferredTransform = true;
+			}
 			else
 			{
-				if( !instance.ignoreSync.transform.position || (instance.ignoreSync.transform.position && data.vitalData && data.vitalData.ignoreSync.transform.position) )
+				//if( !instance.ignoreSync.transform.quaternion || (instance.ignoreSync.transform.quaternion && data.vitalData && !data.vitalData.ignoreSync.transform.quaternion) )
+
+				if( !instance.ignoreSync.transform.position || (instance.ignoreSync.transform.position && data.vitalData && !data.vitalData.ignoreSync.transform.position) )
 					instance.position.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
-				if( !instance.ignoreSync.transform.quaternion || (instance.ignoreSync.transform.quaternion && data.vitalData && data.vitalData.ignoreSync.transform.quaternion) )
+				
+				// NOTE: the !!!instance.quaternion._x check was extremely important to get pre-existing objects's quaternions correctly who started with ignore sync.
+				if( !instance.ignoreSync.transform.quaternion || !!!instance.quaternion._x || (instance.ignoreSync.transform.quaternion && data.vitalData && !data.vitalData.ignoreSync.transform.quaternion) )
 					instance.quaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
-				if( !instance.ignoreSync.transform.scale || (instance.ignoreSync.transform.scale && data.vitalData && data.vitalData.ignoreSync.transform.scale) )
+
+				if( !instance.ignoreSync.transform.scale || (instance.ignoreSync.transform.scale && data.vitalData && !data.vitalData.ignoreSync.transform.scale) )
 					instance.scale.set(data.transform.scale.x, data.transform.scale.y, data.transform.scale.z);
 			}
 		}
@@ -2032,25 +2507,38 @@ JumpStart.prototype.doPendingUpdates = function()
 			this.extractData.call(this, data.syncData, instance.syncData, Infinity);
 		}
 
-		// Apply any behaviors that need to be applied
-		var i, behavior;
-		for( i = 0; i < pendingApplyBehaviors.length; i++ )
-			instance.applyBehavior(pendingApplyBehaviors[i]);
-
+		// Unpply any behaviors that need to be applied
 		for( i = 0; i < pendingUnapplyBehaviors.length; i++ )
+		{
+			//console.log("Unapply alpha " + pendingUnapplyBehaviors.length);
 			instance.unapplyBehavior(pendingUnapplyBehaviors[i]);
+		}
 
 		// Deferred transforms means a lerpSync behavior applied to this object
 		if( deferredTransform && !!instance.behaviors.lerpSync )
 		{
 			// pre-prep this instance for lerpSync if this is its 1st sync received
-			if( !!!instance.userData.lerpSync )
-				jumpStart.behaviors.lerpSync.syncPrep.call(instance);
+			//if( !!!instance.userData.lerpSync )
+			//	jumpStart.behaviors.lerpSync.syncPrep.call(instance);
+			//console.log(pendingApplyBehaviors);
+			var lerpBehaviorIndex = pendingApplyBehaviors.indexOf("lerpSync");
+			if( !!!instance.userData.lerpSync )//lerpBehaviorIndex >= 0 )
+			{
+				//var blah = pendingApplyBehaviors.splice(lerpBehaviorIndex, 1);
+				//console.log("blah");
+				//console.log(blah);
+				instance.applyBehavior("lerpSync");
+			}
 
 			if( !!!data.isInitialSync )
 			{
 				if( !instance.ignoreSync.transform.position || (instance.ignoreSync.transform.position && !data.vitalData.ignoreSync.transform.position) )
+				{
+					//if( instance.name === "da bomb" )
+					//	console.log("setting position async");
+					//instance.updateMatrixWorld();
 					instance.userData.lerpSync.targetPosition.set(data.transform.position.x, data.transform.position.y, data.transform.position.z);
+				}
 				if( !instance.ignoreSync.transform.quaternion || (instance.ignoreSync.transform.quaternion && !data.vitalData.ignoreSync.transform.quaternion) )
 					instance.userData.lerpSync.targetQuaternion.set(data.transform.quaternion._x, data.transform.quaternion._y, data.transform.quaternion._z, data.transform.quaternion._w);
 
@@ -2086,8 +2574,28 @@ JumpStart.prototype.doPendingUpdates = function()
 			}
 		}
 
-		delete this.pendingUpdates[x];
+		var i, behavior;
+		for( i = 0; i < pendingApplyBehaviors.length; i++ )
+		{
+			// double check that we STILL need to be applied
+			// (the same check that is done before adding this behavior to the pending list)
+			//if( !!!instance.behaviors || !instance.behaviors.hasOwnProperty(pendingApplyBehaviors[i]) || !instance.behaviors[pendingApplyBehaviors[i]] )
+				instance.applyBehavior(pendingApplyBehaviors[i], "NO_OPTIONS");
+		}
+
+//		if( !!instance && instance.name === "da bomb" )
+//			console.log("Removing da bomb");
+		//delete this.pendingUpdates[x];
+		//deadUpdates.push(x);
+
+		//delete this.pendingUpdates[x];
 	}
+
+	//var max = pendingUpdates.length;
+	//var i;
+	//for( i = 0; i < max; i++ )
+	for( x in pendingUpdates )
+		delete this.pendingUpdates[x];
 };
 
 JumpStart.prototype.onGamepadButtonEvent = function(e)
@@ -2133,6 +2641,7 @@ JumpStart.prototype.onTick = function()
 		//console.log("dos");
 		this.gamepads = (!!navigator.getGamepads) ? navigator.getGamepads() : this.gamepads = navigator.webkitGetGamepads();
 	}
+
 //*/	
 	// Detect a gamepad
 	if( this.activeGamepadIndex === -1 )
@@ -2182,24 +2691,31 @@ JumpStart.prototype.onTick = function()
 	{
 		// Poll the active gamepad
 		var gamepad = this.gamepads[this.activeGamepadIndex];
-		var previousGamepadState = this.previousGamepadStates[this.activeGamepadIndex];
-
-		if( !!gamepad.buttons && gamepad.buttons.length > 0 )
+		if( !!!gamepad )
 		{
-			var buttonIndex;
-			for( buttonIndex in gamepad.buttons )
-			{
-				if( gamepad.buttons[buttonIndex].value !== previousGamepadState.buttons[buttonIndex].value )
-				{
-					// Button value has changed
-					var fakeEvent = {
-						"type": "gamepadbutton",
-						"buttonCode": parseInt(buttonIndex),
-						"value": gamepad.buttons[buttonIndex].value
-					};
+			this.activeGamepadIndex = -1;
+		}
+		else
+		{
+			var previousGamepadState = this.previousGamepadStates[this.activeGamepadIndex];
 
-					this.onGamepadButtonEvent(fakeEvent);
-					previousGamepadState.buttons[buttonIndex].value = gamepad.buttons[buttonIndex].value;
+			if( !!gamepad.buttons && gamepad.buttons.length > 0 )
+			{
+				var buttonIndex;
+				for( buttonIndex in gamepad.buttons )
+				{
+					if( gamepad.buttons[buttonIndex].value !== previousGamepadState.buttons[buttonIndex].value )
+					{
+						// Button value has changed
+						var fakeEvent = {
+							"type": "gamepadbutton",
+							"buttonCode": parseInt(buttonIndex),
+							"value": gamepad.buttons[buttonIndex].value
+						};
+
+						this.onGamepadButtonEvent(fakeEvent);
+						previousGamepadState.buttons[buttonIndex].value = gamepad.buttons[buttonIndex].value;
+					}
 				}
 			}
 		}
@@ -2244,7 +2760,7 @@ JumpStart.prototype.onTick = function()
 	this.doPendingUpdates();
 	doPendingListeners.call(this);
 
-	var i, freshObject, listenerName, isInitialSync;
+	var i, freshObject, listenerName, isInitialSync, behavior, x;
 	for( i in this.freshObjects )
 	{
 		freshObject = this.freshObjects[i];
@@ -2252,6 +2768,20 @@ JumpStart.prototype.onTick = function()
 		isInitialSync = (!!freshObject.__isInitialSync) ? freshObject.__isInitialSync : false;
 		delete freshObject["__isInitialSync"];
 
+		// apply behavior listeners // FIXME: what if we are the owner and spawned them during initialization?
+		if( freshObject.ownerID !== jumpStart.localUser.userID || isInitialSync )
+		{
+			for( x in freshObject.behaviors )
+			{
+				if( freshObject.behaviors[x] )
+				{
+					jumpStart.behaviors[x].applyBehavior.call(freshObject);
+					console.log("yeeepi");
+				}
+			}
+		}
+
+		// spawn listeners
 		for( listenerName in freshObject.listeners.spawn )
 			freshObject.listeners.spawn[listenerName].call(freshObject, isInitialSync);
 	}
@@ -2616,6 +3146,79 @@ JumpStart.prototype.onWindowResize = function()
 	jumpStart.renderer.setSize(window.innerWidth, window.innerHeight);
 };
 
+JumpStart.prototype.loadModelsEx = function(fileNames, callback)
+{
+	// fileNames are relative to the "assets/[appID]/" path.
+	// Convert all fileNames to valid paths.
+
+	var max = fileNames.length;
+	var i;
+	for( i = 0; i < max; i++ )
+	{
+		fileNames[i] = "assets/" + this.options.appID + "/" + fileNames[i];
+	}
+
+	var found = fileNames[0].lastIndexOf("/");
+	//var urlTrunk = (found > 0) ? fileNames[0].substring(0, found) : "";
+	var urlFile = (found > 0 ) ? fileNames[0].substring(found+1) : fileNames[0];
+
+	found = location.pathname.lastIndexOf("/");
+	var urlPath = (found > 0) ? location.pathname.substring(1, found) : "";
+
+	var multiloader = altspace.utilities.multiloader;
+	if( !!!multiloader.hasBeenInit )
+	{
+		multiloader.hasBeenInit = true;
+		multiloader.init({
+			crossOrigin: "anonymous",
+			baseUrl: ""
+		});
+	}
+
+	var loadRequest = new multiloader.LoadRequest();
+	var fileName;
+	for( i = 0; i < max; i++ )
+	{
+		fileName = fileNames[i];
+
+		if( jumpStart.isModelDefined(fileName) )
+			continue;
+		
+		loadRequest.objUrls.push(urlPath + "/" + fileName + ".obj");
+		loadRequest.mtlUrls.push(urlPath + "/" + fileName + ".mtl");
+	}
+
+
+	var dummy = {
+		"callback": callback,
+		"fileNames": fileNames
+	};
+
+	multiloader.load(loadRequest, function(request)
+	{
+		var i, object, fileName;
+		for( i = 0; i < loadRequest.objects.length; i++ )
+		{
+			object = loadRequest.objects[i];
+
+			fileName = loadRequest.objUrls[i];
+			if( urlPath !== "" )
+				fileName = fileName.substring(urlPath.length + 1);
+
+			fileName = fileName.substring(0, fileName.length - 4);
+
+			jumpStart.models.push({
+				"modelFile": fileName,
+				"object": object
+			});
+		}
+
+		console.log("JumpStart: Loaded " + loadRequest.objectsLoaded + " model(s).");
+		dummy.callback(dummy.fileNames, request);
+	}.bind(dummy));
+
+};
+
 JumpStart.prototype.loadModels = function(fileNames)
 {
 	// fileNames are relative to the "assets/[appID]/" path.
@@ -2642,16 +3245,24 @@ JumpStart.prototype.loadModels = function(fileNames)
 				var urlPath = (found > 0) ? location.pathname.substring(1, found) : "";
 
 				var multiloader = altspace.utilities.multiloader;
-				multiloader.init({
-					crossOrigin: "anonymous",
-					baseUrl: ""
-				});
+				if( !!!multiloader.hasBeenInit )
+				{
+					multiloader.hasBeenInit = true;
+					multiloader.init({
+						crossOrigin: "anonymous",
+						baseUrl: ""
+					});
+				}
 
 				var loadRequest = new multiloader.LoadRequest();
 				var i, fileName;
 				for( i = 0; i < fileNames.length; i++ )
 				{
 					fileName = fileNames[i];
+
+					if( jumpStart.isModelDefined(fileName) )
+						continue;
+					
 					loadRequest.objUrls.push(urlPath + "/" + fileName + ".obj");
 					loadRequest.mtlUrls.push(urlPath + "/" + fileName + ".mtl");
 				}
@@ -2676,7 +3287,7 @@ JumpStart.prototype.loadModels = function(fileNames)
 					}
 
 					console.log("JumpStart: Loaded " + loadRequest.objectsLoaded + " model(s).");
-					promiseCallback(fileNames.length);
+					promiseCallback(loadRequest);
 				}.bind(this));
 			}.bind(this)
 		};
@@ -2858,6 +3469,17 @@ JumpStart.prototype.enclosureBoundary = function(boundaryID)
 	return boundary;
 };
 
+JumpStart.prototype.isModelLoaded = function(modelFile)
+{
+	return this.models.find(function(t){ return (!!!t.object && t.modeFile === modelFile); });
+};
+
+// if the model is defined but NOT loaded, then it is probably LOADING right now.
+JumpStart.prototype.isModelDefined = function(modelFile)
+{
+	return this.models.find(function(t){ return (t.modeFile === modelFile); });
+};
+
 JumpStart.prototype.spawnInstance = function(modelFile, options)
 {
 	this.tickLag += 0.02;
@@ -2901,6 +3523,8 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	else
 		instance = new THREE.Group();
 
+	//if( instance.modelFile === "models/base" )
+		//console.log("spawnz0r");
 	//instance.position.set(0, this.worldOffset.y, 0);
 
 	/* OCTREE DISABLED FOR NOW
@@ -3026,10 +3650,13 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			if( !!!options )
 				options = {};
 
+			if( options === "NO_OPTIONS" )
+				options = undefined;
+
 			var behavior = jumpStart.behaviors[behaviorName];
 			if( !!behavior )
 			{
-				if( behavior.applyBehavior.call(this, options) )
+				if( typeof behavior.applyBehavior === "function" && behavior.applyBehavior.call(this, options) )
 					this.behaviors[behaviorName] = true;
 				else
 					console.warn("Behavior \"" + behaviorName + "\" failed to apply.");
@@ -3039,6 +3666,9 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		},
 		"unapplyBehavior": function(behaviorName, options)
 		{
+			//if( !this.behaviors.hasOwnProperty(behaviorName) || !this.behaviors[behaviorName] )
+			//	return;
+			
 			if( !!!options )
 				options = {};
 
@@ -3060,6 +3690,9 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		{
 			if( !jumpStart.options.multiuserOnly )
 				return;
+
+			//if( this.name === "da bomb" )
+			//	console.log("syncing");
 
 			var defaultOptions = {
 				"transform": false,
@@ -3361,8 +3994,36 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 
 	if( !this.isReady )
 		instance.__isInitialSync = true;
+
+	// make everything not have an altspace collider by default.
+	this.makeNonCollide(instance);
 	
+	if( instance.modelFile === "models/base" )
+		console.log(instance.parent);
+
 	return instance;
+};
+
+JumpStart.prototype.makeNonCollide = function(sceneObject)
+{
+	var max = sceneObject.children.length;
+	var i, instance;
+	for( i = 0; i < max; i++ )
+	{
+		instance = sceneObject.children[i];
+		instance.userData.altspace = {collider: {enabled: false}};
+	}
+};
+
+JumpStart.prototype.makeCollide = function(sceneObject)
+{
+	var max = sceneObject.children.length;
+	var i, instance;
+	for( i = 0; i < max; i++ )
+	{
+		instance = sceneObject.children[i];
+		instance.userData.altspace = {collider: {enabled: true}};
+	}
 };
 
 JumpStart.prototype.addEventListener = function(eventType, listener)

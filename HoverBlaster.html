@@ -81,6 +81,7 @@
 
 				var button = jumpStart.spawnInstance("models/button", {"parent": buttonFrame});
 				button.blocksLOS = true;
+				jumpStart.makeCollide(button);
 				button.addEventListener("cursorenter", buttonEnter);
 				button.addEventListener("cursorexit", buttonExit);
 				button.addEventListener("cursordown", buttonDown);
@@ -149,6 +150,7 @@
 
 				var button2 = jumpStart.spawnInstance("models/button", {"parent": buttonFrame2});
 				button2.blocksLOS = true;
+				jumpStart.makeCollide(button2);
 				button2.addEventListener("cursorenter", buttonEnter);
 				button2.addEventListener("cursorexit", buttonExit);
 				button2.addEventListener("cursordown", buttonDown);
@@ -200,6 +202,7 @@
 
 				var button3 = jumpStart.spawnInstance("models/button", {"parent": buttonFrame3});
 				button3.blocksLOS = true;
+				jumpStart.makeCollide(button3);
 				button3.addEventListener("cursorenter", buttonEnter);
 				button3.addEventListener("cursorexit", buttonExit);
 				button3.addEventListener("cursordown", buttonDown);

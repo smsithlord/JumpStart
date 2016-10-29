@@ -159,6 +159,7 @@
 				var aimPlane = jumpStart.spawnCursorPlane();
 				aimPlane.name = "aimPlane";
 				aimPlane.blocksLOS = true;
+				jumpStart.makeCollide(aimPlane);
 				aimPlane.translateZ(-10.0);
 				aimPlane.scale.y *= 0.5;
 				aimPlane.translateY(-jumpStart.worldOffset.y / 2.0);
@@ -387,8 +388,14 @@
 				button.addEventListener("cursorenter", buttonEnter);
 				button.addEventListener("cursorexit", buttonExit);
 				button.addEventListener("cursordown", buttonDown);
+				button.addEventListener("spawn", buttonSpawn);
 
 				return button;
+			}
+
+			function buttonSpawn()
+			{
+				jumpStart.makeCollide(this);
 			}
 
 			function buttonEnter()
@@ -504,9 +511,11 @@
 					target.syncData.hasBeenShot = false;
 					target.position.copy(shooter.position);
 					target.quaternion.copy(counter.quaternion);
+					target.position.y += 20.0;
+					//target.updateMatrixWorld();
 					target.applyBehavior("physics", {"force": new THREE.Vector3(0, 10.0, 0), "rotation": new THREE.Vector3()});
 					target.addEventListener("tick", targetTick);
-					target.addEventListener("networkRemove", targetNetworkRemove);
+					//target.addEventListener("networkRemove", targetNetworkRemove);
 					target.addEventListener("spawn", targetSpawn);
 					//target.addEventListener("remove", targetRemove);
 					target.sync();
@@ -518,7 +527,7 @@
 					target.position.copy(shooter.position);
 					target.quaternion.copy(counter.quaternion);
 					target.addEventListener("tick", targetTick);
-					target.addEventListener("networkRemove", targetNetworkRemove);
+					//target.addEventListener("networkRemove", targetNetworkRemove);
 					target.applyBehavior("footballPass", {"height": 300, "speed": 300.0, "targetPosition": jumpStart.scene.getObjectByName(shooter.userData.targetName).position.clone(), "originalPosition": target.position.clone(), "callbackFuncName": "removeOnFinish"});
 					target.addEventListener("spawn", targetSpawn);
 					//target.addEventListener("remove", targetRemove);
@@ -564,12 +573,37 @@
 
 			function shardTick()
 			{
-				if( this.position.y === 0 && !!this.userData.physics )
+				var tempRad = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
+				if( this.position.y === tempRad )
 				{
-					this.unapplyBehavior("physics");
-					this.rotation.x = Math.PI / 2.0;
-					this.rotation.z = 0;
-					this.applyBehavior("shrinkRemove", {"delay": 2.0});
+					if( this.userData.physics.velocity.length() === 0 )
+					{
+						this.unapplyBehavior("physics");
+						this.rotation.x = Math.PI / 2.0;
+						this.rotation.z = 0;
+						this.applyBehavior("shrinkRemove", {"delay": 2.0, "localMode": true});
+						this.removeEventListener("tick", arguments.callee);
+					}
+					else
+					{
+						var airDrag = 2.0;
+						var drag = this.userData.physics.velocity.clone();
+						drag.normalize();
+						drag.multiplyScalar(airDrag);
+						drag.y *= 100.0;
+						drag.multiplyScalar(jumpStart.deltaTime);
+						this.userData.physics.velocity.sub(drag);
+
+						var rotDrag = 10.0;
+						this.userData.physics.rotVelocity.x *= (1.0 * rotDrag * jumpStart.deltaTime);
+						this.userData.physics.rotVelocity.y *= (1.0 * rotDrag * jumpStart.deltaTime);
+						this.userData.physics.rotVelocity.z *= (1.0 * rotDrag * jumpStart.deltaTime);
+
+						//this.userData.physics.velocity.y -= 10.0 * jumpStart.deltaTime;
+						//var rotDelta = new THREE.Vector3();
+						//rotDelta 
+						//this.userData.physics.rotation.sub(new THREE.Vector3());
+					}
 				}
 			}
 
@@ -591,7 +625,8 @@
 					//return;
 				}
 
-				if( this.position.y === 0 )
+				var tempRad = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
+				if( this.position.y === tempRad )
 				{
 					jumpStart.removeInstance(this);
 					return;
@@ -648,9 +683,12 @@
 				ball.position.copy(position);
 				ball.quaternion.copy(cannon.quaternion);
 				ball.scale.set(3.0, 3.0, 3.0);
+				//ball.updateMatrixWorld();
 				ball.applyBehavior("physics", {"force": new THREE.Vector3().copy(jumpStart.localUser.cursorHit.scaledPoint).add(new THREE.Vector3(0, 100.0, 0)).sub(ball.position).normalize().multiplyScalar(15.0)});
+				ball.applyBehavior("autoRemoval");
+				ball.applyBehavior("dropShadow");
 				ball.addEventListener("tick", ballTick);
-				ball.addEventListener("networkRemove", ballNetworkRemove);
+				//ball.addEventListener("networkRemove", ballNetworkRemove);
 				ball.addEventListener("spawn", ballSpawn);
 				ball.sync();
 
@@ -660,44 +698,64 @@
 			function ballSpawn()
 			{
 				jumpStart.playSound("sounds/cannon_fired");
+				//console.log(this.userData.physics);
 			}
 
+			/*
 			function ballNetworkRemove()
 			{
 				return false;
 			}
+			*/
 
 			function ballTick()
 			{
-				if( !!!this.userData.shrinkRemove )
+				if( !!!this.userData.shrinkRemove && !!this.behaviors.physics )
 				{
-					if( this.position.y === 0 )
+					var tempRad = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
+					//console.log(this.position.y + " vs " + jumpStart.worldOffset.y);
+					if( this.position.y === tempRad )
 					{
-						if( this.userData.physics.velocity.length() > 0.8 )
+						var velLength = this.userData.physics.velocity.length();
+						if( velLength >= 1.0 )
 							jumpStart.playSound("sounds/floor");
+						else if( velLength === 0 && this.ownerID === jumpStart.localUser.userID )
+						{
+							//jumpStart.removeInstance(this);
+							this.unapplyBehavior("physics");
+							this.applyBehavior("shrinkRemove", {"delay": 2.0, "speed": 4.0, "localMode": true});
+							this.applyBehavior("lerpSync");
+							//this.updateMatrixWorld();
+							this.sync();
+							return;
+						}
 
-						this.userData.physics.velocity.multiplyScalar(0.6);
-						this.userData.physics.rotVelocity.multiplyScalar(0.7);
+						//this.userData.physics.velocity.multiplyScalar(0.6);
+						//this.userData.physics.rotVelocity.multiplyScalar(0.7);
 					}
-					else if( Math.abs(this.position.z) === Math.abs(jumpStart.worldOffset.y) )
+					else if( Math.abs(this.position.z) === Math.abs(jumpStart.worldOffset.y) - tempRad )
+					{
+						console.log("backstop");
+						jumpStart.playSound("sounds/backstop");
+						this.userData.physics.velocity.x *= 0.4;
+						this.userData.physics.velocity.z *= 0.4;
+					}
+					else if( Math.abs(this.position.x) === Math.abs(jumpStart.worldOffset.y) - tempRad )
 					{
 						jumpStart.playSound("sounds/backstop");
-						this.userData.physics.velocity.x *= 0.3;
-						this.userData.physics.velocity.z *= 0.3;
-					}
-					else if( Math.abs(this.position.x) === Math.abs(jumpStart.worldOffset.y) )
-					{
-						jumpStart.playSound("sounds/backstop");
-						this.userData.physics.velocity.x *= 0.3;
-						this.userData.physics.velocity.z *= 0.3;
+						this.userData.physics.velocity.x *= 0.4;
+						this.userData.physics.velocity.z *= 0.4;
 					}
 
-					if( this.userData.physics.velocity.length() < 0.1 )
-					{
-						this.userData.physics.velocity.set(0, 0, 0);
-						this.userData.physics.rotVelocity.set(0, 0, 0);
-						this.applyBehavior("shrinkRemove", {"delay": 2.0, "speed": 4.0});
-					}
+				//	console.log(Math.abs(this.position.z) + " vs " + Math.abs(jumpStart.worldOffset.y));
+
+					//if( this.userData.physics.velocity.length() === 0 )
+					//{
+					//	this.userData.physics.velocity.set(0, 0, 0);
+					//	this.userData.physics.rotVelocity.set(0, 0, 0);
+
+					//	this.applyBehavior("shrinkRemove", {"delay": 2.0, "speed": 4.0});
+					//}
 
 					// collision check
 					if( this.ownerID === jumpStart.localUser.userID )

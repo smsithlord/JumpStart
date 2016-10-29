@@ -96,6 +96,7 @@
 					buttonFace.translateZ(13.5);
 
 					buttonFace.blocksLOS = true;
+					jumpStart.makeCollide(buttonFace);
 					if( !!soundFile )
 						buttonFace.userData.soundFile = soundFile;
 

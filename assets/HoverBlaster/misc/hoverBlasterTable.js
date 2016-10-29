@@ -3,6 +3,70 @@ jumpStartBehavior({
 	{
 		"tableCount": 0,	// Needed because Altspace requires each dynamic texture be different
 		"tableRef": null, // FIXME: "cheating".  this will make this un-instancable, but the gamepad callback needs to know our table.
+		"applyBehavior": function(options)
+		{
+			if( !!options )
+			{
+				this.syncData.hoverBlasterTable = {
+					"ownerID": jumpStart.localUser.userID,
+					"ownerName": jumpStart.localUser.displayName,
+					"isActive": false,
+					"rotSpeed": 0.3,/*
+					"grandParentTest":
+					{
+						"parentTest":
+						{
+							"childTest": 21
+						}
+					},*/
+					"timeline": {}
+				};
+
+				jumpStart.behaviors.hoverBlasterTable.resetTimeline.call(this, 0, "STAGE 1");
+				jumpStart.behaviors.hoverBlasterTable.generateStage.call(this, 0);
+
+				this.addEventListener("spawn", jumpStart.behaviors.hoverBlasterTable.spawnBehavior);
+				this.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.tickBehavior);
+				this.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.removeBehavior);
+			}
+
+			jumpStart.playSound("sounds/bomberready", 0.3);
+			jumpStart.playSound("sounds/bomberin", 0.3);
+			
+
+			this.userData.hoverBlasterTable = {
+				"radius": 118.0,
+				"initialRot": -1,
+				"rocks": [],
+				"guns": [],
+				"rot": Math.PI - 0.3,
+				"plates": [],
+				"initialTimeline": this.syncData.hoverBlasterTable.timeline.info.previous,
+				"spentTimeline": [],
+				"totalPlates": 0,
+				"lasers": {},
+				"enemyLasers": {},
+				"weaponExplosions": {},
+				"rocks": [],
+				"currentStage": this.syncData.hoverBlasterTable.timeline.info.id,
+				"board": null,
+				"ship": null
+			};
+
+			var board = jumpStart.spawnInstance(null);
+			board.position.copy(this.position);
+			board.rotateY(Math.PI);	// so the well-lit side faces the player
+			this.userData.hoverBlasterTable.board = board;
+
+			var dome = jumpStart.spawnInstance("models/dome", {"parent": board});
+			dome.scale.multiplyScalar(0.95);
+			dome.userData.board = board;
+			this.userData.hoverBlasterTable.dome = dome;
+
+			jumpStart.behaviors.hoverBlasterTable.tableRef = this;
+
+			return true;
+		},
 		"generateEntityId": function()
 		{
 			if( !!!this.userData.hoverBlasterTable )
@@ -342,34 +406,6 @@ jumpStartBehavior({
 					this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 			});
 		},
-		"applyBehavior": function(options)
-		{
-			this.syncData.hoverBlasterTable = {
-				"ownerID": jumpStart.localUser.userID,
-				"ownerName": jumpStart.localUser.displayName,
-				"isActive": false,
-				"rotSpeed": 0.3,/*
-				"grandParentTest":
-				{
-					"parentTest":
-					{
-						"childTest": 21
-					}
-				},*/
-				"timeline": {}
-			};
-
-			jumpStart.playSound("sounds/bomberready", 0.3);
-			jumpStart.playSound("sounds/bomberin", 0.3);
-			jumpStart.behaviors.hoverBlasterTable.resetTimeline.call(this, 0, "STAGE 1");
-			jumpStart.behaviors.hoverBlasterTable.generateStage.call(this, 0);
-
-			this.addEventListener("spawn", jumpStart.behaviors.hoverBlasterTable.spawnBehavior);
-			this.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.tickBehavior);
-			this.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.removeBehavior);
-
-			return true;
-		},
 		"resetTimeline": function(id, title)
 		{
 			console.log("Resetting timeline");
@@ -381,7 +417,7 @@ jumpStartBehavior({
 					"title": title,
 					"rotSpeed": 0.3,
 					"previous": "-1"
-				},
+				}/*,
 				"0":
 				{
 					"stageText":
@@ -391,7 +427,7 @@ jumpStartBehavior({
 						"offsetX": 0.1,
 						"template": "stageText"
 					}
-				}/*,
+				}*//*,
 				"0o2":
 				{
 					"goText":
@@ -407,6 +443,20 @@ jumpStartBehavior({
 		},
 		"generateStage": function(id)
 		{
+			// add in idle space for loading time of clients
+			var offsetZ = 0.3;
+			var safeZ = (offsetZ).toString().replace(".", "o");
+			if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
+				this.syncData.hoverBlasterTable.timeline[safeZ] = {
+					"stageText":
+					{
+						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"offsetY": 0.0,
+						"offsetX": 0.1,
+						"template": "stageText"
+					}
+				};
+
 			console.log("Generate stage ID for " + id);
 			if( id === 0 )
 			{
@@ -414,7 +464,7 @@ jumpStartBehavior({
 				//this.syncData.hoverBlasterTable.timeline.info.music = "UBP7xH348cI";
 				
 				var length = 1.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -480,7 +530,7 @@ jumpStartBehavior({
 			{
 				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -571,7 +621,7 @@ jumpStartBehavior({
 			{
 				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -695,7 +745,7 @@ jumpStartBehavior({
 			{
 				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -836,7 +886,7 @@ jumpStartBehavior({
 			{
 				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.2;
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -994,7 +1044,7 @@ jumpStartBehavior({
 			{
 				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.3;
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -1086,7 +1136,7 @@ jumpStartBehavior({
 				this.syncData.hoverBlasterTable.timeline.info.rotSpeed = 0.4;
 
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 
@@ -1389,7 +1439,7 @@ jumpStartBehavior({
 			else if( id === 5 )
 			{
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -1479,7 +1529,7 @@ jumpStartBehavior({
 			else if( id === 6 )
 			{
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -1569,7 +1619,7 @@ jumpStartBehavior({
 			else
 			{
 				var length = 2.0;
-				var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
+				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
 	//			if( !!this.userData.hoverBlasterTable )
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 				
@@ -1639,6 +1689,9 @@ jumpStartBehavior({
 		},
 		"tickBehavior": function()
 		{
+			if( !!!this.userData.hoverBlasterTable.ship )
+				return;
+
 //			if( !!this.syncData.hoverBlasterTable.timeline.info.previous )
 //			{
 //				console.log(this.syncData.hoverBlasterTable.timeline.info.previous);
@@ -3236,6 +3289,10 @@ jumpStartBehavior({
 		},
 		"shipSpawn": function(isInitialSync) 
 		{
+			console.log("SHIP SPANW");
+			//if( this.ownerID !== jumpStart.localUser.userID)
+				//return;
+
 			if( isInitialSync && this.ownerID === jumpStart.localUser.userID )
 			{
 				setTimeout(function(){ jumpStart.removeInstance(this); }.bind(this), 1000);
@@ -3243,6 +3300,9 @@ jumpStartBehavior({
 			}
 
 			var table = jumpStart.scene.getObjectByName(this.syncData.tableName);
+			if( !!!table )
+				return;
+			
 			table.userData.hoverBlasterTable.ship = this;
 			this.userData.table = table;
 			this.userData.oldShotsFired = this.syncData.shotsFired;
@@ -3492,51 +3552,9 @@ jumpStartBehavior({
 		},
 		"spawnBehavior": function(isInitialSync)
 		{
-			//console.log("Gamepads");
-			//console.log(jumpStart.gamepads);
-			//console.log(altspace.getGamepads());
-			//var gamepadIndex, gamepad, previousGamepadState, buttonIndex;
-			//	for( gamepadIndex in this.gamepads )
-			//gamepad = this.gamepads[gamepadIndex];
-
-			if( !!!this.userData.hoverBlasterTable )
-				this.userData.hoverBlasterTable = {};
-
-			this.userData.hoverBlasterTable.radius = 118.0;
-			this.userData.hoverBlasterTable.initialRot = -1;
-			this.userData.hoverBlasterTable.rocks = [];
-			this.userData.hoverBlasterTable.guns = [];
-			this.userData.hoverBlasterTable.rot = Math.PI - 0.3;
-			//this.userData.hoverBlasterTable.rotateX(this.userData.hoverBlasterTable.rot);
-			this.userData.hoverBlasterTable.plates = [];
-			this.userData.hoverBlasterTable.initialTimeline = this.syncData.hoverBlasterTable.timeline.info.previous;
-			this.userData.hoverBlasterTable.spentTimeline = [];
-			this.userData.hoverBlasterTable.totalPlates = 0;
-			this.userData.hoverBlasterTable.lasers = {};
-			this.userData.hoverBlasterTable.enemyLasers = {};
-			this.userData.hoverBlasterTable.weaponExplosions = {};
-			this.userData.hoverBlasterTable.rocks = [];
-			this.userData.hoverBlasterTable.currentStage = this.syncData.hoverBlasterTable.timeline.info.id;
-			this.userData.hoverBlasterTable.board = null;
-			this.userData.hoverBlasterTable.ship = null;
-
-			var board = jumpStart.spawnInstance(null);//models/hawk");
-			board.position.copy(this.position);
-
-			//board.quaternion.copy(this.quaternion);
-			board.rotateY(Math.PI);	// so the well-lit side faces the player
-			//board.rotateX(-Math.PI / 1.5);
-			this.userData.hoverBlasterTable.board = board;
-
-			var dome = jumpStart.spawnInstance("models/dome", {"parent": board});
-			dome.scale.multiplyScalar(0.95);
-			dome.userData.board = board;
-			this.userData.hoverBlasterTable.dome = dome;
-
-			jumpStart.behaviors.hoverBlasterTable.tableRef = this;
-
 			if( this.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
 			{
+				console.log("Spawn a shp!!");
 				var ship = jumpStart.spawnInstance(this.userData.shipType);
 
 				ship.syncData.dead = false;
@@ -3547,7 +3565,7 @@ jumpStartBehavior({
 				ship.addEventListener("spawn", jumpStart.behaviors.hoverBlasterTable.shipSpawn);
 				ship.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipTick);
 				ship.applyBehavior("autoSync");
-				ship.applyBehavior("lerpSync");
+				ship.applyBehavior("lerpSync", {"speed": 30.0});
 				ship.sync();
 
 				// FIXME: Spawn msgs should be called locally automatically by JumpStart!
