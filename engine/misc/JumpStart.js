@@ -1,7 +1,7 @@
 // Global objects
 function JumpStart(options, appBehaviors)
 {
-	this.version = "0.2.1";
+	this.version = "0.2.2";
 	this.shouldSimulateLag = false;
 	this.tickLag = 0.0;	// for simulating bad performance.
 
@@ -44,6 +44,9 @@ function JumpStart(options, appBehaviors)
 		"renderer",
 		"clock",
 		"raycaster",
+		"fontLoader",
+		"fontUrl",
+		"font",
 		"cursorRay",
 		"enclosure",
 		"localUser",
@@ -108,6 +111,7 @@ function JumpStart(options, appBehaviors)
 	this.roomID = this.getQueryVariable("room");
 	this.isAltspace = (window.hasOwnProperty("altspace") && window.altspace.inClient);
 	this.isGear = navigator.userAgent.match(/mobile/i);
+	this.quality = (this.isGear) ? "low" : "high";
 	this.isInitialized = false;
 	this.isReady = false;
 	this.isRunning = false;
@@ -116,6 +120,7 @@ function JumpStart(options, appBehaviors)
 	this.previousGamepadStates = [];
 	this.hoveredObject = null;
 	this.clickedObject = null;
+	this.fontUrl = "https://cdn.rawgit.com/mrdoob/three.js/r74/examples/fonts/helvetiker_regular.typeface.js";
 
 	// Set as many synchronous non-null PRIVATE member veriables as possible 
 	this.options =
@@ -533,75 +538,128 @@ function JumpStart(options, appBehaviors)
 						"useParent": (!!options.useParent) ? options.useParent : false
 					};
 
-					this.addEventListener("spawn", jumpStart.behaviors.dropShadow.spawnBehavior);
+					//this.addEventListener("spawn", jumpStart.behaviors.dropShadow.spawnBehavior);
 					this.addEventListener("tick", jumpStart.behaviors.dropShadow.tickBehavior);
 				}
 
-				return true;
-			},
-			"createShadow": function()
-			{
 				var target = (this.syncData.dropShadow.useParent) ? this.parent : this;
 
-				var geometry = new THREE.SphereGeometry( this.boundingSphere.radius * this.syncData.dropShadow.scale, 5, 8, 0, Math.PI);
+				var tempRad = (!!this.boundingSphere) ? this.boundingSphere.radius : 10.0;
+				var geometry = new THREE.SphereGeometry( 1.0, 5, 8, 0, Math.PI);
 				var material = new THREE.MeshBasicMaterial( {color: 0x000000, transparent: true, opacity: 0.5} );
 				var shadowObject = new THREE.Mesh( geometry, material );
 				var shadow = jumpStart.spawnInstance(null, {"object": shadowObject});
 				shadow.scale.z = 0.1;
-				shadow.scale.x = target.scale.x;
-				shadow.scale.y = target.scale.y;
+				shadow.scale.x = tempRad * this.syncData.dropShadow.scale * target.scale.x;
+				shadow.scale.y = tempRad * this.syncData.dropShadow.scale * target.scale.x;
 				shadow.rotateX(-Math.PI / 2.0);
 				this.addEventListener("remove", jumpStart.generateRemoveWatcher(shadow));
 
 				this.userData.dropShadow = {
 					"shadow": shadow
 				};
+
+				return true;
+			},/*
+			"createShadow": function()
+			{
+				this.userData.dropShadowshadow = shadow;
 			},
 			"spawnBehavior": function(isInitialSync)
 			{
 				jumpStart.behaviors.dropShadow.createShadow.call(this);
-			},
+			},*/
 			"tickBehavior": function()
 			{
-				if( !!!this.userData.dropShadow )
-					jumpStart.behaviors.dropShadow.createShadow.call(this);
+				//if( !!!this.userData.dropShadow )
+				//	jumpStart.behaviors.dropShadow.createShadow.call(this);
 
 				var target = (this.syncData.dropShadow.useParent) ? this.parent : this;
 				var shadow = this.userData.dropShadow.shadow;
 				shadow.position.copy(target.position);
 				shadow.position.y = 0.0;
+
+				var tempRad = (!!this.boundingSphere) ? this.boundingSphere.radius : 10.0;
+				shadow.scale.x = tempRad * this.syncData.dropShadow.scale * target.scale.x;
+				shadow.scale.y = tempRad * this.syncData.dropShadow.scale * target.scale.x;
 			},
 			"unapplyBehavior": function()
 			{
 				delete this.userData["dropShadow"];
 				delete this.syncData["dropShadow"];
+				this.removeEventListener("tick", jumpStart.behaviors.dropShadow.tickBehavior);
 				return true;
 			}
 		},
-		"asyncModel": // local behavior
+		"asyncModel": // local behavior (but its presence gets synced so we're loved.)
 		{
 			"applyBehavior": function(options)
 			{
-				this.userData.asyncModel = {
-					"modelFile": options.modelFile,
-					"callback": options.callback,
-					"useBubbleIn": (!!options.useBubbleIn) ? options.useBubbleIn : true
-				};
-
-				jumpStart.loadModelsEx([this.userData.asyncModel.modelFile], function(fileNames, request)
+				if( !!options )
 				{
+					this.userData.asyncModel = {
+						"modelFile": options.modelFile,
+						"callback": (typeof options.callback === "function") ? options.callback : null,
+						"useBubbleIn": (options.hasOwnProperty("useBubbleIn")) ? options.useBubbleIn : true,
+						"bubbleInSpeed": (!!options.bubbleInSpeed) ? options.bubbleInSpeed : 4.0,
+						"visualObject": null
+					};
+				}
+				else
+				{
+					this.unapplyBehavior("asyncModel");
+					return;
+				}
+
+				function onModelReady()
+				{
+					// abort if the object that called us has already been deleted
 					if( !!!jumpStart.objects[this.uuid] )
 						return;
-					
-					var visualObject = jumpStart.spawnInstance(this.userData.asyncModel.modelFile, {"parent": this});
+
+					var visualObject;
+					if( !!this.userData.asyncModel && !!this.userData.asyncModel.visualObject )
+						visualObject = this.userData.asyncModel.visualObject;
+
+					if( !!!visualObject )
+					{
+						visualObject = jumpStart.spawnInstance(this.userData.asyncModel.modelFile, {"parent": this});
+						visualObject.userData.modelParent = this;
+						this.userData.asyncModel.visualObject = visualObject;
+					}
+
+					this.boundingSphere = visualObject.boundingSphere.clone();
+
 					if( this.userData.asyncModel.useBubbleIn )
-						visualObject.applyBehavior("bubbleIn", {"speed": 6.0});
+						visualObject.applyBehavior("bubbleIn", {"speed": this.userData.asyncModel.bubbleInSpeed});
 
-					this.boundingSphere = visualObject.boundingSphere;
-
+					// if the local user has attached a local non-synced function to userData.asyncModel.callback, call it for them.
 					if( !!this.userData.asyncModel.callback )
-						this.userData.asyncModel.callback();
-				}.bind(this));
+						this.userData.asyncModel.callback(visualObject);
+				}
+
+				// load it right away if the model is ready
+				var foundModel = jumpStart.findModel(this.userData.asyncModel.modelFile);
+				if( !!foundModel && foundModel.doneLoading )
+				{
+					// delay 1 tick (other than the visual model) so we don't cluster love user code
+					var visualObject = jumpStart.spawnInstance(this.userData.asyncModel.modelFile, {"parent": this});
+					visualObject.userData.modelParent = this;
+					this.userData.asyncModel.visualObject = visualObject;
+
+					visualObject.addEventListener("tick", function()
+					{
+						onModelReady.call(this.userData.modelParent);
+						this.removeEventListener("tick", arguments.callee);
+					});
+				}
+				else
+				{
+					jumpStart.loadModelsEx([this.userData.asyncModel.modelFile], function(fileNames, request)
+					{
+						onModelReady.call(this);
+					}.bind(this));
+				}
 
 				return true;
 			},
@@ -653,7 +711,13 @@ function JumpStart(options, appBehaviors)
 				this.scale.z += ds;
 
 				if( this.userData.bubbleIn.scaleDirection > 0 && this.scale.x > this.syncData.bubbleIn.maxScale + 0.2 )
+				{
 					this.userData.bubbleIn.scaleDirection = -1.0;
+					this.scale.set(this.syncData.bubbleIn.maxScale + 0.2, this.syncData.bubbleIn.maxScale + 0.2, this.syncData.bubbleIn.maxScale + 0.2);
+
+					//var tempScale = new THREE.Vector3().multiplyScalar(this.syncData.bubbleIn.maxScale + 0.2);
+					//this.scale.copy(tempScale);
+				}
 				else if( this.userData.bubbleIn.scaleDirection < 0 && this.scale.x <= this.syncData.bubbleIn.maxScale )
 				{
 					this.scale.set(this.syncData.bubbleIn.maxScale, this.syncData.bubbleIn.maxScale, this.syncData.bubbleIn.maxScale);
@@ -1165,7 +1229,7 @@ console.log("Spawning");
 							console.error("JumpStart: Invalid room ID \"" + this.roomID + "\" specified.");
 						else
 						{
-							this.firebase.state = snapshot.val();
+							this.firebase.state = snapshot.val();							
 
 							if( this.firebase.isLocallyInitializing )
 							{
@@ -1509,77 +1573,84 @@ console.log("Spawning");
 
 				this.clock = new THREE.Clock();
 				this.raycaster = new THREE.Raycaster();
+				this.fontLoader = new THREE.FontLoader();
 
-				// FIX ME: It might be worth it for all blocksLOS objects to always know the distance from themselves to the player's eye so that we can perform the raycasts in order of distance, and only on objects within range.
-				this.raycaster.intersectObjectsAdv = function(objects, recursive, recursiveCompare)
+				// load a font in
+				this.fontLoader.load(this.fontUrl, function(font)
 				{
-					function ascSort(a, b)
+					this.font = font;
+
+					// FIX ME: It might be worth it for all blocksLOS objects to always know the distance from themselves to the player's eye so that we can perform the raycasts in order of distance, and only on objects within range.
+					this.raycaster.intersectObjectsAdv = function(objects, recursive, recursiveCompare)
 					{
-						return a.distance - b.distance;
-					}
-
-					function intersectObject(object, raycaster, intersects, recursive)
-					{
-						var result = recursiveCompare(object);
-						if( object.visible === false || !!!result || !result )
-							return;
-
-						object.raycast(raycaster, intersects);
-
-						if( recursive === true )
+						function ascSort(a, b)
 						{
-							var children = object.children;
-
-							var i;
-							for( i = 0; i < children.length; i ++ )
-								intersectObject( children[ i ], raycaster, intersects, true );
+							return a.distance - b.distance;
 						}
+
+						function intersectObject(object, raycaster, intersects, recursive)
+						{
+							var result = recursiveCompare(object);
+							if( object.visible === false || !!!result || !result )
+								return;
+
+							object.raycast(raycaster, intersects);
+
+							if( recursive === true )
+							{
+								var children = object.children;
+
+								var i;
+								for( i = 0; i < children.length; i ++ )
+									intersectObject( children[ i ], raycaster, intersects, true );
+							}
+						}
+
+						var intersects = [];
+
+						var i, result;
+						for( i = 0; i < objects.length; i++ )
+							intersectObject(objects[i], this, intersects, recursive);
+
+						intersects.sort(ascSort);
+
+						return intersects;
+					};
+
+
+
+					// FIX ME: Why is this a spoofed ray?  We should have THREE.js loaded by now to make a real one.
+					this.cursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
+					this.futureCursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
+
+					if ( !this.isAltspace )
+					{
+						this.renderer = new THREE.WebGLRenderer({ alpha: true });
+						this.renderer.setClearColor( 0x000000, 0 );
+						this.renderer.setSize( window.innerWidth, window.innerHeight );
+
+						this.DOMReady().then(function() { document.body.appendChild( this.renderer.domElement ); }.bind(this));
+
+						var aspect = window.innerWidth / window.innerHeight;
+						this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 4000 * this.options.sceneScale );
+
+						var pos = this.options.camera.position.clone().add(this.worldOffset.clone().multiplyScalar(this.options.sceneScale));
+						this.camera.position.copy(pos);
+
+						var lookAtSpot = this.worldOffset.clone().multiplyScalar(this.options.sceneScale);
+						lookAtSpot.y += 50;
+
+						this.camera.lookAt(lookAtSpot);
+
+						this.localUser.cursorRayOrigin.copy(this.camera.position);
+
+						// OBJMTLLoader always uses PhongMaterial, so we need light in scene.
+						var ambient = new THREE.AmbientLight( 0xffffff );
+						this.scene.add( ambient );
 					}
-
-					var intersects = [];
-
-					var i, result;
-					for( i = 0; i < objects.length; i++ )
-						intersectObject(objects[i], this, intersects, recursive);
-
-					intersects.sort(ascSort);
-
-					return intersects;
-				};
-
-
-
-				// FIX ME: Why is this a spoofed ray?  We should have THREE.js loaded by now to make a real one.
-				this.cursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
-				this.futureCursorRay = {"origin": new THREE.Vector3(), "direction": new THREE.Vector3()};
-
-				if ( !this.isAltspace )
-				{
-					this.renderer = new THREE.WebGLRenderer({ alpha: true });
-					this.renderer.setClearColor( 0x000000, 0 );
-					this.renderer.setSize( window.innerWidth, window.innerHeight );
-
-					this.DOMReady().then(function() { document.body.appendChild( this.renderer.domElement ); }.bind(this));
-
-					var aspect = window.innerWidth / window.innerHeight;
-					this.camera = new THREE.PerspectiveCamera(45, aspect, 1, 4000 * this.options.sceneScale );
-
-					var pos = this.options.camera.position.clone().add(this.worldOffset.clone().multiplyScalar(this.options.sceneScale));
-					this.camera.position.copy(pos);
-
-					var lookAtSpot = this.worldOffset.clone().multiplyScalar(this.options.sceneScale);
-					lookAtSpot.y += 50;
-
-					this.camera.lookAt(lookAtSpot);
-
-					this.localUser.cursorRayOrigin.copy(this.camera.position);
-
-					// OBJMTLLoader always uses PhongMaterial, so we need light in scene.
-					var ambient = new THREE.AmbientLight( 0xffffff );
-					this.scene.add( ambient );
-				}
-				else
-					this.renderer = altspace.getThreeJSRenderer();
+					else
+						this.renderer = altspace.getThreeJSRenderer();
+				}.bind(this));
 			}
 		}.bind(this));
 	}.bind(this));
@@ -1601,6 +1672,11 @@ console.log("Spawning");
 						// Define the list of JavaScript files
 						var baseScripts = [
 							"https://cdn.firebase.com/js/client/2.3.2/firebase.js",
+							"https://cdn.rawgit.com/mrdoob/three.js/r74/build/three.min.js",
+							"https://cdn.rawgit.com/mrdoob/three.js/r74/examples/js/loaders/MTLLoader.js",
+							"https://cdn.rawgit.com/mrdoob/three.js/r74/examples/js/loaders/OBJLoader.js",
+							"http://altspacevr.github.io/AltspaceSDK/dist/altspace.min.js"
+							/*
 							"http://sdk.altvr.com/libs/three.js/r73/build/three.min.js",
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/OBJMTLLoader.js",
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/MTLLoader.js",
@@ -1608,6 +1684,7 @@ console.log("Spawning");
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/utils/FontUtils.js",
 							"http://sdk.altvr.com/libs/three.js/r73/examples/fonts/helvetiker_regular.typeface.js",
 							"http://sdk.altvr.com/libs/altspace.js/0.5.3/altspace.min.js"
+							*/
 							//"engine/misc/threeoctree.js"	// Octree disabled for now
 						];
 
@@ -1806,7 +1883,7 @@ JumpStart.prototype.precacheApp = function()
 		"then": function(callback)
 		{
 			// Get stuff ready that we might use during precache
-			this.objectLoader = new THREE.OBJMTLLoader();
+			//this.objectLoader = new THREE.OBJMTLLoader();
 
 			if( !this.isAltspace )
 				onGetSkeleton.call(this, null);
@@ -1855,7 +1932,7 @@ JumpStart.prototype.onReadyToPrecache = function()
 		"then": function(callback)
 		{
 			// Get stuff ready that we might use during precache
-			this.objectLoader = new THREE.OBJMTLLoader();
+		//	this.objectLoader = new THREE.OBJMTLLoader();
 
 			if( !this.isAltspace )
 				onGetSkeleton.call(this, null);
@@ -2086,7 +2163,7 @@ JumpStart.prototype.spawnCursorPlane = function(options)
 
 	var cursorPlane = new THREE.Mesh(
 		new THREE.BoxGeometry(options.width, options.height, 0),
-		new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: 0.5, visible: this.options.debug["showCursorPlanes"] })
+		new THREE.MeshBasicMaterial( { color: getRandomColor(), transparent: true, opacity: (this.options.debug["showCursorPlanes"]) ? 0.5 : 0, visible: this.options.debug["showCursorPlanes"] })
 	);
 
 	this.spawnInstance(null, {"object": cursorPlane, "parent": options.parent});
@@ -2106,7 +2183,7 @@ JumpStart.prototype.precacheSound = function(fileName)
 	if( !!this.sounds[fileName] )
 		return;
 
-	longFileName = "assets/" + this.options.appID + "/" + fileName + ".ogg";
+	longFileName = (fileName.indexOf("assets/") !== 0 && fileName.indexOf("engine/") !== 0 ) ? "assets/" + this.options.appID + "/" + fileName + ".ogg" : fileName + ".ogg";
 
 	var req = new XMLHttpRequest();
 	req.open("GET", longFileName);
@@ -2470,7 +2547,6 @@ JumpStart.prototype.doPendingUpdates = function()
 		var deferredTransform = false;
 		if( !!data.transform )//hasOwnProperty("transform") )
 		{
-			console.log(data.transform);
 			instance.name = data.transform.name;
 
 			// There is only ONE case where transform updates would not be applied:
@@ -2776,7 +2852,6 @@ JumpStart.prototype.onTick = function()
 				if( freshObject.behaviors[x] )
 				{
 					jumpStart.behaviors[x].applyBehavior.call(freshObject);
-					console.log("yeeepi");
 				}
 			}
 		}
@@ -3151,21 +3226,200 @@ JumpStart.prototype.loadModelsEx = function(fileNames, callback)
 	// fileNames are relative to the "assets/[appID]/" path.
 	// Convert all fileNames to valid paths.
 
+	var batchQuality = this.quality;
+	var qualityPath = "";//(batchQuality === "low") ? "/low" : "";
+
 	var max = fileNames.length;
 	var i;
 	for( i = 0; i < max; i++ )
 	{
-		fileNames[i] = "assets/" + this.options.appID + "/" + fileNames[i];
+		if( fileNames[i].indexOf("assets/") !== 0  && fileNames[i].indexOf("engine/") !== 0 )
+			fileNames[i] = "assets/" + this.options.appID + "/" + fileNames[i];
 	}
 
+	// step up 2 dir levels
 	var found = fileNames[0].lastIndexOf("/");
-	//var urlTrunk = (found > 0) ? fileNames[0].substring(0, found) : "";
 	var urlFile = (found > 0 ) ? fileNames[0].substring(found+1) : fileNames[0];
 
 	found = location.pathname.lastIndexOf("/");
 	var urlPath = (found > 0) ? location.pathname.substring(1, found) : "";
 
-	var multiloader = altspace.utilities.multiloader;
+	var multiloader = this.multiloader;//altspace.utilities.multiloader;
+	if( !!!multiloader )
+	{
+		// PUT THE LOADER HERE!!
+		// ORIGINALLY FROM ALTSPACE SDK: https://github.com/AltspaceVR/AltspaceSDK/blob/master/src/utilities/multiloader.js
+		// MODIFIED by Elijah Newman-Gomez to allow model quality switching for GearVR users.
+		this.OBJMTLLoader = (function(){
+			 function load(objFile, mtlFile, callback, progress, error)
+			 {
+				var mtlLoader = new THREE.MTLLoader();
+				var baseUrl = mtlFile.split('/').slice(0, -1).join('/');
+				mtlLoader.setBaseUrl(baseUrl + '/');
+				mtlLoader.load(mtlFile, function (materials)
+				{
+					var objLoader = new THREE.OBJLoader();
+					objLoader.setMaterials(materials);
+					objLoader.load(objFile, callback);
+					
+		        }, progress, error);
+		    }
+
+		    return {
+				load: load
+			};
+		})();
+
+		this.multiloader = (function(){
+			var loader;
+			var TRACE;
+			var baseUrl = '';
+			var crossOrigin = '';//assigned to THREE.MTLLoader.crossOrigin
+
+			function LoadRequest(){
+				//To create loadRequst: new MultiLoader.LoadRequest()
+
+				var objUrls = [];//Paths to model geometry file, in Wavefront OBJ format.
+				var mtlUrls = [];//Paths to model materials file, in Wavefront MTL format.
+				var objects = [];//objects[i] is result of loader.load(objUrl[i], mtlUrl[i])
+				var error;//String indicating loading error with at least one file.
+				var objectsLoaded = 0;//Used internally to determine when loading complete.
+
+				return {
+					objUrls: objUrls,
+					mtlUrls: mtlUrls,
+					objects: objects,
+					error: error,
+					objectsLoaded: objectsLoaded
+				};
+
+			}//end of LoadRequest
+
+			function init(params){
+				var p = params || {};
+				TRACE = p.TRACE || false;
+				if (p.crossOrigin) crossOrigin = p.crossOrigin;
+				if (p.baseUrl) baseUrl = p.baseUrl;
+				if (baseUrl.slice(-1) !== '/') baseUrl += '/';
+
+				//loader = new altspace.utilities.shims.OBJMTLLoader();
+				loader = jumpStart.OBJMTLLoader;
+				loader.crossOrigin = crossOrigin;
+				if (TRACE) console.log('MultiLoader initialized with params', params);
+			}
+
+			function load(loadRequest, batchInfo, onComplete){
+				var req = loadRequest;
+				var start = Date.now();
+				if (!req || !req instanceof LoadRequest){
+					throw new Error('MultiLoader.load expects first arg of type LoadRequest');
+				}
+				if (!onComplete || typeof(onComplete) !== 'function'){
+					throw new Error('MultiLoader.load expects second arg of type function');
+				}
+				if (!req.objUrls || !req.mtlUrls || req.objUrls.length !== req.mtlUrls.length){
+					throw new Error('MultiLoader.load called with bad LoadRequest');
+				}
+				var reqCount = req.objUrls.length;
+				if (TRACE) console.log('Loading models...')
+				for (var i=0; i < reqCount; i++){
+					batchInfo.objQualities[i] = batchInfo.batchQuality;
+					batchInfo.loadModelHandle = function(req, i, batchInfo){//We need i in the closure to store result.
+						var objUrl = req.objUrls[i];
+						var mtlUrl = req.mtlUrls[i];
+
+						// modify the obj & mtl urls according to quality
+						//var qualityPath;
+						//if( batchInfo.objQualities[i] === "low" )
+						//	qualityPath = "low";
+
+						function getQualityUrl(batchInfo, regularUrl)
+						{
+							var qualityPath = "";
+							if( batchInfo.objQualities[i] === "low" )
+								qualityPath = "low/";
+
+							var qualityUrl = regularUrl;
+							// find the assets/models path
+							var index = qualityUrl.indexOf("models/");
+							if( index >= 0 )
+								qualityUrl = qualityUrl.substring(0, index + 7) + qualityPath + qualityUrl.substring(index + 7);
+
+							return qualityUrl;
+						}
+
+						var qualityUrl = getQualityUrl(batchInfo, req.objUrls[i]);
+
+						var objUrl = baseUrl + qualityUrl;//req.objUrls[i];
+						var mtlUrl = baseUrl + getQualityUrl(batchInfo, req.mtlUrls[i]);
+
+						if (TRACE) console.log('Loading obj:'+objUrl+', mtl:'+mtlUrl);
+						loader.load(objUrl, mtlUrl, createLoaderCallback(req, reqCount, i, onComplete), onProgress, onErrorCallback(req, batchInfo, i));
+					};
+					batchInfo.loadModelHandle(req, i, batchInfo);
+				}
+			}
+
+			function createLoaderCallback(req, reqCount, i, onComplete)
+			{
+				return function(object3d)
+				{
+					//onLoaded
+					req.objects[i] = object3d;
+					req.objectsLoaded++;
+
+					//if( batchInfo.objQualities[i] === )
+
+					if(req.objectsLoaded === reqCount){
+						//var elapsed = ((Date.now()-start)/1000.0).toFixed(2);
+						//if (TRACE) console.log('Loaded '+reqCount+' models in '+elapsed+' seconds');
+						onComplete();
+					}
+				};
+			}
+
+			function onErrorCallback(req, batchInfo, i)
+			{
+				return function(e)
+				{
+					//onError
+					//console.log("error be:");
+					//console.log(e);
+					//if( batchInfo[]
+					//var url = xhr.target.responseURL || '';
+					//req.error = 'Error loading file '+url;
+
+					if( e.type === "load" )
+					{
+						var quality = batchInfo.objQualities[i];
+						if( quality === "low" )
+						{
+							batchInfo.objQualities[i] = "high";
+							batchInfo.loadModelHandle(req, i, batchInfo);
+						}
+					}
+				};
+			}
+
+			function onProgress(xhr){
+				if (xhr.lengthComputable && xhr.target.responseURL) {
+					//Skip progress log if no xhr url, meaning it's a local file.
+					var percentComplete = xhr.loaded / xhr.total * 100;
+					var filename = xhr.target.responseURL.split('/').pop();
+				//	if (TRACE) console.log('...'+filename+' '+Math.round(percentComplete,2)+'% downloaded');
+				}
+			}
+
+			return {
+				init: init,
+				load: load,
+				LoadRequest: LoadRequest,
+			};
+
+		}());
+	}
+	multiloader = this.multiloader;
+
 	if( !!!multiloader.hasBeenInit )
 	{
 		multiloader.hasBeenInit = true;
@@ -3176,46 +3430,61 @@ JumpStart.prototype.loadModelsEx = function(fileNames, callback)
 	}
 
 	var loadRequest = new multiloader.LoadRequest();
-	var fileName;
+	var objUrls = [];
+	var fileName, objUrl;
 	for( i = 0; i < max; i++ )
 	{
 		fileName = fileNames[i];
 
 		if( jumpStart.isModelDefined(fileName) )
 			continue;
-		
-		loadRequest.objUrls.push(urlPath + "/" + fileName + ".obj");
-		loadRequest.mtlUrls.push(urlPath + "/" + fileName + ".mtl");
+
+		objUrl = urlPath + qualityPath + "/" + fileName + ".obj";
+		loadRequest.objUrls.push(objUrl);
+		objUrls.push(objUrl);
+
+		// FIXME: need to run tests to see if loading same texture twice actually takes place. (it shouldn't)
+		loadRequest.mtlUrls.push(urlPath + qualityPath + "/" + fileName + ".mtl");
 	}
 
 
-	var dummy = {
+	var batchInfo = {
 		"callback": callback,
-		"fileNames": fileNames
+		"fileNames": fileNames,
+		"objUrls": objUrls,
+		"urlPath": urlPath,
+		"batchQuality": batchQuality,
+		"objQualities": []
 	};
 
-	multiloader.load(loadRequest, function(request)
+	var max = batchInfo.fileNames.length;
+	var i;
+	for( i = 0; i < max; i++ )
+		batchInfo.objQualities.push(batchInfo.batchQuality);
+
+	multiloader.load(loadRequest, batchInfo, function(request)
 	{
+		// SUCCESS
+
 		var i, object, fileName;
 		for( i = 0; i < loadRequest.objects.length; i++ )
 		{
 			object = loadRequest.objects[i];
 
-			fileName = loadRequest.objUrls[i];
-			if( urlPath !== "" )
-				fileName = fileName.substring(urlPath.length + 1);
-
-			fileName = fileName.substring(0, fileName.length - 4);
-
+			fileName = this.fileNames[i];	// the clean filename w/o quality
+		//	console.log("yarrrrrrrrrrrrrrrrrr");
+		//	console.log(fileName);
 			jumpStart.models.push({
 				"modelFile": fileName,
-				"object": object
+				"object": object,
+				"quality": this.objQualities[i],
+				"doneLoading": true
 			});
 		}
 
 		console.log("JumpStart: Loaded " + loadRequest.objectsLoaded + " model(s).");
-		dummy.callback(dummy.fileNames, request);
-	}.bind(dummy));
+		batchInfo.callback(batchInfo.fileNames, request);
+	}.bind(batchInfo));
 
 };
 
@@ -3227,7 +3496,8 @@ JumpStart.prototype.loadModels = function(fileNames)
 	var i;
 	for( i in fileNames )
 	{
-		fileNames[i] = "assets/" + this.options.appID + "/" + fileNames[i];
+		if( fileNames[i].indexOf("assets/") !== 0 && fileNames[i].indexOf("engine/") !== 0 )
+			fileNames[i] = "assets/" + this.options.appID + "/" + fileNames[i];
 	}
 
 	// Return a promise-like structure
@@ -3244,7 +3514,7 @@ JumpStart.prototype.loadModels = function(fileNames)
 				found = location.pathname.lastIndexOf("/");
 				var urlPath = (found > 0) ? location.pathname.substring(1, found) : "";
 
-				var multiloader = altspace.utilities.multiloader;
+				var multiloader = altspace.utilities.multiloader;	// old LoadModels uses regular Altspace loader.
 				if( !!!multiloader.hasBeenInit )
 				{
 					multiloader.hasBeenInit = true;
@@ -3297,8 +3567,9 @@ JumpStart.prototype.loadModels = function(fileNames)
 //	- Private method for checking if a model is already cached.
 JumpStart.prototype.findModel = function(modelFile)
 {
-	modelFile = "assets/" + this.options.appID + "/" + modelFile;
-	
+	if( modelFile.indexOf("assets/") !== 0 && modelFile.indexOf("engine/") !== 0 )
+		modelFile = "assets/" + this.options.appID + "/" + modelFile;
+
 	var i, model;
 	for( i = 0; i < this.models.length; i++ )
 	{
@@ -3477,6 +3748,9 @@ JumpStart.prototype.isModelLoaded = function(modelFile)
 // if the model is defined but NOT loaded, then it is probably LOADING right now.
 JumpStart.prototype.isModelDefined = function(modelFile)
 {
+	if( modelFile.indexOf("assets/") !== 0 && modelFile.indexOf("engine/") !== 0 )
+		modelFile = "assets/" + this.options.appID + "/" + modelFile;
+
 	return this.models.find(function(t){ return (t.modeFile === modelFile); });
 };
 
@@ -3523,6 +3797,14 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	else
 		instance = new THREE.Group();
 
+/*
+	if( !!instance.geometry )
+	{
+		var oldObject = instance;
+		instance = new THREE.Group();
+		instance.add(oldObject);
+	}
+*/
 	//if( instance.modelFile === "models/base" )
 		//console.log("spawnz0r");
 	//instance.position.set(0, this.worldOffset.y, 0);
@@ -3554,6 +3836,15 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 //	if( !options.isInitialSync )
 		this.freshObjects.push(instance);
 
+	function computeBoundingSphere(geometry)
+	{
+		geometry.computeBoundingSphere();
+
+		var sphere = geometry.boundingSphere.clone();
+		sphere.radius *= 1.15;	// Scale up slightly
+		return sphere;
+	}
+
 	// Compute a collision radius based on a bounding sphere for a child mesh that contains geometry
 	var computedBoundingSphere = null;
 	var i, mesh;
@@ -3561,14 +3852,32 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 	{
 		mesh = instance.children[i];
 
-		if( mesh.geometry.faces.length > 0 )
-		{
-			mesh.geometry.computeBoundingSphere();
-			computedBoundingSphere = mesh.geometry.boundingSphere.clone();
-			computedBoundingSphere.radius *= 1.15;	// Scale up slightly
+		//if( !!mesh.geometry.faces && mesh.geometry.faces.length > 0 )
+		//{
+		//	console.log("yip 111");
+			computedBoundingSphere = computeBoundingSphere(mesh.geometry);
 			break;
-		}
+		//}
 	}
+
+	if( !computedBoundingSphere && !!instance.geometry && instance.geometry.faces && instance.geometry.faces.length > 0 )
+	{
+		//console.log("yip 222");
+		computedBoundingSphere = computeBoundingSphere(instance.geometry);
+	}
+	else
+	{
+		//console.log("NO GEOMETRY FOUND!!!");
+		//console.log(instance);
+	}
+
+	if( !!computedBoundingSphere )
+	{
+		//console.log("Applying bounding sphere w/ radius " + computedBoundingSphere.radius);
+		this.boundingSphere = computedBoundingSphere;
+	}
+
+	//console.log(instance.children);
 
 	// List all the object-level listeners
 	var validEvents = ["tick", "cursorenter", "cursorexit", "cursordown", "cursorup", "spawn", "remove", "networkRemove", "userconnect", "userdisconnect"];
@@ -4006,6 +4315,9 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 
 JumpStart.prototype.makeNonCollide = function(sceneObject)
 {
+	if( !this.isAltspace )
+		return;
+
 	var max = sceneObject.children.length;
 	var i, instance;
 	for( i = 0; i < max; i++ )
@@ -4013,10 +4325,15 @@ JumpStart.prototype.makeNonCollide = function(sceneObject)
 		instance = sceneObject.children[i];
 		instance.userData.altspace = {collider: {enabled: false}};
 	}
+
+	sceneObject.userData.altspace = {collider: {enabled: false}};
 };
 
 JumpStart.prototype.makeCollide = function(sceneObject)
 {
+	if( !this.isAltspace )
+		return;
+
 	var max = sceneObject.children.length;
 	var i, instance;
 	for( i = 0; i < max; i++ )
@@ -4024,6 +4341,8 @@ JumpStart.prototype.makeCollide = function(sceneObject)
 		instance = sceneObject.children[i];
 		instance.userData.altspace = {collider: {enabled: true}};
 	}
+
+	sceneObject.userData.altspace = {collider: {enabled: true}};
 };
 
 JumpStart.prototype.addEventListener = function(eventType, listener)

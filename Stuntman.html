@@ -15,7 +15,7 @@
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModels(["models/star", "models/namecard", "models/button", "models/buttonFrame", "models/fuse", "models/fuseOn", "models/base", "models/barrel", "models/baseGripOn", "models/baseGripOff", "models/barrelGripOff", "models/barrelGripOn", "models/goal", "models/pool", "models/water", "models/stuntman_cannonball", "models/stuntman_splat"]).then( function()
+				jumpStart.loadModelsEx(["models/star", "models/namecard", "models/button", "models/buttonFrame", "models/fuse", "models/fuseOn", "models/base", "models/barrel", "models/baseGripOn", "models/baseGripOff", "models/barrelGripOff", "models/barrelGripOn", "models/goal", "models/pool", "models/water", "models/stuntman_cannonball", "models/stuntman_splat"], function()
 				{
 					jumpStart.doneCaching();
 				});

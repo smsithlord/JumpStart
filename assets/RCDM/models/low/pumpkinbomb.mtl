@@ -1,0 +1,38 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 23.10.2016 06:56:16
+
+newmtl Material__0
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.1451 0.1451 0.1451
+	Kd 0.1451 0.1451 0.1451
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\texture_pumpkin_bomb.jpg
+	map_Kd maps\texture_pumpkin_bomb.jpg
+	map_Ks maps\texture_pumpkin_bomb.jpg
+	map_Ke maps\emiss_pumpkin_bomb.jpg
+	map_bump maps\normal_bomb.jpg
+	bump maps\normal_bomb.jpg
+
+newmtl 01___Default
+	Ns 10.0000
+	Ni 1.5000
+	d 1.0000
+	Tr 0.0000
+	Tf 1.0000 1.0000 1.0000 
+	illum 2
+	Ka 0.5882 0.5882 0.5882
+	Kd 0.5882 0.5882 0.5882
+	Ks 0.0000 0.0000 0.0000
+	Ke 0.0000 0.0000 0.0000
+	map_Ka maps\texture_pumpkin_bomb.jpg
+	map_Kd maps\texture_pumpkin_bomb.jpg
+	map_Ks maps\texture_pumpkin_bomb.jpg
+	map_Ke maps\emiss_pumpkin_bomb.jpg
+	map_bump maps\normal_bomb.jpg
+	bump maps\normal_bomb.jpg

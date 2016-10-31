@@ -1,24 +1,56 @@
 jumpStartBehavior({
 	"hoverBlasterTable":
 	{
-		"tableCount": 0,	// Needed because Altspace requires each dynamic texture be different
-		"tableRef": null, // FIXME: "cheating".  this will make this un-instancable, but the gamepad callback needs to know our table.
+		"focusedTableRef": null, // locally remember what table has input
+		"tables": {},
+		"createTable": function(position, quaternion)
+		{
+			var tableExists = false;
+			var x;
+			for( x in jumpStart.behaviors.hoverBlasterTable.tables )
+			{
+				tableExists = true;
+				return;
+			}
+
+			// the local user who calls createTable will be the one playing
+			var table = jumpStart.spawnInstance(null);
+			table.position.copy(position);
+			table.position.y += 90.0;
+
+			var pos;
+			if( jumpStart.isAltspace )
+				pos = jumpStart.localUser.skeleton.getJoint("Eye").getWorldPosition();
+			else
+				pos = jumpStart.camera.getWorldPosition();
+
+			pos.y = table.position.y;
+
+			table.lookAt(pos);
+			table.rotateX(Math.PI);
+			
+			table.applyBehavior("autoRemoval");
+			table.applyBehavior("hoverBlasterTable");
+			table.syncData.hoverBlasterTable.isActive = true;
+			table.sync();
+
+			return table;
+		},
 		"applyBehavior": function(options)
 		{
 			if( !!options )
 			{
+				// we MUST have a unique name
+				if( this.name === "" )
+					this.name = "hb" + jumpStart.generateId();
+
 				this.syncData.hoverBlasterTable = {
 					"ownerID": jumpStart.localUser.userID,
 					"ownerName": jumpStart.localUser.displayName,
 					"isActive": false,
-					"rotSpeed": 0.3,/*
-					"grandParentTest":
-					{
-						"parentTest":
-						{
-							"childTest": 21
-						}
-					},*/
+					"rotSpeed": 0.3,
+					"originalQuaternion": this.quaternion.clone(),
+					"originalRotation": this.rotation.clone(),
 					"timeline": {}
 				};
 
@@ -30,11 +62,24 @@ jumpStartBehavior({
 				this.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.removeBehavior);
 			}
 
-			jumpStart.playSound("sounds/bomberready", 0.3);
-			jumpStart.playSound("sounds/bomberin", 0.3);
-			
+			jumpStart.behaviors.hoverBlasterTable.tables[this.name] = this;
+//console.log("Adding table " + this.name);
+			jumpStart.precacheSound("sounds/bonus");
+			jumpStart.precacheSound("sounds/coin_collect");
+			jumpStart.precacheSound("sounds/damage1");
+			jumpStart.precacheSound("sounds/damage2");
+			jumpStart.precacheSound("sounds/damage3");
+			jumpStart.precacheSound("sounds/explosion0");
+			jumpStart.precacheSound("sounds/explosion1");
+			jumpStart.precacheSound("sounds/laser1");
+			jumpStart.precacheSound("sounds/laser2");
+			jumpStart.precacheSound("sounds/shatter");
+			jumpStart.precacheSound("sounds/bomberin");
+			jumpStart.precacheSound("sounds/bomberready");
 
 			this.userData.hoverBlasterTable = {
+				"originalCameraPosition": null,
+				"originalCameraQuaternion": null,
 				"radius": 118.0,
 				"initialRot": -1,
 				"rocks": [],
@@ -53,67 +98,11 @@ jumpStartBehavior({
 				"ship": null
 			};
 
-			var board = jumpStart.spawnInstance(null);
-			board.position.copy(this.position);
-			board.rotateY(Math.PI);	// so the well-lit side faces the player
-			this.userData.hoverBlasterTable.board = board;
-
-			var dome = jumpStart.spawnInstance("models/dome", {"parent": board});
-			dome.scale.multiplyScalar(0.95);
-			dome.userData.board = board;
-			this.userData.hoverBlasterTable.dome = dome;
-
-			jumpStart.behaviors.hoverBlasterTable.tableRef = this;
-
 			return true;
-		},
-		"generateEntityId": function()
-		{
-			if( !!!this.userData.hoverBlasterTable )
-				this.userData.hoverBlasterTable = {};
-
-			if( !!!this.userData.hoverBlasterTable.lastPushTime )
-				this.userData.hoverBlasterTable.lastPushTime = 0;
-
-			if( !!!this.userData.hoverBlasterTable.lastRandChars )
-				this.userData.hoverBlasterTable.lastRandChars = [];
-			
-			var PUSH_CHARS = '-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz';
-
-			var now = new Date().getTime();
-			var duplicateTime = (now === this.userData.hoverBlasterTable.lastPushTime);
-			this.userData.hoverBlasterTable.lastPushTime = now;
-
-			var timeStampChars = new Array(8);
-			for (var i = 7; i >= 0; i--) {
-				timeStampChars[i] = PUSH_CHARS.charAt(now % 64);
-				// NOTE: Can't use << here because javascript will convert to int and lose the upper bits.
-				now = Math.floor(now / 64);
-			}
-			if (now !== 0) throw new Error('We should have converted the entire timestamp.');
-
-			var id = timeStampChars.join('');
-
-			if (!duplicateTime) {
-				for (i = 0; i < 12; i++) {
-					this.userData.hoverBlasterTable.lastRandChars[i] = Math.floor(Math.random() * 64);
-				}
-			} else {
-				// If the timestamp hasn't changed since last push, use the same random number, except incremented by 1.
-				for (i = 11; i >= 0 && this.userData.hoverBlasterTable.lastRandChars[i] === 63; i--) {
-					this.userData.hoverBlasterTable.lastRandChars[i] = 0;
-				}
-				this.userData.hoverBlasterTable.lastRandChars[i]++;
-			}
-			for (i = 0; i < 12; i++) {
-				id += PUSH_CHARS.charAt(this.userData.hoverBlasterTable.lastRandChars[i]);
-			}
-			if(id.length != 20) throw new Error('Length should be 20.');
-			return id;
 		},
 		"tableButtonListener": function(e)
 		{
-			var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
+			var table = jumpStart.behaviors.hoverBlasterTable.focusedTableRef;
 
 			if( !table || !table.userData.hoverBlasterTable.ship )
 				return;
@@ -153,9 +142,11 @@ jumpStartBehavior({
 							{
 								if( !!!ship.userData.bomber && ship.userData.bombCooldown <= 0 )
 								{
-									var bomber = jumpStart.spawnInstance("models/bomber", {"parent": ship.parent});
-									bomber.scale.set(0.1, 0.1, 0.1);
-									//bomber.scale.set(0.7, 0.7, 0.7);
+									var bomber = jumpStart.spawnInstance(null, {"parent": ship.parent});
+									bomber.applyBehavior("asyncModel", {"modelFile": "models/bomber"});
+									bomber.syncData.tableName = table.name;
+									//bomber.scale.set(0.1, 0.1, 0.1);
+									////bomber.scale.set(0.7, 0.7, 0.7);
 									bomber.position.copy(ship.position);
 									bomber.quaternion.copy(ship.quaternion);
 									bomber.translateZ(-100.0);
@@ -217,8 +208,10 @@ jumpStartBehavior({
 								if( !!!ship.userData.bomber && ship.userData.bombCooldown <= 0 )
 								{
 									ship.userData.bombCooldown = 8.0;
-									var bomber = jumpStart.spawnInstance("models/bomber", {"parent": ship.parent});
-									bomber.scale.set(0.1, 0.1, 0.1);
+									var bomber = jumpStart.spawnInstance(null, {"parent": ship.parent});
+									bomber.syncData.tableName = table.name;
+									//bomber.applyBehavior("asyncModel", {"modelFile": "models/bomber"});
+									//bomber.scale.set(0.1, 0.1, 0.1);
 									//bomber.scale.set(0.7, 0.7, 0.7);
 									bomber.position.copy(ship.position);
 									bomber.quaternion.copy(ship.quaternion);
@@ -256,11 +249,26 @@ jumpStartBehavior({
 		},
 		"gameOverNotify": function()
 		{
+			var ship = this.userData.hoverBlasterTable.ship;
+			
+			var explosion = jumpStart.spawnInstance(null, {"parent": ship});
+			explosion.applyBehavior("asyncModel", {"modelFile": "models/explosion", "useBubbleIn": false});
+			explosion.scale.set(0.3, 0.3, 0.3);
+			explosion.scale.multiplyScalar(1 / ship.scale.x);
+
+			explosion = jumpStart.spawnInstance(null, {"parent": ship});
+			explosion.applyBehavior("asyncModel", {"modelFile": "models/explosion", "useBubbleIn": false});
+			explosion.scale.set(0.2, 0.2, 0.2);
+			explosion.translateX(8.0);
+			explosion.translateZ(8.0);
+			explosion.translateY(4.0);
+			explosion.scale.multiplyScalar(1 / ship.scale.x);
+
 			var params = {
 				size: 10.0,
 				height: 1,
-				font: "helvetiker",
-				curveSegments: 1
+				font: jumpStart.font,// "helvetiker",
+				curveSegments: (jumpStart.isGearVR) ? 1 : 2
 			};
 
 			var geometry = new THREE.TextGeometry("GAME OVER", params);
@@ -270,15 +278,13 @@ jumpStartBehavior({
 			geometry.computeBoundingBox();
 			var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
 
-			var text = jumpStart.spawnInstance(null)
+			var text = jumpStart.spawnInstance(null);
 			text.userData.table = this;
 
-			var ship = this.userData.hoverBlasterTable.ship;
-			var worldPos = ship.getWorldPosition();
-			jumpStart.world.worldToLocal(worldPos);
-			text.position.copy(worldPos);
+			text.position.copy(ship.position);
+			text.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);
+			text.rotateX(Math.PI);
 			text.position.y += 10.0;
-//					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 
 			var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
 			var offset = new THREE.Vector3().copy(displacement);
@@ -299,8 +305,8 @@ jumpStartBehavior({
 					var params = {
 						size: 10.0,
 						height: 1,
-						font: "helvetiker",
-						curveSegments: 1
+						font: jumpStart.font,// "helvetiker",
+						curveSegments: (jumpStart.isGearVR) ? 1 : 2
 					};
 
 					var geometry = new THREE.TextGeometry("SCORE: " + this.userData.table.userData.hoverBlasterTable.ship.syncData.coins, params);
@@ -312,11 +318,10 @@ jumpStartBehavior({
 
 					var text = jumpStart.spawnInstance(null)
 					text.userData.table = this.userData.table;
-					var worldPos = ship.getWorldPosition();
-					jumpStart.world.worldToLocal(worldPos);
-					text.position.copy(worldPos);
+					text.position.copy(ship.position);
+					text.quaternion.copy(this.userData.table.syncData.hoverBlasterTable.originalQuaternion);
+					text.rotateX(Math.PI);
 					text.position.y += 10.0;
-		//					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 
 					var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
 					var offset = new THREE.Vector3().copy(displacement);
@@ -337,8 +342,8 @@ jumpStartBehavior({
 							var params = {
 								size: 10.0,
 								height: 1,
-								font: "helvetiker",
-								curveSegments: 1
+								font: jumpStart.font,//"helvetiker",
+								curveSegments: (jumpStart.isGearVR) ? 1 : 2
 							};
 
 							var geometry = new THREE.TextGeometry("Nice try!", params);
@@ -350,11 +355,10 @@ jumpStartBehavior({
 
 							var text = jumpStart.spawnInstance(null)
 							text.userData.table = this.userData.table;
-							var worldPos = ship.getWorldPosition();
-							jumpStart.world.worldToLocal(worldPos);
-							text.position.copy(worldPos);
+							text.position.copy(ship.position);
+							text.quaternion.copy(this.userData.table.syncData.hoverBlasterTable.originalQuaternion);
+							text.rotateX(Math.PI);
 							text.position.y += 10.0;
-				//					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 
 							var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
 							var offset = new THREE.Vector3().copy(displacement);
@@ -372,16 +376,10 @@ jumpStartBehavior({
 									this.removeEventListener("tick", arguments.callee);
 									this.applyBehavior("shrinkRemove");
 
+									// remove the table
 									if( this.userData.table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
-									{
-										// remove the table and everything else we can think of
 										jumpStart.removeInstance(this.userData.table);
-									}
 
-									//if( this.userData.table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userId )
-										//spawnHoverBlasterPlaceholder(new THREE.Vector3(), new THREE.Quaternion());
-										//spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
-									//spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
 									return;
 								}
 
@@ -394,16 +392,12 @@ jumpStartBehavior({
 						}
 
 						this.position.y += 10.0 * jumpStart.deltaTime;
-						if( jumpStart.isAltspace )
-							this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 					});
 
 					return;
 				}
 
 				this.position.y += 10.0 * jumpStart.deltaTime;
-				if( jumpStart.isAltspace )
-					this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 			});
 		},
 		"resetTimeline": function(id, title)
@@ -417,26 +411,7 @@ jumpStartBehavior({
 					"title": title,
 					"rotSpeed": 0.3,
 					"previous": "-1"
-				}/*,
-				"0":
-				{
-					"stageText":
-					{
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
-						"offsetY": 0.0,
-						"offsetX": 0.1,
-						"template": "stageText"
-					}
-				}*//*,
-				"0o2":
-				{
-					"goText":
-					{
-						"offsetY": 0.0,
-						"offsetX": 0.1,
-						"template": "goText"
-					}
-				}*/
+				}
 			};
 
 			this.syncData.hoverBlasterTable.timeline = timeline;
@@ -450,7 +425,7 @@ jumpStartBehavior({
 				this.syncData.hoverBlasterTable.timeline[safeZ] = {
 					"stageText":
 					{
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": 0.1,
 						"template": "stageText"
@@ -478,7 +453,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -488,7 +463,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -499,7 +474,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -509,12 +484,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}					
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -524,7 +499,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === 1 )
 			{
@@ -544,7 +519,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -554,7 +529,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -565,7 +540,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -575,7 +550,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -589,7 +564,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": rotZ,
 						"rotY": rotY,
@@ -600,12 +575,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -615,7 +590,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === 2 )
 			{
@@ -634,7 +609,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -644,7 +619,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -655,7 +630,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -665,7 +640,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -680,7 +655,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": rotZ,
 						"rotY": rotY,
@@ -691,7 +666,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					//rotZ = Math.PI * 0.4 * Math.random();
 					//rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
@@ -700,7 +675,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"rotY": rotY,
@@ -711,10 +686,10 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 /*
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"template": "crazy"
@@ -724,12 +699,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					*/
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -739,7 +714,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === 3 )
 			{
@@ -758,7 +733,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -768,7 +743,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -779,7 +754,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -789,7 +764,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -804,7 +779,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": rotZ,
 						"rotY": rotY,
@@ -815,7 +790,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					//rotZ = Math.PI * 0.4 * Math.random();
 					//rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
@@ -824,7 +799,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"rotY": rotY,
@@ -835,13 +810,13 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					var rotY = Math.PI * 0.4 * Math.random();
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"rotY": rotY,
@@ -852,10 +827,10 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 /*
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"template": "crazy"
@@ -865,12 +840,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					*/
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -880,7 +855,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === 4 )
 			{
@@ -899,7 +874,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -909,7 +884,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -920,7 +895,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -930,7 +905,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -945,7 +920,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": rotZ,
 						"rotY": rotY,
@@ -956,7 +931,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					//rotZ = Math.PI * 0.4 * Math.random();
 					//rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
@@ -965,7 +940,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"rotY": rotY,
@@ -976,13 +951,13 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					var rotY = Math.PI * 0.4 * Math.random();
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"rotY": rotY,
@@ -993,13 +968,13 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					var rotY = Math.PI * 0.4 * Math.random();
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"rotY": rotY,
@@ -1010,10 +985,10 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 /*
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": -rotZ,
 						"template": "crazy"
@@ -1023,12 +998,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					*/
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -1038,7 +1013,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === "3never" )
 			{
@@ -1058,7 +1033,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -1068,7 +1043,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1079,7 +1054,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -1089,7 +1064,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1103,7 +1078,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": rotZ,
 						"rotY": rotY,
@@ -1114,12 +1089,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -1129,7 +1104,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === 5 )
 			{
@@ -1141,7 +1116,7 @@ jumpStartBehavior({
 	//				offsetZ = this.userData.hoverBlasterTable.rot;
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "bonusText"
@@ -1151,7 +1126,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 				
 				// generate a random stage length units long
 
@@ -1163,7 +1138,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -1173,7 +1148,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1185,7 +1160,7 @@ jumpStartBehavior({
 				for( z = 0; z < length && rotZ < 0; z += 0.05 )
 				{
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "coin"
@@ -1195,7 +1170,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ += spread * 0.2;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1206,7 +1181,7 @@ jumpStartBehavior({
 				for( z = z; z < length && rotZ >= -spread; z += 0.05 )
 				{
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "coin"
@@ -1216,7 +1191,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ -= (Math.PI * 0.2) * 0.2;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1225,7 +1200,7 @@ jumpStartBehavior({
 				for( z += 0.1; z < length && rotZ > 0; z += 0.05 )
 				{
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "coin"
@@ -1235,7 +1210,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ += spread * 0.2;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1247,7 +1222,7 @@ jumpStartBehavior({
 				for( z += 0.1; z < length && stripLength < 4; z += 0.05 )
 				{
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": 0.0,
 						"template": "coin"
@@ -1257,7 +1232,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					stripLength++;
 				}
 
@@ -1266,7 +1241,7 @@ jumpStartBehavior({
 				for( z += 0.1; z < length && rotZ >= 0; z += 0.05 )
 				{
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "coin"
@@ -1276,7 +1251,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ -= spread * 0.2;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1287,7 +1262,7 @@ jumpStartBehavior({
 				for( z = z; z < length && rotZ <= spread; z += 0.05 )
 				{
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "coin"
@@ -1297,7 +1272,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ += spread * 0.2;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1308,7 +1283,7 @@ jumpStartBehavior({
 				for( z += 0.1; z < length && stripLength < 4; z += 0.05 )
 				{
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": 0.0,
 						"template": "coin"
@@ -1318,7 +1293,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					stripLength++;
 				}
 
@@ -1338,7 +1313,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ += (Math.PI * 0.2) * 0.1;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1358,7 +1333,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ -= (Math.PI * 0.2) * 0.1;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1379,7 +1354,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ -= (Math.PI * 0.2) * 0.1;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1399,7 +1374,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 					rotZ += (Math.PI * 0.2) * 0.1;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
@@ -1419,12 +1394,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 				}
 				*/
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -1434,7 +1409,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === 5 )
 			{
@@ -1453,7 +1428,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -1463,7 +1438,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1474,7 +1449,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -1484,7 +1459,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1498,7 +1473,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": rotZ,
 						"rotY": rotY,
@@ -1509,12 +1484,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -1524,7 +1499,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else if( id === 6 )
 			{
@@ -1543,7 +1518,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -1553,7 +1528,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1564,7 +1539,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -1574,7 +1549,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1588,7 +1563,7 @@ jumpStartBehavior({
 					rotY *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 10.0,
 						"offsetX": rotZ,
 						"rotY": rotY,
@@ -1599,12 +1574,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -1614,7 +1589,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 			else
 			{
@@ -1633,7 +1608,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "rocks"
@@ -1643,7 +1618,7 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
@@ -1654,7 +1629,7 @@ jumpStartBehavior({
 					rotZ *= (Math.random() > 0.5) ? 1.0 : -1.0;
 
 					entity = {
-						"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+						"id": jumpStart.generateId(),
 						"offsetY": 0.0,
 						"offsetX": rotZ,
 						"template": "gun"
@@ -1664,12 +1639,12 @@ jumpStartBehavior({
 					if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 						this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+					this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 					//jumpStart.behaviors.hoverBlasterTable.spawnRocks(rotZ);
 				}
 
 				entity = {
-					"id": jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this),
+					"id": jumpStart.generateId(),
 					"offsetY": 0.0,
 					"offsetX": 0.1,
 					"template": "clearText"
@@ -1679,7 +1654,7 @@ jumpStartBehavior({
 				if( !!!this.syncData.hoverBlasterTable.timeline[safeZ] )
 					this.syncData.hoverBlasterTable.timeline[safeZ] = {};
 
-				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.behaviors.hoverBlasterTable.generateEntityId.call(this)] = entity;
+				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
 		},
 		"getAmountZ": function()
@@ -1720,6 +1695,7 @@ jumpStartBehavior({
 
 			// ALWAYS update rotation
 			var rotSpeed = (!!this.syncData.hoverBlasterTable.timeline.info) ? this.syncData.hoverBlasterTable.timeline.info.rotSpeed : this.syncData.hoverBlasterTable.rotSpeed;
+			var oldRot = this.userData.hoverBlasterTable.rot;
 			this.userData.hoverBlasterTable.rot += rotSpeed * jumpStart.deltaTime;
 
 			if( this.userData.hoverBlasterTable.rot > (Math.PI / (numSegments)) * this.userData.hoverBlasterTable.totalPlates )
@@ -1730,15 +1706,17 @@ jumpStartBehavior({
 				var plate;
 				if( this.userData.hoverBlasterTable.plates.length < 15 )
 				{
-					plate = jumpStart.spawnInstance("models/road", {"parent": this});
+					plate = jumpStart.spawnInstance(null, {"parent": this});
+					plate.applyBehavior("asyncModel", {"modelFile": "models/road", "callback": function(visualObject)
+						{
+							var plateMaterial = jumpStart.getMaterial(visualObject);
+							plateMaterial.transparent = true;
+							plateMaterial.opacity = 0.87;
+							plateMaterial.needsUpdate = true;
+						}, "bubbleInSpeed": 3.0
+					});
 					plate.userData.table = this;
 					plate.userData.rotOffset = this.rotation.x;
-
-					var plateMaterial = jumpStart.getMaterial(plate);
-					plateMaterial.transparent = true;
-					plateMaterial.opacity = 0.87;
-					plateMaterial.needsUpdate = true;
-				//	console.log(plateMaterial);
 
 					this.userData.hoverBlasterTable.plates.push(plate);
 				}
@@ -1747,22 +1725,24 @@ jumpStartBehavior({
 					plate = this.userData.hoverBlasterTable.plates[0];
 					this.userData.hoverBlasterTable.plates.shift();
 					this.userData.hoverBlasterTable.plates.push(plate);
+					this.userData.hoverBlasterTable.plates[0].scale.sub(new THREE.Vector3(jumpStart.deltaTime, jumpStart.deltaTime, jumpStart.deltaTime));
 				}
 
 				plate.rotation.x = (Math.PI / 4.0) - delta;
-			//	if( plate.rotation.x > Math.PI * 2.0 )
-			//		plate.rotation.x /= (Math.PI * 2.0);
-			//	console.log(plate.rotation.x / (Math.PI * 2.0));
+				plate.applyBehavior("bubbleIn", {"speed": 3.0});
 			}
 
-			this.rotation.x = this.userData.hoverBlasterTable.rot;
-			//if( this.rotation.x > Math.PI * 2.0 )
-			//		this.rotation.x /= Math.PI * 2.0;
-			//this.updateMatrix();
+			var plate0 = this.userData.hoverBlasterTable.plates[0];
+			if( this.userData.hoverBlasterTable.plates.length >= 15 && plate0.scale.x < 1 && plate0.scale.x > 0.0001 )
+			{
+				plate0.scale.sub(new THREE.Vector3(jumpStart.deltaTime * 3.0, jumpStart.deltaTime * 3.0, jumpStart.deltaTime * 3.0));
 
-			// only proceed if active
-		//	if( !this.syncData.hoverBlasterTable.isActive )
-			//	return;
+				if( plate0.scale.x < 0.0001 )
+					plate0.scale.set(0.0001, 0.0001, 0.0001);
+			}
+
+			//this.rotation.x = this.userData.hoverBlasterTable.rot;
+			this.rotateX(this.userData.hoverBlasterTable.rot - oldRot);
 
 			if( this.userData.hoverBlasterTable.initialRot === -1 )
 				this.userData.hoverBlasterTable.initialRot = this.userData.hoverBlasterTable.rot;// + Math.PI;
@@ -1831,7 +1811,8 @@ jumpStartBehavior({
 		{
 			var table = this.userData.table;
 
-			var debris = jumpStart.spawnInstance("models/rocks_broken", {"parent": table});
+			var debris = jumpStart.spawnInstance(null, {"parent": table});
+			debris.applyBehavior("asyncModel", {"modelFile": "models/rocks_broken", "useBubbleIn": false});
 			debris.userData.table = table;
 			debris.userData.rotOffset = this.userData.rotOffset;
 			debris.userData.maxGrowScale = 1.0;
@@ -1985,29 +1966,11 @@ jumpStartBehavior({
 
 				if( index === 0  && table.syncData.hoverBlasterTable.isActive)
 				{
-					var explosion = jumpStart.spawnInstance("models/explosion", {"parent": ship});
-					explosion.scale.set(0.3, 0.3, 0.3);
-					explosion.scale.multiplyScalar(1 / ship.scale.x);
-					//explosion.position.copy(ship.position);
-
-					explosion = jumpStart.spawnInstance("models/explosion", {"parent": ship});
-					explosion.scale.set(0.2, 0.2, 0.2);
-					//explosion.position.copy(ship.position);
-					explosion.translateX(8.0);
-					explosion.translateZ(8.0);
-					explosion.translateY(4.0);
-					explosion.scale.multiplyScalar(1 / ship.scale.x);
-
-					//if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
-				//	{
-						table.syncData.hoverBlasterTable.isActive = false;
-						table.sync();
+					table.syncData.hoverBlasterTable.isActive = false;
+					table.sync();
 
 					ship.syncData.dead = true;
 					ship.sync({"syncData": true});
-				//	}
-
-//					jumpStart.behaviors.hoverBlasterTable.gameOverNotify.call(table);
 				}
 
 				jumpStart.removeInstance(laser);
@@ -2026,8 +1989,8 @@ jumpStartBehavior({
 			var params = {
 				size: 12.0,
 				height: 1,
-				font: "helvetiker",
-				curveSegments: 1
+				font: jumpStart.font,//"helvetiker",
+				curveSegments: (jumpStart.isGearVR) ? 1 : 2
 			};
 
 			var geometry = new THREE.TextGeometry(words, params);
@@ -2087,11 +2050,15 @@ jumpStartBehavior({
 		},
 		"gunSpawn": function()
 		{
-			var base = jumpStart.spawnInstance("models/manualgun_base", {"parent": this});
-			var tower = jumpStart.spawnInstance("models/manualgun_tower", {"parent": base});
+			var base = jumpStart.spawnInstance(null, {"parent": this});
+			base.applyBehavior("asyncModel", {"modelFile": "models/manualgun_base"});
+
+			var tower = jumpStart.spawnInstance(null, {"parent": base});
+			tower.applyBehavior("asyncModel", {"modelFile": "models/manualgun_tower"});
 			tower.translateY(8.5);
 
-			var barrels = jumpStart.spawnInstance("models/manualgun_barrels", {"parent": tower});
+			var barrels = jumpStart.spawnInstance(null, {"parent": tower});
+			barrels.applyBehavior("asyncModel", {"modelFile": "models/manualgun_barrels"});
 			barrels.translateY(4.0);
 			barrels.translateZ(2.0);
 
@@ -2104,7 +2071,8 @@ jumpStartBehavior({
 			parent.userData.fireCooldown = 1.5;
 
 			parent.updateMatrixWorld();
-			var laser = jumpStart.spawnInstance("models/enemy_laser", {"parent": parent});
+			var laser = jumpStart.spawnInstance(null, {"parent": parent});
+			laser.applyBehavior("asyncModel", {"modelFile": "models/enemy_laser", "useBubbleIn": false});
 			laser.userData.table = parent.userData.table;
 			laser.userData.table.userData.hoverBlasterTable.enemyLasers[laser.uuid] = laser;
 			laser.addEventListener("remove", jumpStart.behaviors.hoverBlasterTable.enemyLaserRemove);
@@ -2188,12 +2156,14 @@ jumpStartBehavior({
 
 						if( index === 0 && table.syncData.hoverBlasterTable.isActive )
 						{
-							var explosion = jumpStart.spawnInstance("models/explosion", {"parent": ship});
+							var explosion = jumpStart.spawnInstance(null, {"parent": ship});
+							explosion.applyBehavior("asyncModel", {"modelFile": "models/explosion"});
 							explosion.scale.set(0.3, 0.3, 0.3);
 							explosion.scale.multiplyScalar(1 / ship.scale.x);
 							//explosion.position.copy(ship.position);
 
-							explosion = jumpStart.spawnInstance("models/explosion", {"parent": ship});
+							explosion = jumpStart.spawnInstance(null, {"parent": ship});
+							explosion.applyBehavior("asyncModel", {"modelFile": "models/explosion"});
 							explosion.scale.set(0.2, 0.2, 0.2);
 							//explosion.scale.multiplyScalar(1 / ship.scale.x);
 							//explosion.position.copy(ship.position);
@@ -2221,7 +2191,7 @@ jumpStartBehavior({
 		},
 		"bomberRemove": function()
 		{
-			var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
+			var table = this.userData.table;
 			if( !table || !table.userData.hoverBlasterTable.ship )
 				return;
 
@@ -2230,12 +2200,9 @@ jumpStartBehavior({
 		},
 		"bomberTick": function()
 		{
-			//var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
-			//if( !table )
-			//	return;
-
-			if( this.scale.x < 0.7 && !!!this.behaviors.shrinkRemove )
-				this.scale.add(new THREE.Vector3(1, 1, 1).multiplyScalar(jumpStart.deltaTime));
+			// SAVE ME: PROBABLY A GOOD WAY TO ADD TO VECTORS OVER DELTA TIME!!!
+			//if( this.scale.x < 0.7 && !!!this.behaviors.shrinkRemove )
+			//	this.scale.add(new THREE.Vector3(1, 1, 1).multiplyScalar(jumpStart.deltaTime));
 
 			var table = this.userData.table;
 
@@ -2256,7 +2223,8 @@ jumpStartBehavior({
 					bomb.quaternion.copy(this.quaternion);
 					bomb.lookAt(new THREE.Vector3(0, 0, 0));
 
-					var bombVisual = jumpStart.spawnInstance("models/bomb", {"parent": bomb});
+					var bombVisual = jumpStart.spawnInstance(null, {"parent": bomb});
+					bombVisual.applyBehavior("asyncModel", {"modelFile": "models/bomb"});
 					//bombVisual.position.copy(this.position);
 					//bombVisual.quaternion.copy(this.quaternion);
 
@@ -2313,9 +2281,12 @@ jumpStartBehavior({
 		},
 		"bomberSpawn": function()
 		{
-			var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
+			console.log("Spawn bomber for table " + this.syncData.tableName);
+			var table = jumpStart.scene.getObjectByName(this.syncData.tableName);
 			if( !table )
 				return;
+
+			this.applyBehavior("asyncModel", {"modelFile": "models/bomber"});
 
 			var ship = table.userData.hoverBlasterTable.ship;
 			if( !!ship )
@@ -2336,7 +2307,8 @@ jumpStartBehavior({
 
 			//JumpStart.playSound(soundFile, 0.5);
 
-			var explosion = jumpStart.spawnInstance("models/explosion");
+			var explosion = jumpStart.spawnInstance(null);
+			explosion.applyBehavior("asyncModel", {"modelFile": "models/explosion"});
 			explosion.userData.table = table;
 			explosion.position.copy(position);
 
@@ -2445,7 +2417,8 @@ jumpStartBehavior({
 			gun.userData.kill = function()
 			{
 				var table = this.userData.table;
-				var debris = jumpStart.spawnInstance("models/manualgun_base_broken", {"parent": table});
+				var debris = jumpStart.spawnInstance(null, {"parent": table});
+				debris.applyBehavior("asyncModel", {"modelFile": "models/manualgun_base_broken", "useBubbleIn": false});
 				debris.userData.table = table;
 				debris.userData.rotOffset = this.userData.rotOffset;
 				debris.userData.maxGrowScale = 1.0;
@@ -2455,7 +2428,8 @@ jumpStartBehavior({
 
 				//jumpStart.behaviors.hoverBlasterTable.spawnCoin.call(table, this.rotation.z);
 ///*
-				var coin = jumpStart.spawnInstance("models/coin", {"parent": table});
+				var coin = jumpStart.spawnInstance(null, {"parent": table});
+				coin.applyBehavior("asyncModel", {"modelFile": "models/coin"});
 				coin.userData.table = this.userData.table;
 				coin.userData.hitRadius = 10.0;
 				coin.userData.rotOffset = this.userData.rotOffset;
@@ -2471,7 +2445,6 @@ jumpStartBehavior({
 					var ship = this.userData.table.userData.hoverBlasterTable.ship;
 
 					jumpStart.playSound("sounds/coin_collect", 0.8);
-					//jumpStart.removeInstance(this);
 					this.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipHitCollect);
 					this.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 					this.applyBehavior("shrinkRemove", {"speed": 3.0});
@@ -2491,10 +2464,11 @@ jumpStartBehavior({
 						if( index < 7)
 						{
 							index++;
+
 							// health bar
 							function spawnBar(ship)
 							{
-								var geometry = new THREE.SphereGeometry( 3, 5, 5 );
+								var geometry = (jumpStart.isGearVR) ? new THREE.SphereGeometry( 3, 5, 5 ) : new THREE.SphereGeometry( 3, 8, 8 );
 								var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
 								var barObject = new THREE.Mesh( geometry, material );
 								var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
@@ -2502,24 +2476,8 @@ jumpStartBehavior({
 							}
 
 							var bar = spawnBar(ship);
-/*
-							var healthBarPositions = [
-								null,
-								new THREE.Vector3(0, 0, -25.8),
-								new THREE.Vector3(0, 7.5, -23.8),
-								new THREE.Vector3(0, 11.0, -18.0),
-								new THREE.Vector3(0, 7.7, -10.3),
-								new THREE.Vector3(0, 5.5, -3.0),
-								new THREE.Vector3(0, 5.5, 5.0),
-								new THREE.Vector3(0, 5.5, 12.0)
-							];
-*/
-							//console.log(index);
-							//console.log(ship.userData.healthBar.userData["bar" + index]);
 							bar.position.copy(ship.userData.healthBarPositions[index]);
 							ship.userData.healthBar.userData["bar" + index] = bar;
-
-							//ship.userData.healthBar = healthBar;
 
 							ship.userData.health += 40.0;
 						}
@@ -2527,33 +2485,10 @@ jumpStartBehavior({
 						ship.syncData.coins++;
 						ship.sync({"syncData": true});
 					}
-
-					//if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
-					//	ship.syncData.coins++;
-					//text.position.set(0, 20.0, 0);
-
-				//	text.userData.rotOffset = -this.userData.hoverBlasterTable.rot + (Math.PI / 2.0);
-				//	text.rotation.x = text.userData.rotOffset;
-				//	text.rotateX(-Math.PI / 1.5);
-
-				//	text.translateY(this.userData.hoverBlasterTable.radius + (displacement.y / 2.0) + 30.0);
-				//	text.scale.set(0.0001, 0.0001, 0.0001);
-					//text.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 				};
 				coin.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 				coin.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipHitCollect);
-				//coin.addEventListener("tick", coinTick);
-				//coin.addEventListener("1, coinSpawn);
-				//coin.addEventListener("remove", coinRemove);							
-				//coin.sync();
-//*/
-
-				//var explosion = SpawnExplosion(this.position, 1.0);
-				//explosion.quaternion.copy(this.quaternion);
-				//explosion.translateY(20.0);
-
 				jumpStart.playSound("sounds/explosion1", 0.1);
-
 				jumpStart.removeInstance(this);
 			};
 
@@ -2600,7 +2535,9 @@ jumpStartBehavior({
 		"spawnCoin": function(entry)//rotZ)
 		{
 			var rotZ = entry.offsetX;
-			var coin = jumpStart.spawnInstance("models/coin", {"parent": this});
+
+			var coin = jumpStart.spawnInstance(null, {"parent": this});
+			coin.applyBehavior("asyncModel", {"modelFile": "models/coin"});
 			coin.userData.entryID = entry.id;
 			coin.userData.table = this;
 			coin.userData.hitRadius = 10.0;
@@ -2611,82 +2548,56 @@ jumpStartBehavior({
 			coin.translateY(this.userData.hoverBlasterTable.radius + 40.0);
 			coin.rotateY(Math.PI / 2.0);
 			coin.scale.set(0.0001, 0.0001, 0.0001);
-			//coin.userData.health = 100.0;
 			coin.userData.collected = function()
 			{
 				var table = this.userData.table;
 				var ship = this.userData.table.userData.hoverBlasterTable.ship;
 
 				jumpStart.playSound("sounds/coin_collect", 0.8);
-				//jumpStart.removeInstance(this);
 				this.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipHitCollect);
 				this.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 				this.applyBehavior("shrinkRemove", {"speed": 3.0});
 
-				//ship.syncData.coins++;
-
-				var params = {
-					size: 12.0,
-					height: 1,
-					font: "helvetiker",
-					curveSegments: 1
-				};
-
 				if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
 				{
+					var index = 7;
+					while( index > 0 )
+					{
+						var bar = ship.userData.healthBar.userData["bar" + index];
+						if( !!bar )
+							break;
+
+						index--;
+					}
+
+					if( index < 7)
+					{
+						index++;
+
+						// health bar
+						function spawnBar(ship)
+						{
+							var geometry = (jumpStart.isGearVR) ? new THREE.SphereGeometry( 3, 5, 5 ) : new THREE.SphereGeometry( 3, 8, 8 );
+							var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+							var barObject = new THREE.Mesh( geometry, material );
+							var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
+							return bar;
+						}
+
+						var bar = spawnBar(ship);
+						bar.position.copy(ship.userData.healthBarPositions[index]);
+						ship.userData.healthBar.userData["bar" + index] = bar;
+
+						ship.userData.health += 40.0;
+					}
+					
 					ship.syncData.coins++;
 					ship.sync({"syncData": true});
 				}
-
-				var geometry = new THREE.TextGeometry(ship.syncData.coins, params);
-				var material = new THREE.MeshBasicMaterial({color:'yellow'});
-				var mesh = new THREE.Mesh(geometry, material);
-
-				geometry.computeBoundingBox();
-				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
-
-				var text = jumpStart.spawnInstance(null)
-				text.userData.table = table;
-				var worldPos = this.getWorldPosition();
-				jumpStart.world.worldToLocal(worldPos);
-				text.position.copy(worldPos);
-				text.position.y += 10.0;
-//					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
-
-				var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
-				var offset = new THREE.Vector3().copy(displacement);
-				offset.multiply(textMesh.scale);
-				textMesh.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
-
-				text.userData.life = 1.5;
-				text.addEventListener("tick", function()
-				{
-					this.userData.life -= jumpStart.deltaTime;
-
-					if( this.userData.life <= 0 )
-					{
-						//jumpStart.removeInstance(this);
-						this.removeEventListener("tick", arguments.callee);
-						this.applyBehavior("shrinkRemove");
-						return;
-					}
-
-					this.position.y += 10.0 * jumpStart.deltaTime;
-					if( jumpStart.isAltspace )
-						this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
-				});
 			};
 			coin.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 			coin.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipHitCollect);
-			//coin.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.hitDetect);
-			/*
-			coin.addEventListener("remove", function()
-			{
-				var table = this.userData.table;
-				table.userData.hoverBlasterTable.rocks.splice(table.userData.hoverBlasterTable.rocks.indexOf(this), 1);
-			});
-			*/
-			
+
 			// reposition any rocks that are in the way
 			jumpStart.behaviors.hoverBlasterTable.repositionRocks.call(this, [coin]);
 		},
@@ -2705,7 +2616,8 @@ jumpStartBehavior({
 		"spawnRocks": function(entry)//rotZ)
 		{
 			rotZ = entry.offsetX;
-			var rocks = jumpStart.spawnInstance("models/rocks", {"parent": this});
+			var rocks = jumpStart.spawnInstance(null, {"parent": this});
+			rocks.applyBehavior("asyncModel", {"modelFile": "models/rocks"});
 			rocks.userData.entryID = entry.id;
 			rocks.userData.table = this;
 			rocks.userData.hitRadius = 20.0;
@@ -2750,16 +2662,26 @@ jumpStartBehavior({
 		{
 			var rotZ = entry.offsetX;
 			var rotY = entry.rotY;
-
-			var crazy = jumpStart.spawnInstance("models/thai");
+//console.log(this.syncData.hoverBlasterTable.originalQuaternion);
+			var crazy = jumpStart.spawnInstance(null);
+			crazy.position.copy(this.position);
+			crazy.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);
+			//crazy.rotateX(Math.PI);// * 2.0);
+			crazy.applyBehavior("asyncModel", {"modelFile": "models/thai"});
 			crazy.userData.entryID = entry.id;
 			crazy.userData.table = this;
 			crazy.userData.hitRadius = 10.0;
 			crazy.userData.health = 100.0;
-			crazy.userData.dumbTime = 3.0;
-			crazy.position.z -= this.userData.hoverBlasterTable.radius;
-			crazy.position.y = this.position.y + 20.0;
-			crazy.rotation.x = -Math.PI / 2.0;
+			crazy.userData.dumbTime = 2.8;
+			//crazy.translateX(-Math.PI / 2.0);
+			//crazy.rotateX(-Math.PI / 1.5);
+			crazy.rotateX(-Math.PI);
+			crazy.translateY(this.position.y - 20.0);
+			crazy.translateZ(-this.userData.hoverBlasterTable.radius);
+			crazy.rotateX(Math.PI + (Math.PI / 2.0));
+			//crazy.position.z -= this.userData.hoverBlasterTable.radius;
+			//crazy.position.y = this.position.y + 20.0;
+			//crazy.rotation.x = -Math.PI / 2.0;
 
 			//var rot = Math.PI * 0.4 * Math.random();
 			//rot *= (Math.random() > 0.5) ? 1.0 : -1.0;
@@ -2768,7 +2690,7 @@ jumpStartBehavior({
 			crazy.addEventListener("tick", function()
 			{
 				var table = this.userData.table;
-				if( table.parent !== jumpStart.world )
+				if( !!!jumpStart.objects[table.uuid] )//table.parent !== jumpStart.world )
 					jumpStart.removeInstance(this);
 
 				// only proceed if active
@@ -2848,9 +2770,12 @@ jumpStartBehavior({
 		},
 		"removeBehavior": function()
 		{
-			jumpStart.removeInstance(this.userData.hoverBlasterTable.board);
+			delete jumpStart.behaviors.hoverBlasterTable.tables[this.name];
 
-			jumpStart.behaviors.hoverBlasterTable.tableRef = null;
+			//this.userData.hoverBlasterTable.playerBoardElem.parentNode.removeChild(table.userData.hoverBlasterTable.playerBoardElem);
+			//this.userData.hoverBlasterTable.playerBoardElem = null;
+
+			//jumpStart.removeInstance(this.userData.hoverBlasterTable.board);
 
 			if( this.ownerID === jumpStart.localUser.userId )
 			{
@@ -2869,19 +2794,20 @@ jumpStartBehavior({
 					jumpStart.gamepad.preventDefault(preventAxis, preventButtons);
 				}
 
-				jumpStart.addEventListener("gamepadbutton", jumpStart.behaviors.hoverBlasterTable.tableButtonListener);
-				jumpStart.removeInstance(this.userData.hoverBlasterTable.ship);
+				jumpStart.behaviors.hoverBlasterTable.focusedTableRef = null;
 
-				//console.log(jumpStart.elapsedTime);//jumpStart.isInitialized && jumpStart.isReady && jumpStart.isRunning);
-				if( !jumpStart.elapsedTime )
+				if( !jumpStart.isAltspace )
 				{
-					setTimeout(function()
-					{
-						spawnHoverBlasterPlaceholder(new THREE.Vector3(), new THREE.Quaternion());
-					}.bind(this), 1000);
+					jumpStart.camera.position.copy(this.userData.hoverBlasterTable.originalCameraPosition);
+					jumpStart.camera.quaternion.copy(this.userData.hoverBlasterTable.originalCameraQuaternion);
+					this.userData.hoverBlasterTable.originalCameraPosition = null;
+					this.userData.hoverBlasterTable.originalCameraQuaternion = null;
+					jumpStart.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.autoWebCamera);
 				}
-				else
-					spawnHoverBlasterPlaceholder(new THREE.Vector3(), new THREE.Quaternion());
+
+				jumpStart.removeEventListener("gamepadbutton", jumpStart.behaviors.hoverBlasterTable.tableButtonListener);
+
+				jumpStart.removeInstance(this.userData.hoverBlasterTable.ship);
 			}
 		},
 		"fireLaser": function()
@@ -2893,7 +2819,8 @@ jumpStartBehavior({
 			var i, laserOffset, laser;
 			for( i = 0; i < laserOffsets.length; i++ )
 			{
-				laser = jumpStart.spawnInstance("models/player_laser");
+				laser = jumpStart.spawnInstance(null);
+				laser.applyBehavior("asyncModel", {"modelFile": "models/player_laser", "useBubbleIn": false});
 				laser.userData.table = table;
 				laser.userData.power = 20.0;	// must all be the same power cuz of how healthbar works
 				laser.position.copy(this.position);
@@ -2983,8 +2910,8 @@ jumpStartBehavior({
 				var params = {
 					size: 12.0,
 					height: 1,
-					font: "helvetiker",
-					curveSegments: 1
+					font: jumpStart.font,//"helvetiker",
+					curveSegments: (jumpStart.isGearVR) ? 1 : 2
 				};
 
 				var geometry = new THREE.TextGeometry(ship.syncData.coins, params);
@@ -2996,9 +2923,9 @@ jumpStartBehavior({
 
 				var text = jumpStart.spawnInstance(null)
 				text.userData.table = table;
-				var worldPos = this.getWorldPosition();
-				jumpStart.world.worldToLocal(worldPos);
-				text.position.copy(worldPos);
+				text.position.copy(ship.position);
+				text.quaternion.copy(table.syncData.hoverBlasterTable.originalQuaternion);
+				text.rotateX(Math.PI);
 				text.position.y += 10.0;
 //					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 
@@ -3021,8 +2948,6 @@ jumpStartBehavior({
 					}
 
 					this.position.y += 10.0 * jumpStart.deltaTime;
-					if( jumpStart.isAltspace )
-						this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 				});
 			}
 
@@ -3120,58 +3045,45 @@ jumpStartBehavior({
 					}
 					else
 					{
-						// rotation
-						// better
-						//this.rotation.y += jumpStart.gamepad.axes[2] * jumpStart.deltaTime;
-						//this.rotation.x += jumpStart.gamepad.axes[3] * jumpStart.deltaTime;
-
-						// worse
-						//this.rotateY(-jumpStart.gamepad.axes[2] * jumpStart.deltaTime);
-						//this.rotateX(-jumpStart.gamepad.axes[3] * jumpStart.deltaTime);
+						var pitchAxisValue = jumpStart.gamepad.axes[0];
+						var yawAxisValue = jumpStart.gamepad.axes[1];
 
 						// position
 						var currentPosition = this.position.clone();
 
 						var positionRay = this.userData.positionRay;
 						var oldRotation = positionRay.rotation.clone();
-						positionRay.rotateY(jumpStart.gamepad.axes[0] * jumpStart.deltaTime);
+						positionRay.rotateY(pitchAxisValue * jumpStart.deltaTime);
 
-						var max = 0.7;
-						if( positionRay.rotation.y > max )
-						{
-							positionRay.rotation.copy(oldRotation);
-							positionRay.rotation.y = max;
-						}
-						else if( positionRay.rotation.y < -max )
-						{
-							positionRay.rotation.copy(oldRotation);
-							positionRay.rotation.y = -max;
-						}
+						//console.log(positionRay.rotation.y);
+						//var max = table.syncData.hoverBlasterTable.originalRotation.y + 0.3;
+						//var min = table.syncData.hoverBlasterTable.originalRotation.y - 0.3
+						//if( positionRay.rotation.y < min )
+						//	positionRay.rotation.y = min;//oldRotation.y;
+						//else if( positionRay.rotation.y > max )
+						//	positionRay.rotation.y = max;
 
-						//positionRay.updateMatrix();
-						//else
-						//{
-							oldRotation = positionRay.rotation.clone();
-							positionRay.rotateX(jumpStart.gamepad.axes[1] * jumpStart.deltaTime);
+						//var max = 0.7;
+						//if( Math.abs(table.syncData.hoverBlasterTable.originalRotation.y - positionRay.rotation.y) > max )
+						//	positionRay.rotation.copy(oldRotation);
 
-							//console.log(positionRay.rotation.x);
-							max = 0.2;
-							var min = Math.PI / 2.0;
-							if( positionRay.rotation.x > -max )
-							{
-								positionRay.rotation.copy(oldRotation);
-								positionRay.rotation.x = -max;
-							}
-							else if( positionRay.rotation.x < -min )
-							{
-								positionRay.rotation.copy(oldRotation);
-								positionRay.rotation.x = -min;
-							}
-						//}
-//console.log(positionRay.rotation.y);
-						
-//console.log(positionRay.rotation.y);
-						//positionRay.userData.shadow.updateMatrixWorld();
+
+						oldRotation = positionRay.rotation.clone();
+						positionRay.rotateX(yawAxisValue * jumpStart.deltaTime);
+
+						//max = -1.2;
+						//var min = -0.2;
+						//if( positionRay.rotation.x > min )
+						//	positionRay.rotation.x = min;//oldRotation.y;
+						//else if( positionRay.rotation.x < max )
+						//	positionRay.rotation.x = max;
+
+//console.log(Math.abs(table.syncData.hoverBlasterTable.originalRotation.x - positionRay.rotation.x));
+//						var originalRot = table.syncData.hoverBlasterTable.originalRotation.x - ((table.syncData.hoverBlasterTable.originalRotation.x / Math.PI) * Math.PI);
+//console.log(originalRot + " vs " + positionRay.rotation.x);
+
+						//if( Math.abs(table.syncData.hoverBlasterTable.originalRotation.x - positionRay.rotation.x) > max )
+						//	positionRay.rotation.copy(oldRotation);
 
 						var shadowPos = positionRay.userData.shadow.getWorldPosition();
 						var originPos = positionRay.getWorldPosition();
@@ -3179,64 +3091,42 @@ jumpStartBehavior({
 						// rotation
 						var currentQuaternion = this.quaternion.clone();
 
-						var quaternion = positionRay.userData.shadow.getWorldQuaternion();
-						this.quaternion.copy(quaternion);
-						this.rotation.z = 0;
-						this.rotateY(Math.PI);
-						this.rotateX(-Math.PI / 3.0);
+						//var quaternion = positionRay.userData.shadow.getWorldQuaternion();
+						//var quaternion = positionRay.userData.shadow.quaternion.clone();
+						//var quaternion = positionRay.getWorldQuaternion();
+						//var quaternion = table.syncData.hoverBlasterTable.originalQuaternion.clone();
+						//this.quaternion.copy(quaternion);
+						//this.rotateZ(Math.PI);
+						//this.rotation.z = 0;
+						//this.rotateY(Math.PI);
+						//this.rotateX(-Math.PI / 3.0);
+						this.lookAt(table.position);
+						this.rotateX(-Math.PI / 2.8);
+						var quaternion = this.quaternion.clone();
 
-						this.rotateY(-jumpStart.gamepad.axes[2]);
-						this.rotateX(jumpStart.gamepad.axes[3]);
-/*
-						if( this.rotation.x > -0.2 )
-							this.rotation.x = -0.2;
-						else if( this.rotation.x < -Math.PI / 2.0 )
-							this.rotation.x = -Math.PI / 2.0;
-//console.log(positionRay.rotation.y);
-						if( this.rotation.y > 0.84 )
-							this.rotation.y = 0.84;
-						else if( this.rotation.y < -0.84 )
-							this.rotation.y = -0.84;
-*/
+						var axisValueA = jumpStart.gamepad.axes[2];
+						var axisValusB = jumpStart.gamepad.axes[3];
+						this.rotateY(-axisValueA);
+						this.rotateX(axisValusB);
+
 						quaternion.copy(this.quaternion);
 						currentQuaternion.slerp(quaternion, 0.1);
 						this.quaternion.copy(currentQuaternion);
 
-						var heightOffset = 20.0 + (20.0 * jumpStart.gamepad.buttons[6].value);
+						var axisValueC = jumpStart.gamepad.buttons[6];
+						var heightOffset = 20.0 + (20.0 * axisValueC.value);
 
 						var pos = shadowPos.sub(originPos).normalize();
 						pos.multiplyScalar(table.userData.hoverBlasterTable.radius + heightOffset);
 						pos.add(table.position);
-/*
-						var needsLook = false;
-						var yVal = table.position.y;
-						console.log(pos.y + " vs " + yVal);
-						if( pos.y < yVal )
-						{
-							pos.y = yVal;
-							needsLook = true;
-						}
-*/
+
 						currentPosition.lerp(pos, 0.1);
 						this.position.copy(currentPosition);
-
-						//if( needsLook )
-						//{
-							//var lookPos = currentPosition.clone();
-							//jumpStart.world.localToWorld(lookPos);
-						//	positionRay.lookAt(this.getWorldPosition());
-					//	}
 					}
 				}
 				else
 				{
-				//	console.log(jumpStart.localUser.cursorHit.point);
-
-					// position
-				//	var currentPosition = this.position.clone();
-
-					//console.log(this.userData.positionRay);
-					if( jumpStart.localUser.cursorHit )
+					if( false && jumpStart.localUser.cursorHit )
 					{
 						var oldPos = this.position.clone();
 						var oldQuaternion = this.quaternion.clone();
@@ -3303,11 +3193,15 @@ jumpStartBehavior({
 			if( !!!table )
 				return;
 			
+			// local apply
+			this.applyBehavior("asyncModel", {"modelFile": "models/hawk"});
+			//this.syncData.vehicleModel = "models/hawk"
+
 			table.userData.hoverBlasterTable.ship = this;
 			this.userData.table = table;
 			this.userData.oldShotsFired = this.syncData.shotsFired;
-			jumpStart.removeInstance(table.userData.hoverBlasterTable.dome);
-			table.userData.hoverBlasterTable.dome = null;
+			//jumpStart.removeInstance(table.userData.hoverBlasterTable.dome);
+			//table.userData.hoverBlasterTable.dome = null;
 //			if( table.syncData.hoverBlasterTable !== jumpStart.localUser.userID )
 //			{
 //				this.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.shipTick);
@@ -3324,15 +3218,15 @@ jumpStartBehavior({
 			ship.userData.health = 100.0;
 			ship.userData.fireCooldown = 0;
 			ship.scale.multiplyScalar(0.4);	// FIXME: native scale the ship OBJ
-			ship.translateY(180.0);
-			ship.rotateY(Math.PI);
-			ship.translateZ(-100.0);
-			ship.rotateX(Math.PI / -12.0);
+			//ship.translateY(180.0);
+			//ship.rotateY(Math.PI);
+			//ship.translateZ(-100.0);
+			//ship.rotateX(Math.PI / -12.0);
 
 			// health bar
 			function spawnBar(ship)
 			{
-				var geometry = new THREE.SphereGeometry( 3, 5, 5 );
+				var geometry = (jumpStart.isGearVR) ? new THREE.SphereGeometry( 3, 5, 5 ) : new THREE.SphereGeometry( 3, 8, 8 );
 				var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
 				var barObject = new THREE.Mesh( geometry, material );
 				var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
@@ -3342,7 +3236,7 @@ jumpStartBehavior({
 			var healthBar = jumpStart.spawnInstance(null, {"parent": ship});
 			var bar = spawnBar(ship);
 
-			if( ship.modelFile == "models/hawk" )
+			if( true || ship.modelFile == "models/hawk" )
 			{
 				ship.userData.healthBarPositions = [
 				null,
@@ -3402,11 +3296,27 @@ jumpStartBehavior({
 			//jumpStart.world.localToWorld(worldPos);
 
 			var positionRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
+			//ship.userData.positionRay = positionRay;
+			//var debugVisual = jumpStart.spawnInstance(null, {"parent": positionRay});
+			//debugVisual.scale.z = 200.0;
+			//debugVisual.applyBehavior("asyncModel", {"modelFile": "engine/models/pixel"});
 			positionRay.position.copy(table.position);
+			positionRay.quaternion.copy(table.quaternion);
+
+			var pos;
+			if( jumpStart.isAltspace )
+				pos = jumpStart.localUser.skeleton.getJoint("Eye").getWorldPosition();
+			else
+				pos = jumpStart.camera.getWorldPosition();
+
+			pos.y = positionRay.position.y + table.userData.hoverBlasterTable.radius;
+
+			positionRay.lookAt(pos);
+			//positionRay.rotateX(Math.PI);
 
 //displacementRay.rotateX(Math.PI * -0.1);
 			var shipPos = ship.getWorldPosition();
-			positionRay.lookAt(shipPos);
+			//positionRay.lookAt(shipPos);
 
 //displacementRay.rotateX(Math.PI * -0.1);
 /*
@@ -3416,18 +3326,43 @@ jumpStartBehavior({
 			*/
 
 			var shadow = jumpStart.spawnInstance(null, {"parent": positionRay});
+			/*
+			shadow.addEventListener("tick", function()
+			{
+				var pos;
+				if( jumpStart.isAltspace )
+					pos = jumpStart.localUser.skeleton.getJoint("Eye").getWorldPosition();
+				else
+					pos = jumpStart.camera.getWorldPosition();
+
+				//pos.y = this.position.y;
+
+				this.lookAt(pos);
+				//this.rotateX(Math.PI);
+			});
+			*/
+			//shadow.quaternion.copy(table.quaternion);
+			//shadow.rotateX(-Math.PI);
+			//var pos = table.position.clone();
+			//pos.y = shadow.position.y;
+			//shadow.lookAt(pos);
+
+
 			shadow.position.z = table.userData.hoverBlasterTable.radius;
 			positionRay.userData.shadow = shadow;
-			
+
 			ship.userData.positionRay = positionRay;
+
+			// FIXME: Why aren't the positionray and displacementray one and the same?
+			var displacementRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
+			displacementRay.position.copy(table.position);
+			displacementRay.quaternion.copy(table.quaternion);
 
 			ship.addEventListener("remove", function()
 			{
+				jumpStart.removeInstance(this.userData.positionRay);
 				jumpStart.removeInstance(this.userData.displacementRay);
 			});
-
-			var displacementRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
-			displacementRay.position.copy(table.position);
 
 			var crazyPos = ship.getWorldPosition();
 			displacementRay.lookAt(crazyPos);
@@ -3442,7 +3377,8 @@ jumpStartBehavior({
 			displacementRay.userData.shadow = shadow;
 			ship.userData.displacementRay = displacementRay;
 
-			var sight = jumpStart.spawnInstance("models/player_laser", {"parent": ship});
+			var sight = jumpStart.spawnInstance(null, {"parent": ship});
+			sight.applyBehavior("asyncModel", {"modelFile": "models/player_laser"});
 			sight.scale.set(0.1, 0.1, 10.0);
 			sight.translateZ(200.0);
 			ship.userData.sight = sight;
@@ -3514,7 +3450,8 @@ jumpStartBehavior({
 
 			if( this.modelFile === "models/chopper" )
 			{
-				var blades = jumpStart.spawnInstance("models/chopper_blades", {"parent": ship});
+				var blades = jumpStart.spawnInstance(null, {"parent": ship});
+				blades.applyBehavior("asyncModel", {"modelFile": "models/chopper_blades"});
 				blades.position.y = 8.81;
 				blades.position.z = 2.888;
 				blades.addEventListener("tick", function()
@@ -3522,7 +3459,8 @@ jumpStartBehavior({
 					this.rotateY(-5.0 * jumpStart.deltaTime);
 				});
 
-				var bladesBack = jumpStart.spawnInstance("models/chopper_blades_back", {"parent": ship});
+				var bladesBack = jumpStart.spawnInstance(null, {"parent": ship});
+				bladesBack.applyBehavior("asyncModel", {"modelFile": "models/chopper_blades_back"});
 				bladesBack.position.z = -27.848;
 				bladesBack.position.y = 3.982;
 				bladesBack.addEventListener("tick", function()
@@ -3532,7 +3470,8 @@ jumpStartBehavior({
 			}
 			else if( this.modelFile === "models/chopper2" )
 			{
-				var blades = jumpStart.spawnInstance("models/chopper2_blades", {"parent": ship});
+				var blades = jumpStart.spawnInstance(null, {"parent": ship});
+				blades.applyBehavior("asyncModel", {"modelFile": "models/chopper2_blades"});
 				blades.position.y = 12.696;
 				blades.position.z = -5.285;
 				blades.addEventListener("tick", function()
@@ -3540,7 +3479,8 @@ jumpStartBehavior({
 					this.rotateY(-10.0 * jumpStart.deltaTime);
 				});
 
-				var bladesBack = jumpStart.spawnInstance("models/chopper2_blades_back", {"parent": ship});
+				var bladesBack = jumpStart.spawnInstance(null, {"parent": ship});
+				blades.applyBehavior("asyncModel", {"modelFile": "models/chopper2_blades_back"});
 				bladesBack.position.z = -32.696;
 				bladesBack.position.y = 6.939;
 				bladesBack.position.x = 1.217;
@@ -3554,8 +3494,12 @@ jumpStartBehavior({
 		{
 			if( this.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
 			{
-				console.log("Spawn a shp!!");
-				var ship = jumpStart.spawnInstance(this.userData.shipType);
+				var ship = jumpStart.spawnInstance(null);
+				ship.position.copy(this.position);
+				ship.quaternion.copy(this.quaternion);
+				//ship.rotation.x = 0;
+				//ship.translateZ(-400.0);
+				//ship.translateY(-this.userData.hoverBlasterTable.radius);
 
 				ship.syncData.dead = false;
 				ship.syncData.tableName = this.name;
@@ -3574,20 +3518,46 @@ jumpStartBehavior({
 
 				// capture gamepad input
 				//var table = this;
-				//jumpStart.behaviors.hoverBlasterTable.tableRef = this;
+				jumpStart.behaviors.hoverBlasterTable.focusedTableRef = this;
 				jumpStart.addEventListener("gamepadbutton", jumpStart.behaviors.hoverBlasterTable.tableButtonListener);
-				//*/
-			}
-		
-		/*
-			if( this.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
-			{
-				ship.applyBehavior("autoSync");
-				ship.applyBehavior("lerpSync");
-				ship.sync();
-			}
-		*/
 
+				// auto camera
+				if( !jumpStart.isAltspace )
+				{
+					this.userData.hoverBlasterTable.originalCameraPosition = (jumpStart.isAltspace) ? null : jumpStart.camera.position.clone();
+					this.userData.hoverBlasterTable.originalCameraQuaternion = (jumpStart.isAltspace) ? null : jumpStart.camera.quaternion.clone();
+					jumpStart.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.autoWebCamera);
+				}
+			}
+		},
+		"autoWebCamera": function()
+		{
+			var oldPos = jumpStart.camera.position.clone();
+			var oldQuaternion = jumpStart.camera.quaternion.clone();
+
+			var table = jumpStart.behaviors.hoverBlasterTable.focusedTableRef;
+			if( !!!table )
+				return;
+
+			var ship = table.userData.hoverBlasterTable.ship;
+			if( !!!ship )
+				return;
+
+			jumpStart.camera.position.copy(ship.getWorldPosition());
+			jumpStart.camera.quaternion.copy(ship.getWorldQuaternion());
+			jumpStart.camera.rotateY(Math.PI);
+			jumpStart.camera.translateZ(160.0);
+			jumpStart.camera.translateY(140.0);
+			jumpStart.camera.rotateX(-0.5);
+
+			var targetPos = jumpStart.camera.position.clone();
+			var targetQuaternion = jumpStart.camera.quaternion.clone();
+
+			jumpStart.camera.position.copy(oldPos);
+			jumpStart.camera.quaternion.copy(oldQuaternion);
+
+			jumpStart.camera.position.lerp(targetPos, 0.05);
+			jumpStart.camera.quaternion.slerp(targetQuaternion, 0.05);
 		}
 	}
 });

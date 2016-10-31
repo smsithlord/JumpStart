@@ -52,7 +52,7 @@
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModels(["models/smasher", "models/table", "models/mole", "models/gold"]).then( function()
+				jumpStart.loadModelsEx(["models/smasher", "models/table", "models/mole", "models/gold"], function()
 				{
 					jumpStart.doneCaching();
 				});

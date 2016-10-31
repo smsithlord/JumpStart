@@ -68,6 +68,7 @@ jumpStartBehavior({
 			tableTop.position.copy(this.position);
 			tableTop.quaternion.copy(this.quaternion);
 			tableTop.blocksLOS = true;
+			jumpStart.makeCollide(tableTop);
 			tableTop.translateY(2.0);
 			tableTop.translateZ(7.0);
 			tableTop.rotateX(Math.PI / 1.77);
@@ -85,6 +86,7 @@ jumpStartBehavior({
 			coinDoor.position.copy(this.position);
 			coinDoor.quaternion.copy(this.quaternion);
 			coinDoor.blocksLOS = true;
+			jumpStart.makeCollide(coinDoor);
 			coinDoor.translateY(-23.0);
 			coinDoor.translateZ(21.0);
 			coinDoor.position.y -= 1.5;

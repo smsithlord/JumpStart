@@ -82,7 +82,7 @@ jumpStartBehavior({
 							if( !!!doubleClickRequiredObject )
 							{
 								var parentObject = this.parent.parent;
-								var imageFile = "assets/rcdm/misc/doubleclickrequired.png";
+								var imageFile = "assets/RCDM/misc/doubleclickrequired.png";
 								var x, imageMaterial, imageGeometry, imagePlane;
 								var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), transparent: true, opacity: 1.0});
 								var imageGeometry = new THREE.PlaneGeometry(100, 32, 1 , 1);
@@ -160,7 +160,7 @@ jumpStartBehavior({
 				{
 					if( !!!gamepadRequiredObject )
 					{
-						var imageFile = "assets/rcdm/misc/gamepadrequired.png";
+						var imageFile = "assets/RCDM/misc/gamepadrequired.png";
 						var x, imageMaterial, imageGeometry, imagePlane;
 						var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), transparent: true, opacity: 1.0});
 						var imageGeometry = new THREE.PlaneGeometry(100, 32, 1 , 1);
@@ -259,19 +259,20 @@ jumpStartBehavior({
 				{
 					var lookTarget = new THREE.Vector3(0, 200.0, 800.0);
 
-					var iconFile = "assets/rcdm/misc/thumbs/" + vehicleTypeName + "Icon.png";
+					var iconFile = "assets/RCDM/misc/thumbs/" + vehicleTypeName + "Icon.png";
 					var x, icon, iconMaterial, iconGeometry, iconPlane;
-					var iconMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(iconFile), transparent: true, opacity: 0.9});
+					var iconMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(iconFile), transparent: true, opacity: 0.95});
 					//iconMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(iconFile)});
 
 					var iconGeometry = new THREE.PlaneGeometry(32, 32, 1 , 1);
 					var iconPlane = new THREE.Mesh(iconGeometry, iconMaterial);
 					var iconObject = jumpStart.spawnInstance(null, {"object": iconPlane, "parent": menuParent});
 					iconObject.blocksLOS = true;
+					jumpStart.makeCollide(iconObject);
 					iconObject.userData.targetScale = new THREE.Vector3(1, 1, 1);
 					iconObject.userData.menuParent = menuParent;
 					iconObject.userData.vehicleTypeName = vehicleTypeName;
-					iconObject.applyBehavior("bubbleIn", {"speed": 6.0});
+					iconObject.applyBehavior("bubbleIn", {"speed": 4.0});
 
 					iconObject.addEventListener("cursorenter", function()
 					{

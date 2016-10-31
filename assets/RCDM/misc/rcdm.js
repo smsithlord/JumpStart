@@ -105,6 +105,9 @@ jumpStartBehavior({
 					jumpStart.gamepad.preventDefault(preventAxis, preventButtons);
 			}
 
+			// FIXME: why isn't this calling itself anymore???
+			//this.behaviors.rcdm.spawn.call(this);
+
 			return true;
 		},
 		"addVehicleType": function(vehicleType)
@@ -412,8 +415,8 @@ jumpStartBehavior({
 			var params = {
 				size: 10.0,
 				height: 1,
-				font: "helvetiker",
-				curveSegments: 1
+				font: jumpStart.font,//"helvetiker",
+				curveSegments: (!!jumpStart.isGearVR) ? 1 : 2
 			};
 
 			var geometry = new THREE.TextGeometry(this.syncData.rcdm.operatorName, params);

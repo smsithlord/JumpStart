@@ -55,7 +55,7 @@
 					"models/target"
 				];
 
-				jumpStart.loadModels(models).then( function()
+				jumpStart.loadModelsEx(models, function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -74,6 +74,7 @@
 
 				// Make the floor 40% larger to avoid Altspace from thinking mouse clicks are not captured along the edges
 				floorBoundary.scale.multiplyScalar(1.4);
+				jumpStart.makeCollide(floorBoundary);
 
 				var cage = jumpStart.spawnInstance("models/cube_cage");
 				cage.name = "cage";

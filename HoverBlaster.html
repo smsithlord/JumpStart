@@ -22,501 +22,107 @@
 			
 			jumpStart.addEventListener("precache", function()
 			{
-				jumpStart.precacheSound("sounds/bonus");
-				jumpStart.precacheSound("sounds/coin_collect");
-				jumpStart.precacheSound("sounds/damage1");
-				jumpStart.precacheSound("sounds/damage2");
-				jumpStart.precacheSound("sounds/damage3");
-				jumpStart.precacheSound("sounds/explosion0");
-				jumpStart.precacheSound("sounds/explosion1");
-				jumpStart.precacheSound("sounds/laser1");
-				jumpStart.precacheSound("sounds/laser2");
-				jumpStart.precacheSound("sounds/shatter");
-
-				// Async
-				jumpStart.loadModels(["models/button", "models/buttonFrame", "models/vivewand", "models/board", "models/rocks", "models/rocks_broken", "models/missile", "models/road", "models/hawk", "models/player_laser", "models/missilefull", "models/manualgun_base", "models/manualgun_base_broken", "models/explosion", "models/dome", "models/coin", "models/manualgun_tower", "models/manualgun_barrels", "models/enemy_laser", "models/thai", "models/chopper", "models/chopper_blades", "models/chopper2_blades", "models/chopper_blades_back", "models/chopper2_blades_back", "models/chopper2", "models/bomber", "models/bomb"]).then( function()
-				{
-					jumpStart.doneCaching();
-				});
-
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
-				return false;
+				return true;
 			});
-
-			function placeholderSpawn()
-			{
-				console.log("placeholder spawn: " + this.name);
-				if( !jumpStart.isAltspace )
-				{
-					var pos = jumpStart.options.camera.position.clone().add(jumpStart.worldOffset.clone().multiplyScalar(jumpStart.options.sceneScale));
-					jumpStart.camera.position.copy(pos);
-
-					var lookAtSpot = jumpStart.worldOffset.clone().multiplyScalar(jumpStart.options.sceneScale);
-					lookAtSpot.y += 50;
-
-					jumpStart.camera.lookAt(lookAtSpot);
-					jumpStart.camera.rotateX(-0.3);
-				}
-				/*
-				var board = jumpStart.spawnInstance("models/board");
-				board.position.copy(this.position);
-				board.rotateY(Math.PI);
-				this.userData.board = board;
-
-				var dome = jumpStart.spawnInstance("models/dome", {"parent": board});
-				dome.scale.multiplyScalar(0.95);
-				*/
-
-				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});
-				buttonFrame.scale.set(0.6, 0.6, 0.6);
-				/*
-				buttonFrame.position.z += 122.0;
-				buttonFrame.position.y += -10.0;
-				*/
-				buttonFrame.position.z += 160.0;
-				buttonFrame.position.y += -10.0;
-				buttonFrame.rotateX(-Math.PI / 2.0);
-				this.userData.buttonFrame = buttonFrame;
-
-				var button = jumpStart.spawnInstance("models/button", {"parent": buttonFrame});
-				button.blocksLOS = true;
-				jumpStart.makeCollide(button);
-				button.addEventListener("cursorenter", buttonEnter);
-				button.addEventListener("cursorexit", buttonExit);
-				button.addEventListener("cursordown", buttonDown);
-				button.userData.table = this;
-				button.userData.shipType = "models/chopper";
-				this.userData.button = button;
-
-				var demo_chopper = jumpStart.spawnInstance("models/chopper", {"parent": buttonFrame});
-				demo_chopper.position.z = 50.0;
-				demo_chopper.rotation.x = Math.PI / 2.0;
-
-				demo_chopper.userData.maxHeightOffset = 4.0;
-				demo_chopper.userData.heightDirection = 1.0;
-				demo_chopper.addEventListener("tick", function()
-				{
-					if( !!!this.userData.initialHeight )
-					{
-						this.userData.initialHeight = this.position.z;
-
-						if( Math.random() > 0.5 )
-							this.userData.heightDirection *= -1.0;
-
-						var offset = this.userData.maxHeightOffset * Math.random();
-						if( Math.random() > 0.5 )
-							offset *= -1.0;
-
-						this.position.z += offset;
-					}
-
-					//var targetPos = this.position.clone();
-					var targetZ = this.userData.initialHeight;
-					targetZ += this.userData.maxHeightOffset * this.userData.heightDirection;
-
-					//var targetZ = targetPos.z;
-					this.position.z += 6.0 * jumpStart.deltaTime * this.userData.heightDirection;
-
-					if( (this.userData.heightDirection == 1.0 && targetZ - this.position.z < 0.1) || (this.userData.heightDirection == -1.0 && targetZ - this.position.z > 0.1))
-					{
-						this.position.z = targetZ;
-						this.userData.heightDirection *= -1.0;
-					}
-				});
-
-				var blades = jumpStart.spawnInstance("models/chopper_blades", {"parent": demo_chopper});
-				blades.position.y = 8.81;
-				blades.position.z = 2.888;
-				blades.addEventListener("tick", function()
-				{
-					this.rotateY(-5.0 * jumpStart.deltaTime);
-				});
-
-				var bladesBack = jumpStart.spawnInstance("models/chopper_blades_back", {"parent": demo_chopper});
-				bladesBack.position.z = -27.848;
-				bladesBack.position.y = 3.982;
-				bladesBack.addEventListener("tick", function()
-				{
-					this.rotateX(-8.0 * jumpStart.deltaTime);
-				});
-
-				var buttonFrame2 = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});
-				buttonFrame2.scale.set(0.6, 0.6, 0.6);
-				buttonFrame2.position.x = 50.0;
-				buttonFrame2.position.z = 160.0;
-				buttonFrame2.position.y = -10.0;
-				buttonFrame2.rotateX(-Math.PI / 2.0);
-
-				var button2 = jumpStart.spawnInstance("models/button", {"parent": buttonFrame2});
-				button2.blocksLOS = true;
-				jumpStart.makeCollide(button2);
-				button2.addEventListener("cursorenter", buttonEnter);
-				button2.addEventListener("cursorexit", buttonExit);
-				button2.addEventListener("cursordown", buttonDown);
-				button2.userData.table = this;
-				button2.userData.shipType = "models/hawk";
-
-				var demo_hawk = jumpStart.spawnInstance("models/hawk", {"parent": buttonFrame2});
-				demo_hawk.position.z = 50.0;
-				demo_hawk.rotation.x = Math.PI / 2.0;
-
-				demo_hawk.userData.maxHeightOffset = 4.0;
-				demo_hawk.userData.heightDirection = 1.0;
-				demo_hawk.addEventListener("tick", function()
-				{
-					if( !!!this.userData.initialHeight )
-					{
-						this.userData.initialHeight = this.position.z;
-
-						if( Math.random() > 0.5 )
-							this.userData.heightDirection *= -1.0;
-
-						var offset = this.userData.maxHeightOffset * Math.random();
-						if( Math.random() > 0.5 )
-							offset *= -1.0;
-
-						this.position.z += offset;
-					}
-
-					//var targetPos = this.position.clone();
-					var targetZ = this.userData.initialHeight;
-					targetZ += this.userData.maxHeightOffset * this.userData.heightDirection;
-
-					//var targetZ = targetPos.z;
-					this.position.z += 6.0 * jumpStart.deltaTime * this.userData.heightDirection;
-
-					if( (this.userData.heightDirection == 1.0 && targetZ - this.position.z < 0.1) || (this.userData.heightDirection == -1.0 && targetZ - this.position.z > 0.1))
-					{
-						this.position.z = targetZ;
-						this.userData.heightDirection *= -1.0;
-					}
-				});
-
-				var buttonFrame3 = jumpStart.spawnInstance("models/buttonFrame", {"parent": this});
-				buttonFrame3.scale.set(0.6, 0.6, 0.6);
-				buttonFrame3.position.x = -50.0;
-				buttonFrame3.position.z = 160.0;
-				buttonFrame3.position.y = -10.0;
-				buttonFrame3.rotateX(-Math.PI / 2.0);
-
-				var button3 = jumpStart.spawnInstance("models/button", {"parent": buttonFrame3});
-				button3.blocksLOS = true;
-				jumpStart.makeCollide(button3);
-				button3.addEventListener("cursorenter", buttonEnter);
-				button3.addEventListener("cursorexit", buttonExit);
-				button3.addEventListener("cursordown", buttonDown);
-				button3.userData.table = this;
-				button3.userData.shipType = "models/chopper2";
-
-				var demo_chopper2 = jumpStart.spawnInstance("models/chopper2", {"parent": buttonFrame3});
-				demo_chopper2.position.z = 50.0;
-				demo_chopper2.rotation.x = Math.PI / 2.0;
-
-				demo_chopper2.userData.maxHeightOffset = 4.0;
-				demo_chopper2.userData.heightDirection = 1.0;
-				demo_chopper2.addEventListener("tick", function()
-				{
-					if( !!!this.userData.initialHeight )
-					{
-						this.userData.initialHeight = this.position.z;
-
-						if( Math.random() > 0.5 )
-							this.userData.heightDirection *= -1.0;
-
-						var offset = this.userData.maxHeightOffset * Math.random();
-						if( Math.random() > 0.5 )
-							offset *= -1.0;
-
-						this.position.z += offset;
-					}
-
-					//var targetPos = this.position.clone();
-					var targetZ = this.userData.initialHeight;
-					targetZ += this.userData.maxHeightOffset * this.userData.heightDirection;
-
-					//var targetZ = targetPos.z;
-					this.position.z += 6.0 * jumpStart.deltaTime * this.userData.heightDirection;
-
-					if( (this.userData.heightDirection == 1.0 && targetZ - this.position.z < 0.1) || (this.userData.heightDirection == -1.0 && targetZ - this.position.z > 0.1))
-					{
-						this.position.z = targetZ;
-						this.userData.heightDirection *= -1.0;
-					}
-				});
-
-				var blades2 = jumpStart.spawnInstance("models/chopper2_blades", {"parent": demo_chopper2});
-				blades2.position.y = 12.696;
-				blades2.position.z = -5.285;
-				blades2.addEventListener("tick", function()
-				{
-					this.rotateY(-10.0 * jumpStart.deltaTime);
-				});
-
-				var bladesBack2 = jumpStart.spawnInstance("models/chopper2_blades_back", {"parent": demo_chopper2});
-				bladesBack2.position.z = -32.696;
-				bladesBack2.position.y = 6.939;
-				bladesBack2.position.x = 1.217;
-				bladesBack2.addEventListener("tick", function()
-				{
-					this.rotateX(-8.0 * jumpStart.deltaTime);
-				});
-			}
-
-			function buttonEnter()
-			{
-				//console.log("hilite");
-				//if( hasCannon || cannon.syncData.isActive )
-				//	this.setColor(new THREE.Color("rgb(50%, 50%, 50%)"));
-				//else
-					this.setColor(new THREE.Color("#5599ff"));
-
-				//jumpStart.playSound("sounds/ping");
-			}
-
-			function buttonExit()
-			{
-				this.setColor(new THREE.Color("rgb(100%, 100%, 100%)"));
-				//jumpStart.playSound("sounds/pingoff", 0.2);
-			}
-
-			function buttonDown()
-			{
-//				if( !jumpStart.isAltspace )
-//					jumpStart.camera.rotateX(Math.PI / 9.0);
-				//console.log(jumpStart.gamepads);
-				//var gamepad = jumpStart.gamepads[jumpStart.activeGamepadIndex];
-				//console.log(jumpStart.activeGamepadIndex);
-				//jumpStart.playSound("sounds/pingoff", 0.2);
-				//this.blocksLOS = false;
-
-				this.setColor(new THREE.Color("rgb(50%, 50%, 50%)"));
-				spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion(), this, this.userData.shipType);
-				//this.userData.table.position.x += 260.0;
-				jumpStart.removeInstance(this.userData.table);
-			}
-
-			function spawnHoverBlasterPlaceholder(position, quaternion)
-			{
-				var rando = parseInt(Math.random()*10) + "" + parseInt(Math.random()) + "" + parseInt(Math.random()) + "";
-				var table = jumpStart.spawnInstance(null);
-				table.position.y += 90.0;
-				table.name = "Table " + rando;
-				table.addEventListener("spawn", placeholderSpawn);
-				table.addEventListener("remove", placeholderRemove);
-				//table.addEventListener("networkRemove", placeholderNetworkRemove);
-				table.sync();
-			}
-/*
-			function placeholderNetworkRemove()
-			{
-				// the hiarchy will not be retained over the network
-				jumpStart.removeInstance(this.userData.buttonFrame);
-			}*/
-
-			function placeholderRemove()
-			{
-				console.log("placeholder removed" + this.name);
-				if( this.userData.button )
-					this.userData.button.blocksLOS = false;
-				
-				//console.log("removed");
-				//this.position.x += 260.0;
-				//this.userData.button.blocksLOS = false;
-				jumpStart.removeInstance(this.userData.board);
-			}
-
-			function spawnHoverBlasterTable(position, quaternion, button, shipType)
-			{
-				var table = jumpStart.spawnInstance(null);
-				//table.syncData.isActive = false;
-				//table.syncData.playerId = jumpStart.localUser.userId;
-				table.position.y += 90.0;
-				table.userData.shipType = shipType;
-				
-				// This behavior requires each instance have a unique name.
-				var rando = parseInt(Math.random()*10) + "" + parseInt(Math.random()) + "" + parseInt(Math.random()) + "";
-				table.name = "Table " + rando;
-				table.applyBehavior("hoverBlasterTable");
-				/*
-				table.addEventListener("spawn", function()
-				{
-					this.applyBehavior("autoRemoval");	// FIXME: This behavior doesn't like being applied during initialize.
-
-					this.sync();
-				});
-*/
-				table.applyBehavior("autoRemoval");
-				table.syncData.hoverBlasterTable.isActive = true;
-				table.sync();
-
-				if( !jumpStart.gamepad )
-				{
-					var planeOptions2 = {
-							"width": 400.0,
-							"height": 170.0
-						};
-
-					var lookPlane2 = jumpStart.spawnCursorPlane(planeOptions2);
-					lookPlane2.blocksLOS = true;
-					lookPlane2.position.copy(table.position);
-					lookPlane2.quaternion.copy(table.quaternion);
-					lookPlane2.rotateX(-Math.PI / 6.0);
-					lookPlane2.translateZ(90.0);
-					lookPlane2.userData.table = table;
-/*
-					document.addEventListener("keydown", function(e)
-					{
-						var ship = table.userData.hoverBlasterTable.ship;
-						if( e.keyCode === 16 || e.shiftKey )
-							ship.userData.shiftDown = true;
-					}.bind(table), true);
-
-					document.addEventListener("keyup", function(e)
-					{
-						var ship = table.userData.hoverBlasterTable.ship;
-						if( e.keyCode === 16 || e.shiftKey )
-							ship.userData.shiftDown = false;
-					}.bind(table), true);
-*/
-
-					lookPlane2.addEventListener("cursordown", function()
-					{
-						var table = this.userData.table;
-						var ship = table.userData.hoverBlasterTable.ship;
-						ship.userData.fireCooldown = 0.2;
-						jumpStart.behaviors.hoverBlasterTable.fireLaser.call(ship);
-					});
-				}
-/*
-				lookPlane.addEventListener("tick", function()
-				{
-					console.log(jumpStart.localUser.cursorHit.point);
-				});
-*/
-				//*/
-
-				// removal test
-				/*
-				// TODO: improve cleanup function for table to remove active lasers
-				setTimeout(function()
-				{
-					jumpStart.removeInstance(table);
-				}, 4000)
-				*/
-			}
 
 			jumpStart.addEventListener("initialize", function()
 			{
 				//spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
-				spawnHoverBlasterPlaceholder(new THREE.Vector3(), new THREE.Quaternion());
+				//spawnHoverBlasterPlaceholder(new THREE.Vector3(), new THREE.Quaternion());
 				return true;
 			});
 
-			jumpStart.addEventListener("userdisconnect", function(e)
-			{
-				var playersContainer = document.getElementById("players").getElementsByClassName("playersContainer")[0];
-				if( !!!playersContainer )
-					return;
-
-				var divs = playersContainer.getElementsByTagName("div");
-				var i;
-				for( i = 0; i < divs.length; i++ )
-				{
-					if( divs[i].playerId === e.id )
-					{
-						playersContainer.removeChild(divs[i]);
-						break;
-					}
-				}
-			});
-
-			jumpStart.addEventListener("userconnect", function(e)
-			{
-				var playersContainer = document.getElementById("players").getElementsByClassName("playersContainer")[0];
-				if( !!!playersContainer )
-					return;
-
-				var playerSlate = document.createElement("div");
-				playerSlate.playerId = e.id;
-				if( e.displayName === "WebUser" )
-					playerSlate.innerHTML = e.id;
-				else
-					playerSlate.innerHTML = e.displayName;
-
-				playersContainer.appendChild(playerSlate);
-			});
-
+			// webmode userlist
 			if( !jumpStart.isAltspace )
 			{
-				jumpStart.addEventListener("tick", function()
+				jumpStart.addEventListener("userdisconnect", function(e)
 				{
-					var table = jumpStart.behaviors.hoverBlasterTable.tableRef;
-					if( !table )
+					var playersContainer = document.getElementById("players").getElementsByClassName("playersContainer")[0];
+					if( !!!playersContainer )
 						return;
 
-					var ship = table.userData.hoverBlasterTable.ship;
+					var divs = playersContainer.getElementsByTagName("div");
+					var i;
+					for( i = 0; i < divs.length; i++ )
+					{
+						if( divs[i].playerId === e.id )
+						{
+							playersContainer.removeChild(divs[i]);
+							break;
+						}
+					}
+				});
 
-					if( !ship )
+				jumpStart.addEventListener("userconnect", function(e)
+				{
+					var playersContainer = document.getElementById("players").getElementsByClassName("playersContainer")[0];
+					if( !!!playersContainer )
 						return;
 
-					var oldPos = jumpStart.camera.position.clone();
-					var oldQuaternion = jumpStart.camera.quaternion.clone();
+					var playerSlate = document.createElement("div");
+					playerSlate.playerId = e.id;
+					if( e.displayName === "WebUser" )
+						playerSlate.innerHTML = e.id;
+					else
+						playerSlate.innerHTML = e.displayName;
 
-					jumpStart.camera.position.copy(ship.getWorldPosition());
-					jumpStart.camera.quaternion.copy(ship.getWorldQuaternion());
-					jumpStart.camera.rotateY(Math.PI);
-					jumpStart.camera.translateZ(160.0);
-					jumpStart.camera.translateY(140.0);
-					jumpStart.camera.rotateX(-0.5);
-
-					var targetPos = jumpStart.camera.position.clone();
-					var targetQuaternion = jumpStart.camera.quaternion.clone();
-
-					jumpStart.camera.position.copy(oldPos);
-					jumpStart.camera.quaternion.copy(oldQuaternion);
-
-					jumpStart.camera.position.lerp(targetPos, 0.05);
-					jumpStart.camera.quaternion.slerp(targetQuaternion, 0.05);
-					//console.log(ship);
-				//	scene.camera.position.copy()
+					playersContainer.appendChild(playerSlate);
 				});
 			}
 
 			var popup;
 			jumpStart.addEventListener("ready", function()
 			{
-			//	var ceiling = jumpStart.enclosureBoundary("ceiling");
-			//	ceiling.scale.multiplyScalar(1.4);
-/*
-				ceiling.addEventListener("cursordown", function()
-				{
-					console.log("CLICK DETECTED!");
+				var buttonFrame = jumpStart.spawnInstance(null);
+				//buttonFrame.position.x += 200 * Math.random();
+				//buttonFrame.position.x *= (Math.random() > 0.5) ? 1.0 : -1.0;
+				buttonFrame.scale.set(0.0001, 0.0001, 0.0001);
+				buttonFrame.applyBehavior("asyncModel", {
+					"modelFile": "engine/models/gameButtonFrame",
+					"useBubbleIn": false,
+					"callback": function(visualObject)
+					{
+						visualObject.setColor(new THREE.Color("#cccccc"));
+
+						var button = jumpStart.spawnInstance(null, {"parent": this});
+						button.position.y += 4.0;
+						button.applyBehavior("asyncModel", {
+							"modelFile": "engine/models/gameButton",
+							"useBubbleIn": false,
+							"callback": function(visualObject)
+							{
+								this.setColor(new THREE.Color("#99ccff"));
+
+								var buttonFrame = this.parent;
+								buttonFrame.scale.set(1, 1, 1);
+								buttonFrame.applyBehavior("bubbleIn", {"speed": 6.0});
+
+								visualObject.blocksLOS = true;
+								jumpStart.makeCollide(visualObject);
+
+								visualObject.addEventListener("cursorenter", function()
+								{
+									this.parent.parent.setColor(new THREE.Color("#ffffff"));
+								});
+
+								visualObject.addEventListener("cursorexit", function()
+								{
+									this.parent.parent.setColor(new THREE.Color("#cccccc"));
+									this.setColor(new THREE.Color("#99ccff"));
+								});
+
+								visualObject.addEventListener("cursordown", function()
+								{
+									jumpStart.behaviors.hoverBlasterTable.createTable(buttonFrame.position.clone(), buttonFrame.quaternion.clone());
+								});
+							}.bind(button)
+						});
+					}.bind(buttonFrame)
 				});
-			*/
+				//buttonFrame.rotateX(-Math.PI / 2.0);
 
-				//var north = jumpStart.enclosureBoundary("north");
-				//north.scale.multiplyScalar(1.4);
-
-				//var south = jumpStart.enclosureBoundary("south");
-				//south.scale.multiplyScalar(1.4);
-
-				//var east = jumpStart.enclosureBoundary("east");
-				//east.scale.multiplyScalar(1.4);
-
-				//var west = jumpStart.enclosureBoundary("west");
-				//west.scale.multiplyScalar(1.4);
-/*
-				var floor = jumpStart.enclosureBoundary("floor");
-				floor.blocksLOS = true;
-				floor.addEventListener("cursordown", function()
-				{
-					//spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
-					spawnHoverBlasterTable(new THREE.Vector3(), new THREE.Quaternion());
-					this.scale.set(0.0001, 0.0001, 0.0001);
-				});
-*/
-//				console.log("System ready...");
 				if( jumpStart.isAltspace )
 				{
 					window.altspace.open("http://www.jumpstartsdk.com/live/assets/HoverBlaster/misc/menu.html", "_experience", {"hidden": true, "icon": "http://www.jumpstartsdk.com/live/assets/HoverBlaster/misc/menuicon.png"}).then(function(_popup)
@@ -538,7 +144,7 @@
 var ytplayerready = false;
 
   </script>
-  <div id="players" style="position: absolute; top: 0; right: 0; border: 2px solid #000; background-color: rgba(0, 0, 150, 0.3); font-weight: bold; font-size: 30px;">
+  <div id="players" style="display: none; position: absolute; top: 0; right: 0; border: 2px solid #000; background-color: rgba(0, 0, 150, 0.3); font-weight: bold; font-size: 30px;">
   	Players:<br />
   	<div class="playersContainer">
   	</div>
@@ -549,7 +155,7 @@ var ytplayerready = false;
     <script>
     if( !jumpStart.isAltspace )
     {
-    	document.getElementById("player").style.display = "block";
+    	document.getElementById("players").style.display = "block";
       // 2. This code loads the IFrame Player API code asynchronously.
       var tag = document.createElement('script');
 

@@ -21,7 +21,7 @@ jumpStartBehavior({
 			var body = jumpStart.spawnInstance(null, {"parent": this});
 			body.applyBehavior("asyncModel", {
 				"modelFile": bodyModel,
-				"callback": function()
+				"callback": function(visualObject)
 				{
 					this.parent.boundingSphere = this.boundingSphere;
 					this.applyBehavior("dropShadow", {"scale": 0.7, "useParent": true});

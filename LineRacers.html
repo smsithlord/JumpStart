@@ -25,7 +25,7 @@
 				jumpStart.precacheSound("sounds/car_crash");
 
 				// Async
-				jumpStart.loadModels(["models/car", "models/pixel", "models/gold", "models/explosion", "models/pillar", "models/ball", "models/coin", "models/xspot"]).then( function()
+				jumpStart.loadModelsEx(["models/car", "models/pixel", "models/gold", "models/explosion", "models/pillar", "models/ball", "models/coin", "models/xspot"], function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -550,7 +550,11 @@
 
 					lookPosition.copy(jumpStart.localUser.cursorHit.scaledPoint);
 					lookPosition.y = this.position.y;
+
+					var oldQuaternion = this.quaternion.clone();
 					this.lookAt(lookPosition);
+					var targetQuaternion = this.quaternion.clone();
+					this.quaternion.copy(oldQuaternion).slerp(targetQuaternion, 0.1);
 
 					var position = jumpStart.localUser.cursorHit.scaledPoint.clone();
 //					position.y = jump.y;
@@ -743,22 +747,31 @@
 
 				var floorBoundary = jumpStart.enclosureBoundary("floor");
 				floorBoundary.addEventListener("cursordown", playerClick);
+
 				var boundary;
 				boundary = jumpStart.enclosureBoundary("north");
 				boundary.scale.y *= 0.3;
 				boundary.position.y = jumpStart.worldOffset.y;
+				jumpStart.makeCollide(boundary);
+
 				boundary = jumpStart.enclosureBoundary("south");
 				boundary.scale.y *= 0.3;
 				boundary.position.y = jumpStart.worldOffset.y;
+				jumpStart.makeCollide(boundary);
+				
 				boundary = jumpStart.enclosureBoundary("west");
 				boundary.scale.y *= 0.3;
 				boundary.position.y = jumpStart.worldOffset.y;
+				jumpStart.makeCollide(boundary);
+				
 				boundary = jumpStart.enclosureBoundary("east");
 				boundary.scale.y *= 0.3;
 				boundary.position.y = jumpStart.worldOffset.y;
+				jumpStart.makeCollide(boundary);
 
 				// Make the floor 40% larger to avoid Altspace from thinking mouse clicks are not captured along the edges
 				floorBoundary.scale.multiplyScalar(1.4);
+				jumpStart.makeCollide(floorBoundary);
 
 				car = jumpStart.scene.getObjectByName("playerCar");
 				if( !!car && car.ownerID === jumpStart.localUser.userID )

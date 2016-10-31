@@ -30,7 +30,7 @@
 				jumpStart.precacheSound("sounds/leave");
 
 				// Async
-				jumpStart.loadModels([
+				jumpStart.loadModelsEx([
 					"models/counter",
 					"models/namecard",
 					"models/scorecard",
@@ -48,7 +48,7 @@
 					"models/targetShard0",
 					"models/targetShard1",
 					"models/targetShard2"
-				]).then( function()
+				], function()
 				{
 					jumpStart.doneCaching();
 				});
@@ -277,30 +277,38 @@
 				if( !!rigBones )
 					return;
 
-				var rigVerts;
+				var rigVerts = [];
 				var rig = jumpStart.findModel("models/counterrig");
 				rig.object.traverse(function(child)
 				{
 					if( child.name !== "" )
-						rigVerts = child.geometry.vertices;
+					{
+						var verts = child.geometry.attributes.position;
+						var max = verts.count;
+						var i;
+						for( i = 0; i < verts.count; i++ )
+						{
+							rigVerts.push({x: verts.array[i*3+0], y: verts.array[i*3+1], z: verts.array[i*3+2]});
+						}
+					}
 				});
 
 				rigBones = {
 					"middlePole": rigVerts[0],
 					"middleCannon": rigVerts[1],
 					"middleNameCard": rigVerts[2],
-					"middleScoreCard": rigVerts[3],
-					"middleButton": rigVerts[4],
-					"rightPole": rigVerts[5],
-					"rightCannon": rigVerts[6],
-					"rightNameCard": rigVerts[7],
-					"rightScoreCard": rigVerts[8],
-					"rightButton": rigVerts[9],
-					"leftPole": rigVerts[10],
-					"leftCannon": rigVerts[11],
-					"leftNameCard": rigVerts[12],
-					"leftScoreCard": rigVerts[13],
-					"leftButton": rigVerts[14]
+					"middleScoreCard": rigVerts[5],
+					"middleButton": rigVerts[7],
+					"rightPole": rigVerts[27],
+					"rightCannon": rigVerts[10],
+					"rightNameCard": rigVerts[13],
+					"rightScoreCard": rigVerts[14],
+					"rightButton": rigVerts[15],
+					"leftPole": rigVerts[16],
+					"leftCannon": rigVerts[21],
+					"leftNameCard": rigVerts[22],
+					"leftScoreCard": rigVerts[23],
+					"leftButton": rigVerts[36]
 				};
 			}
 
@@ -380,6 +388,7 @@
 				button.blocksLOS = true;
 				button.position.copy(counter.position);
 				button.quaternion.copy(counter.quaternion);
+				//console.log(name + "Button");
 				button.translateX(rigBones[name + "Button"].x);
 				button.translateY(rigBones[name + "Button"].y);
 				button.translateZ(rigBones[name + "Button"].z);
