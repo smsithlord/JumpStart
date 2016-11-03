@@ -1,4 +1,13 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 31.10.2016 23:37:53
+
 newmtl wire_225087143
-Kd 1 1 1
-illum 0
-map_Kd hawk.jpg
+	Ns 32
+	d 1
+	Tr 0
+	Tf 1 1 1
+	illum 2
+	Ka 1 1 1
+	Kd 1 1 1
+	Ks 0.3500 0.3500 0.3500
+	map_Kd maps\hawkComplete.png

@@ -93,6 +93,8 @@
 							"useBubbleIn": false,
 							"callback": function(visualObject)
 							{
+								visualObject.userData.doubleClickTimer = 0;
+
 								this.setColor(new THREE.Color("#99ccff"));
 
 								var buttonFrame = this.parent;
@@ -102,25 +104,247 @@
 								visualObject.blocksLOS = true;
 								jumpStart.makeCollide(visualObject);
 
+								function tickUp()
+								{
+									if( this.scale.x < 1 )
+										this.scale.multiplyScalar(1.2);
+
+									if( this.scale.x >= 1 )
+										this.scale.set(1, 1, 1);
+								}
+
+								function tickDown()
+								{
+									if( this.scale.x > 0.0001 )
+										this.scale.multiplyScalar(0.8);
+
+									if( this.scale.x <= 0.0001 )
+										this.scale.set(0.0001, 0.0001, 0.0001);
+								}
+
 								visualObject.addEventListener("cursorenter", function()
 								{
 									this.parent.parent.setColor(new THREE.Color("#ffffff"));
+									this.parent.parent.userData.playArea.removeEventListener("tick", tickDown);
+
+									if( this.parent.parent.userData.playArea.scale.x < 0.1 )
+										this.parent.parent.userData.playArea.scale.set(0.1, 0.1, 0.1);
+									this.parent.parent.userData.playArea.addEventListener("tick", tickUp);
 								});
 
 								visualObject.addEventListener("cursorexit", function()
 								{
 									this.parent.parent.setColor(new THREE.Color("#cccccc"));
 									this.setColor(new THREE.Color("#99ccff"));
+									this.parent.parent.userData.playArea.removeEventListener("tick", tickUp);
+									this.parent.parent.userData.playArea.addEventListener("tick", tickDown);
 								});
 
 								visualObject.addEventListener("cursordown", function()
 								{
+									var parentObject = this.parent.parent;
+									if( parentObject.ownerID !== jumpStart.localUser.userID )
+										return;
+
+									// dbl click behavior
+									if( this.userData.doubleClickTimer === 0 )
+									{
+										this.userData.doubleClickTimer = 0.3;
+
+										this.addEventListener("tick", function()
+										{
+											if( this.userData.doubleClickTimer === 0 )
+											{
+												this.removeEventListener("tick", arguments.callee);
+												return;
+											}
+
+											this.userData.doubleClickTimer -= jumpStart.deltaTime;
+
+											var gamepadRequiredObject = jumpStart.scene.getObjectByName("gamepadRequired");
+
+											if( this.userData.doubleClickTimer <= 0 && !!!gamepadRequiredObject )
+											{
+												this.userData.doubleClickTimer = 0;
+
+												var doubleClickRequiredObject = jumpStart.scene.getObjectByName("doubleClickRequired");
+
+												if( !!!doubleClickRequiredObject )
+												{
+													var parentObject = this.parent.parent;
+													var imageFile = "assets/RCDM/misc/doubleclickrequired.png";
+													var x, imageMaterial, imageGeometry, imagePlane;
+													var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), transparent: true, opacity: 1.0});
+													var imageGeometry = new THREE.PlaneGeometry(100, 32, 1 , 1);
+													var imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+													var imageObject = jumpStart.spawnInstance(null, {"object": imagePlane});
+													imageObject.name = "doubleClickRequired";
+													imageObject.position.copy(parentObject.position);
+													imageObject.position.y += 50.0;
+													imageObject.userData.lifeLeft = 2.0;
+													imageObject.userData.parentObject = parentObject;
+													imageObject.applyBehavior("bubbleIn", {"speed": 6.0});
+
+													function getEyePos()
+													{
+														var pos;
+														if( jumpStart.isAltspace )
+															pos = jumpStart.localUser.skeleton.getJoint("Eye").getWorldPosition();
+														else
+															pos = jumpStart.camera.position.clone();
+														
+														jumpStart.world.worldToLocal(pos);
+														return pos;
+														//victim.lookAt(pos);
+													}
+													imageObject.lookAt(getEyePos());
+													imageObject.translateZ(1.0);
+
+													imageObject.addEventListener("tick", function()
+													{
+														var parentObject = this.userData.parentObject;
+														this.position.copy(parentObject.position);
+														this.position.y += 50.0;
+
+														if( this.userData.lifeLeft > 0 )
+														{
+															this.userData.lifeLeft -= jumpStart.deltaTime;
+
+															if( this.userData.lifeLeft <= 0 )
+															{
+																this.applyBehavior("shrinkRemove");
+																//this.removeEventListener("tick", arguments.callee);
+															}
+														}
+
+														var oldQuaternion = this.quaternion.clone();
+														this.lookAt(getEyePos());
+														var targetQuaternion = this.quaternion.clone();
+														this.quaternion.copy(oldQuaternion);
+														this.quaternion.slerp(targetQuaternion, 0.05);
+														this.translateZ(1.0);
+													});
+												}
+
+												this.removeEventListener("tick", arguments.callee);
+												return;
+											}
+										});
+										return;
+									}
+
+									this.userData.doubleClickTimer = 0;
+
+									var doubleClickRequiredObject = jumpStart.scene.getObjectByName("doubleClickRequired");
+									if( !!doubleClickRequiredObject )
+									{
+										if( !!!doubleClickRequiredObject.behaviors.shrinkRemove )
+										{
+											doubleClickRequiredObject.applyBehavior("shrinkRemove");
+											doubleClickRequiredObject.userData.lifeLeft = 0;
+										}
+									}
+
+									// gamepad required behavior
+									var gamepadRequiredObject = jumpStart.scene.getObjectByName("gamepadRequired");
+									if( !!!jumpStart.gamepad )
+									{
+										if( !!!gamepadRequiredObject )
+										{
+											var imageFile = "assets/RCDM/misc/gamepadrequired.png";
+											var x, imageMaterial, imageGeometry, imagePlane;
+											var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), transparent: true, opacity: 1.0});
+											var imageGeometry = new THREE.PlaneGeometry(100, 32, 1 , 1);
+											var imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+											var imageObject = jumpStart.spawnInstance(null, {"object": imagePlane});
+											imageObject.name = "gamepadRequired";
+											imageObject.position.copy(parentObject.position);
+											imageObject.position.y += 50.0;
+											imageObject.userData.lifeLeft = 3.0;
+											imageObject.userData.parentObject = parentObject;
+											imageObject.applyBehavior("bubbleIn", {"speed": 4.0});
+
+											function getEyePos()
+											{
+												var pos;
+												if( jumpStart.isAltspace )
+													pos = jumpStart.localUser.skeleton.getJoint("Eye").getWorldPosition();
+												else
+													pos = jumpStart.camera.position.clone();
+												
+												jumpStart.world.worldToLocal(pos);
+												return pos;
+												//victim.lookAt(pos);
+											}
+											imageObject.lookAt(getEyePos());
+											imageObject.translateZ(2.0);
+
+											imageObject.addEventListener("tick", function()
+											{
+												var parentObject = this.userData.parentObject;
+												this.position.copy(parentObject.position);
+												this.position.y += 50.0;
+
+												if( this.userData.lifeLeft > 0 )
+												{
+													this.userData.lifeLeft -= jumpStart.deltaTime;
+
+													if( this.userData.lifeLeft <= 0 )
+													{
+														this.applyBehavior("shrinkRemove");
+														//this.removeEventListener("tick", arguments.callee);
+													}
+												}
+
+												var oldQuaternion = this.quaternion.clone();
+												this.lookAt(getEyePos());
+												var targetQuaternion = this.quaternion.clone();
+												this.quaternion.copy(oldQuaternion);
+												this.quaternion.slerp(targetQuaternion, 0.05);
+												this.translateZ(2.0);
+											});
+										}
+
+										return;
+									}
+									else if( !!gamepadRequiredObject )
+									{
+										if( !!!gamepadRequiredObject.behaviors.shrinkRemove )
+										{
+											gamepadRequiredObject.applyBehavior("shrinkRemove");
+											gamepadRequiredObject.userData.lifeLeft = 0;
+										}
+									}
+
 									jumpStart.behaviors.hoverBlasterTable.createTable(buttonFrame.position.clone(), buttonFrame.quaternion.clone());
 								});
 							}.bind(button)
 						});
 					}.bind(buttonFrame)
 				});
+
+				var playArea = jumpStart.spawnInstance(null);
+				playArea.applyBehavior("asyncModel", {"modelFile": "models/playarea"});
+				playArea.position.copy(buttonFrame.position);
+				playArea.quaternion.copy(buttonFrame.quaternion);
+				playArea.scale.set(0.0001, 0.0001, 0.0001);
+				playArea.userData.originalPosition = playArea.position.clone();
+				buttonFrame.userData.playArea = playArea;
+				playArea.addEventListener("tick", function()
+				{
+					var pos;
+					if( jumpStart.isAltspace )
+						pos = jumpStart.localUser.skeleton.getJoint("Eye").getWorldPosition();
+					else
+						pos = jumpStart.camera.position.clone();
+					jumpStart.world.worldToLocal(pos);
+					pos.y = this.position.y;
+
+					this.position.copy(this.userData.originalPosition);
+					this.lookAt(pos);
+					this.translateZ(150.0);
+				});
+
 				//buttonFrame.rotateX(-Math.PI / 2.0);
 
 				if( jumpStart.isAltspace )
@@ -137,7 +361,7 @@
 		</script>
 	</head>
 
-	<body>
+	<body style="background-color: #000;"><!-- transparent;"> -->
 		<!--<iframe id="music" style="display: none;"></iframe>-->
 
 		<script>
@@ -155,6 +379,7 @@ var ytplayerready = false;
     <script>
     if( !jumpStart.isAltspace )
     {
+    	document.getElementById("player").style.display = "block";
     	document.getElementById("players").style.display = "block";
       // 2. This code loads the IFrame Player API code asynchronously.
       var tag = document.createElement('script');

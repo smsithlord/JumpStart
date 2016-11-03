@@ -27,7 +27,10 @@ jumpStartBehavior({
 			pos.y = table.position.y;
 
 			table.lookAt(pos);
-			table.rotateX(Math.PI);
+			//table.rotateZ(Math.PI);
+			//table.rotateY(Math.PI);
+			//table.rotateY(Math.PI);
+			//table.rotateX(Math.PI);
 			
 			table.applyBehavior("autoRemoval");
 			table.applyBehavior("hoverBlasterTable");
@@ -77,14 +80,204 @@ jumpStartBehavior({
 			jumpStart.precacheSound("sounds/bomberin");
 			jumpStart.precacheSound("sounds/bomberready");
 
+			var radius = 118.0;
+
+			var loopRight = jumpStart.spawnInstance(null);
+			loopRight.position.copy(this.position);
+			//loopRight.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);//this.quaternion);
+			var quat = this.syncData.hoverBlasterTable.originalQuaternion;
+			loopRight.quaternion.set(quat._x, quat._y, quat._z, quat._w);
+			loopRight.translateX(radius * 0.75);// * 0.9 * this.scale.x);
+			loopRight.applyBehavior("asyncModel", {"modelFile": "models/loop"});
+			loopRight.userData.marker = jumpStart.spawnInstance(null, {"parent": loopRight});
+			loopRight.userData.marker.translateX(radius);// * 0.9 * this.scale.x);
+
+			var loopLeft = jumpStart.spawnInstance(null);
+			loopLeft.position.copy(this.position);
+			//loopLeft.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);//this.quaternion);
+			var quat = this.syncData.hoverBlasterTable.originalQuaternion;
+			loopLeft.quaternion.set(quat._x, quat._y, quat._z, quat._w);
+			loopLeft.translateX(-radius * 0.75);// * 0.9 * this.scale.x);
+			loopLeft.applyBehavior("asyncModel", {"modelFile": "models/loop"});
+			loopLeft.userData.marker = jumpStart.spawnInstance(null, {"parent": loopLeft});
+			loopLeft.userData.marker.translateX(-radius);// * 0.9 * this.scale.x);
+
+			var haloBack = jumpStart.spawnInstance(null);
+			haloBack.position.copy(this.position);
+			var quat = this.syncData.hoverBlasterTable.originalQuaternion;
+			haloBack.quaternion.set(quat._x, quat._y, quat._z, quat._w);
+			//haloBack.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);//this.quaternion);
+			haloBack.rotateX(- 0.3);// * 2.0));
+			//haloBack.scale.x *= 1.2;
+			//haloBack.scale.set(0.0001, 0.0001, 0.0001);
+			haloBack.applyBehavior("asyncModel", {
+				"modelFile": "models/halo"
+			});
+
+			var marker = jumpStart.spawnInstance(null);
+			marker.position.copy(jumpStart.world.worldToLocal(haloBack.getWorldPosition()));
+			marker.quaternion.copy(haloBack.quaternion);
+			marker.translateZ(-radius);
+
+			haloBack.userData.marker = marker;
+			haloBack.scale.set(0.0001, 0.0001, 0.0001);
+			haloBack.userData.table = this;
+
+			//haloBack.userData.marker = jumpStart.spawnInstance(null, {"parent": haloBack});
+			//haloBack.userData.marker.translateZ(-radius);
+
+			var haloBottom = jumpStart.spawnInstance(null);
+			haloBottom.position.copy(this.position);
+			//haloBottom.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);//this.quaternion);
+			var quat = this.syncData.hoverBlasterTable.originalQuaternion;
+			haloBottom.quaternion.set(quat._x, quat._y, quat._z, quat._w);
+			haloBottom.rotateX(-Math.PI + 0.3);
+			haloBottom.applyBehavior("asyncModel", {"modelFile": "models/halo"});
+
+			var marker = jumpStart.spawnInstance(null);
+			marker.position.copy(jumpStart.world.worldToLocal(haloBottom.getWorldPosition()));
+			marker.quaternion.copy(haloBottom.quaternion);
+			marker.translateZ(-radius);
+			
+			haloBottom.userData.marker = marker;
+			haloBottom.scale.set(0.0001, 0.0001, 0.0001);
+			haloBottom.userData.table = this;
+			haloBottom.addEventListener("tick", function()
+			{
+				// bottom
+				var table = this.userData.table;
+				var ship = table.userData.hoverBlasterTable.ship;
+				if( !!!ship )
+					return;
+				
+				var val = ship.position.y - (table.position.y + 20.0);
+				val = 1.0 - (val / table.userData.hoverBlasterTable.radius) * 2.0;
+				if( val < 0.0001 )
+					val = 0.0001;
+				else if( val > 1.0 )
+					val = 1.0;
+
+				this.scale.set(val, val, val);
+			});
+			/*
+
+				// top
+				var top = table.userData.hoverBlasterTable.haloTop;
+				var back = table.userData.hoverBlasterTable.haloBack;
+				var table = this.userData.table;
+				var ship = table.userData.hoverBlasterTable.ship;
+				if( !!!ship )
+					return;
+				
+				var val2 = (table.position.y + table.userData.hoverBlasterTable.radius) - ship.position.y;
+				val2 = 1.0 - (val2 / table.userData.hoverBlasterTable.radius) * 2.0;
+				if( val2 < 0.0001 )
+					val2 = 0.0001;
+				else if( val2 > 1.0 )
+					val2 = 1.0;
+
+				var bestVal = (val > val2) ? val : val2;
+				this.scale.set(val, val, val);
+				top.scale.set(val, val, val);
+				back.scale.set(val, val, val);
+			});
+			*/
+
+
+
+			//var dummy = jumpStart.spawnInstance(null, {"parent": haloBottom.userData.marker});
+			//dummy.applyBehavior("asyncModel", {"modelFile": "models/hawk"});
+
+
+			var haloTop = jumpStart.spawnInstance(null);
+			haloTop.position.copy(this.position);
+			//haloTop.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);//this.quaternion);
+			var quat = this.syncData.hoverBlasterTable.originalQuaternion;
+			haloTop.quaternion.set(quat._x, quat._y, quat._z, quat._w);
+			haloTop.rotateX(Math.PI / 2.0);
+			//haloTop.scale.x *= 1.2;
+			//haloTop.scale.set(0.97, 0.97, 0.97);
+			haloTop.applyBehavior("asyncModel", {"modelFile": "models/halo"});
+
+			var marker = jumpStart.spawnInstance(null);
+			marker.position.copy(jumpStart.world.worldToLocal(haloTop.getWorldPosition()));
+			marker.quaternion.copy(haloTop.quaternion);
+			marker.translateZ(-radius);
+
+			haloTop.userData.marker = marker;
+			haloTop.scale.set(0.0001, 0.0001, 0.0001);
+			haloTop.userData.table = this;
+			haloTop.addEventListener("tick", function()
+			{
+				// top
+				var table = this.userData.table;
+				var ship = table.userData.hoverBlasterTable.ship;
+				if( !!!ship )
+					return;
+
+				var top = table.userData.hoverBlasterTable.haloTop;
+				var back = table.userData.hoverBlasterTable.haloBack;
+				
+				var val = (table.position.y + table.userData.hoverBlasterTable.radius) - ship.position.y;
+				val = 1.0 - (val / table.userData.hoverBlasterTable.radius) * 2.0;
+				if( val < 0.0001 )
+					val = 0.0001;
+				else if( val > 1.0 )
+					val = 1.0;
+
+				this.scale.set(val, val, val);
+			});
+
+			//haloTop.userData.marker = jumpStart.spawnInstance(null, {"parent": haloTop});
+			//haloTop.userData.marker.translateZ(-radius);
+			//haloTop.scale.set(0.0001, 0.0001, 0.0001);
+
+			function spawnPlate(angle)
+			{
+				var plate = jumpStart.spawnInstance(null, {"parent": this});
+				plate.applyBehavior("asyncModel", {"modelFile": "models/road", "callback": function(visualObject)
+					{
+						var plateMaterial = jumpStart.getMaterial(visualObject);
+						plateMaterial.transparent = true;
+						plateMaterial.opacity = 0.87;
+						plateMaterial.needsUpdate = true;
+					}, "bubbleInSpeed": 3.0
+				});
+				plate.userData.table = this;
+				plate.userData.rotOffset = this.rotation.x;
+				//plate.rotation.x = (Math.PI / 4.0) - angle;
+				plate.rotation.x = angle;
+				//plate.scale.x *= 1.2;
+				//plate.applyBehavior("bubbleIn", {"speed": 3.0});
+
+				return plate;
+			}
+
+			var numSegments = 13;
+			var i, delta, plate;
+			for( i = 0; i < 26; i++ )
+			{
+				delta = ((Math.PI / numSegments) * i) + (5.0 * Math.PI / numSegments);
+				plate = spawnPlate.call(this, delta);
+			}
+
 			this.userData.hoverBlasterTable = {
+				"loopLeft": loopLeft,
+				"loopRight": loopRight,
+				"haloTop": haloTop,
+				"haloBottom": haloBottom,
+				"haloBack": haloBack,
+				"topMarker": haloTop.userData.marker,
+				"bottomMarker": haloTop.userData.marker,
+				"backMarker": haloTop.userData.marker,
 				"originalCameraPosition": null,
 				"originalCameraQuaternion": null,
-				"radius": 118.0,
+				"radius": radius,
+				//"initialRot": this.rotation.x,
 				"initialRot": -1,
 				"rocks": [],
 				"guns": [],
-				"rot": Math.PI - 0.3,
+				"rot": this.rotation.x,//Math.PI - 0.3,
 				"plates": [],
 				"initialTimeline": this.syncData.hoverBlasterTable.timeline.info.previous,
 				"spentTimeline": [],
@@ -283,7 +476,7 @@ jumpStartBehavior({
 
 			text.position.copy(ship.position);
 			text.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);
-			text.rotateX(Math.PI);
+			//text.rotateX(Math.PI);
 			text.position.y += 10.0;
 
 			var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
@@ -320,7 +513,7 @@ jumpStartBehavior({
 					text.userData.table = this.userData.table;
 					text.position.copy(ship.position);
 					text.quaternion.copy(this.userData.table.syncData.hoverBlasterTable.originalQuaternion);
-					text.rotateX(Math.PI);
+					//text.rotateX(Math.PI);
 					text.position.y += 10.0;
 
 					var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
@@ -357,7 +550,7 @@ jumpStartBehavior({
 							text.userData.table = this.userData.table;
 							text.position.copy(ship.position);
 							text.quaternion.copy(this.userData.table.syncData.hoverBlasterTable.originalQuaternion);
-							text.rotateX(Math.PI);
+							//text.rotateX(Math.PI);
 							text.position.y += 10.0;
 
 							var textMesh = jumpStart.spawnInstance(null, {"object": mesh, "parent": text})
@@ -384,9 +577,6 @@ jumpStartBehavior({
 								}
 
 								this.position.y += 10.0 * jumpStart.deltaTime;
-
-								if( jumpStart.isAltspace )
-									this.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 							});
 							return;
 						}
@@ -1411,7 +1601,7 @@ jumpStartBehavior({
 
 				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
-			else if( id === 5 )
+			else if( id === 6 )
 			{
 				var length = 2.0;
 				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
@@ -1501,7 +1691,7 @@ jumpStartBehavior({
 
 				this.syncData.hoverBlasterTable.timeline[safeZ][jumpStart.generateId()] = entity;
 			}
-			else if( id === 6 )
+			else if( id === 7 )
 			{
 				var length = 2.0;
 				//var offsetZ = 0;	// disabled the offset because the timeline gets reset anyways
@@ -1678,7 +1868,7 @@ jumpStartBehavior({
 				console.log("TIMELINE RESET DETECTED!!");
 				//this.userData.hoverBlasterTable.rot = Math.PI / 2.0;
 				//this.userData.hoverBlasterTable.initialRot = 0;
-				//this.rotation.x = 0;
+				//this.rotation.x = this.userData.hoverBlasterTable.rot;
 				this.userData.hoverBlasterTable.initialRot = this.userData.hoverBlasterTable.rot;
 				this.userData.hoverBlasterTable.spentTimeline = [];
 				this.userData.hoverBlasterTable.currentStage = this.syncData.hoverBlasterTable.timeline.info.id;
@@ -1698,47 +1888,51 @@ jumpStartBehavior({
 			var oldRot = this.userData.hoverBlasterTable.rot;
 			this.userData.hoverBlasterTable.rot += rotSpeed * jumpStart.deltaTime;
 
-			if( this.userData.hoverBlasterTable.rot > (Math.PI / (numSegments)) * this.userData.hoverBlasterTable.totalPlates )
+			var dynamoPlates = false;
+			if( dynamoPlates )
 			{
-				var delta = ((Math.PI / numSegments) * this.userData.hoverBlasterTable.totalPlates) + (5.0 * Math.PI / numSegments);
-				this.userData.hoverBlasterTable.totalPlates++;
-
-				var plate;
-				if( this.userData.hoverBlasterTable.plates.length < 15 )
+				if( this.userData.hoverBlasterTable.rot > (Math.PI / (numSegments)) * this.userData.hoverBlasterTable.totalPlates )
 				{
-					plate = jumpStart.spawnInstance(null, {"parent": this});
-					plate.applyBehavior("asyncModel", {"modelFile": "models/road", "callback": function(visualObject)
-						{
-							var plateMaterial = jumpStart.getMaterial(visualObject);
-							plateMaterial.transparent = true;
-							plateMaterial.opacity = 0.87;
-							plateMaterial.needsUpdate = true;
-						}, "bubbleInSpeed": 3.0
-					});
-					plate.userData.table = this;
-					plate.userData.rotOffset = this.rotation.x;
+					var delta = ((Math.PI / numSegments) * this.userData.hoverBlasterTable.totalPlates) + (5.0 * Math.PI / numSegments);
+					this.userData.hoverBlasterTable.totalPlates++;
 
-					this.userData.hoverBlasterTable.plates.push(plate);
+					var plate;
+					if( this.userData.hoverBlasterTable.plates.length < 15 )
+					{
+						plate = jumpStart.spawnInstance(null, {"parent": this});
+						plate.applyBehavior("asyncModel", {"modelFile": "models/road", "callback": function(visualObject)
+							{
+								var plateMaterial = jumpStart.getMaterial(visualObject);
+								plateMaterial.transparent = true;
+								plateMaterial.opacity = 0.87;
+								plateMaterial.needsUpdate = true;
+							}, "bubbleInSpeed": 3.0
+						});
+						plate.userData.table = this;
+						plate.userData.rotOffset = this.rotation.x;
+
+						this.userData.hoverBlasterTable.plates.push(plate);
+					}
+					else
+					{
+						plate = this.userData.hoverBlasterTable.plates[0];
+						this.userData.hoverBlasterTable.plates.shift();
+						this.userData.hoverBlasterTable.plates.push(plate);
+						this.userData.hoverBlasterTable.plates[0].scale.sub(new THREE.Vector3(jumpStart.deltaTime, jumpStart.deltaTime, jumpStart.deltaTime));
+					}
+
+					plate.rotation.x = (Math.PI / 4.0) - delta;
+					plate.applyBehavior("bubbleIn", {"speed": 3.0});
 				}
-				else
+
+				var plate0 = this.userData.hoverBlasterTable.plates[0];
+				if( this.userData.hoverBlasterTable.plates.length >= 15 && plate0.scale.x < 1 && plate0.scale.x > 0.0001 )
 				{
-					plate = this.userData.hoverBlasterTable.plates[0];
-					this.userData.hoverBlasterTable.plates.shift();
-					this.userData.hoverBlasterTable.plates.push(plate);
-					this.userData.hoverBlasterTable.plates[0].scale.sub(new THREE.Vector3(jumpStart.deltaTime, jumpStart.deltaTime, jumpStart.deltaTime));
+					plate0.scale.sub(new THREE.Vector3(jumpStart.deltaTime * 3.0, jumpStart.deltaTime * 3.0, jumpStart.deltaTime * 3.0));
+
+					if( plate0.scale.x < 0.0001 )
+						plate0.scale.set(0.0001, 0.0001, 0.0001);
 				}
-
-				plate.rotation.x = (Math.PI / 4.0) - delta;
-				plate.applyBehavior("bubbleIn", {"speed": 3.0});
-			}
-
-			var plate0 = this.userData.hoverBlasterTable.plates[0];
-			if( this.userData.hoverBlasterTable.plates.length >= 15 && plate0.scale.x < 1 && plate0.scale.x > 0.0001 )
-			{
-				plate0.scale.sub(new THREE.Vector3(jumpStart.deltaTime * 3.0, jumpStart.deltaTime * 3.0, jumpStart.deltaTime * 3.0));
-
-				if( plate0.scale.x < 0.0001 )
-					plate0.scale.set(0.0001, 0.0001, 0.0001);
 			}
 
 			//this.rotation.x = this.userData.hoverBlasterTable.rot;
@@ -2045,6 +2239,10 @@ jumpStartBehavior({
 					jumpStart.behaviors.hoverBlasterTable.resetTimeline.call(this, idVal, "STAGE " + (idVal+1) );
 					jumpStart.behaviors.hoverBlasterTable.generateStage.call(this, idVal);
 					this.sync();
+
+					var ship = this.userData.hoverBlasterTable.ship;
+					//ship.syncData.killed = {};
+					ship.sync({"syncData": true});
 				}
 			}
 		},
@@ -2055,7 +2253,7 @@ jumpStartBehavior({
 
 			var tower = jumpStart.spawnInstance(null, {"parent": base});
 			tower.applyBehavior("asyncModel", {"modelFile": "models/manualgun_tower"});
-			tower.translateY(8.5);
+			tower.translateY(8.6);
 
 			var barrels = jumpStart.spawnInstance(null, {"parent": tower});
 			barrels.applyBehavior("asyncModel", {"modelFile": "models/manualgun_barrels"});
@@ -2469,7 +2667,7 @@ jumpStartBehavior({
 							function spawnBar(ship)
 							{
 								var geometry = (jumpStart.isGearVR) ? new THREE.SphereGeometry( 3, 5, 5 ) : new THREE.SphereGeometry( 3, 8, 8 );
-								var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+								var material = new THREE.MeshBasicMaterial( {color: "yellow"});// 0x59AAE9} );
 								var barObject = new THREE.Mesh( geometry, material );
 								var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
 								return bar;
@@ -2497,7 +2695,9 @@ jumpStartBehavior({
 			gun.rotation.x = gun.userData.rotOffset;
 			gun.rotateX(-Math.PI / 2.0);
 			gun.rotateZ(rotZ);
-			gun.translateY(this.userData.hoverBlasterTable.radius);
+			//gun.translateY(this.userData.hoverBlasterTable.radius);
+			//gun.translateY(this.userData.hoverBlasterTable.radius + (40.0 * Math.abs(rotZ) * (Math.abs(rotZ) * 0.3)));
+			gun.translateY(this.userData.hoverBlasterTable.radius);// + (40.0 * Math.abs(rotZ) * Math.abs(rotZ) * 0.3 * this.scale.x));
 			gun.scale.set(0.0001, 0.0001, 0.0001);
 			gun.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.rotFade);
 			gun.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.hitDetect);
@@ -2578,7 +2778,7 @@ jumpStartBehavior({
 						function spawnBar(ship)
 						{
 							var geometry = (jumpStart.isGearVR) ? new THREE.SphereGeometry( 3, 5, 5 ) : new THREE.SphereGeometry( 3, 8, 8 );
-							var material = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+							var material = new THREE.MeshBasicMaterial( {color: "yellow"});// 0x59AAE9} );
 							var barObject = new THREE.Mesh( geometry, material );
 							var bar = jumpStart.spawnInstance(null, {"object": barObject, "parent": ship});
 							return bar;
@@ -2625,7 +2825,10 @@ jumpStartBehavior({
 			rocks.rotation.x = rocks.userData.rotOffset;
 			rocks.rotateX(-Math.PI / 2.0);
 			rocks.rotateZ(rotZ);
-			rocks.translateY(this.userData.hoverBlasterTable.radius);
+
+			//var surfaceDist = (this.userData.hoverBlasterTable.radius * this.scale.x) + (40.0 * Math.abs(rotZ) * (Math.abs(rotZ) * 0.3))
+			var surfaceDist = this.userData.hoverBlasterTable.radius;// + (40.0 * Math.abs(rotZ) * Math.abs(rotZ) * 0.3 * this.scale.x);
+			rocks.translateY(surfaceDist);
 			rocks.scale.set(0.0001, 0.0001, 0.0001);
 			rocks.userData.health = 100.0;
 			rocks.userData.kill = jumpStart.behaviors.hoverBlasterTable.rocksKill;
@@ -2665,7 +2868,9 @@ jumpStartBehavior({
 //console.log(this.syncData.hoverBlasterTable.originalQuaternion);
 			var crazy = jumpStart.spawnInstance(null);
 			crazy.position.copy(this.position);
-			crazy.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);
+			var quat = this.syncData.hoverBlasterTable.originalQuaternion;
+			crazy.quaternion.set(quat._x, quat._y, quat._z, quat._w);	// might not be needed down here cuz it might already be converted to a quaternion at this point already.
+			//crazy.quaternion.copy(this.syncData.hoverBlasterTable.originalQuaternion);
 			//crazy.rotateX(Math.PI);// * 2.0);
 			crazy.applyBehavior("asyncModel", {"modelFile": "models/thai"});
 			crazy.userData.entryID = entry.id;
@@ -2675,10 +2880,10 @@ jumpStartBehavior({
 			crazy.userData.dumbTime = 2.8;
 			//crazy.translateX(-Math.PI / 2.0);
 			//crazy.rotateX(-Math.PI / 1.5);
-			crazy.rotateX(-Math.PI);
+			//crazy.rotateX(-Math.PI);
 			crazy.translateY(this.position.y - 20.0);
-			crazy.translateZ(-this.userData.hoverBlasterTable.radius);
-			crazy.rotateX(Math.PI + (Math.PI / 2.0));
+			crazy.translateZ(-this.userData.hoverBlasterTable.radius * 1.2);
+			crazy.rotateX((-Math.PI / 2.0));
 			//crazy.position.z -= this.userData.hoverBlasterTable.radius;
 			//crazy.position.y = this.position.y + 20.0;
 			//crazy.rotation.x = -Math.PI / 2.0;
@@ -2691,7 +2896,10 @@ jumpStartBehavior({
 			{
 				var table = this.userData.table;
 				if( !!!jumpStart.objects[table.uuid] )//table.parent !== jumpStart.world )
+				{
 					jumpStart.removeInstance(this);
+					console.log("Remove it A");
+				}
 
 				// only proceed if active
 				if( !table.syncData.hoverBlasterTable.isActive )
@@ -2703,34 +2911,50 @@ jumpStartBehavior({
 				if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
 				{
 					jumpStart.removeInstance(this);
+					console.log("Remove it B");
 					return;
 				}
 
 				// remove if surface impact
-				if( table.position.distanceTo(this.position) < table.userData.hoverBlasterTable.radius )
+				var surfaceDist = table.userData.hoverBlasterTable.radius * 1.15;// * this.scale.x;
+				if( table.position.distanceTo(this.position) < surfaceDist )//table.userData.hoverBlasterTable.radius )
 				{
-					this.userData.kill.call(this);
-					return;		
+					var goodPos = this.position.clone();
+					goodPos.sub(table.position);
+					goodPos.normalize();
+					goodPos.multiplyScalar(surfaceDist);
+					goodPos.add(table.position);
+					this.position.copy(goodPos);
+					//this.userData.kill.call(this);
+					//return;		
 				}
 
 				this.userData.dumbTime -= jumpStart.deltaTime;
 				if( this.userData.dumbTime > 0 )
 					return;
 
-				var table = this.userData.table;
+				//var table = this.userData.table;
 				var ship = table.userData.hoverBlasterTable.ship;
 
-				if( this.userData.dumbTime > -4.0 )
-				{
+				//if( this.userData.dumbTime > -4.0 )
+				//{
 					var currentQuaternion = this.quaternion.clone();
+					var upVec = this.position.clone();
+					upVec.sub(table.position);
+					upVec.normalize();
+					this.up = upVec;
 					this.lookAt(ship.position);
 
 					var targetQuaternion = this.quaternion.clone();
-					currentQuaternion.slerp(targetQuaternion, 0.02);
+					if( this.userData.dumbTime > -4.0 )
+						currentQuaternion.slerp(targetQuaternion, 0.02);
+					else
+						currentQuaternion.slerp(targetQuaternion, 0.2);
+
 					this.quaternion.copy(currentQuaternion);
-				}
-				else
-					this.lookAt(ship.position);
+				//}
+				//else
+					//this.lookAt(ship.position);
 
 				// update the shadow
 				displacementRay = this.userData.displacementRay;
@@ -2750,6 +2974,7 @@ jumpStartBehavior({
 			crazy.addEventListener("remove", function()
 			{
 				jumpStart.removeInstance(this.userData.displacementRay);
+				console.log("Remove it C");
 			});
 
 			var displacementRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
@@ -2764,7 +2989,8 @@ jumpStartBehavior({
 			var shadowObject = new THREE.Mesh( geometry, material );
 			var shadow = jumpStart.spawnInstance(null, {"object": shadowObject, "parent": displacementRay});
 			shadow.scale.z = 0.01;//0.3;
-			shadow.position.z = this.userData.hoverBlasterTable.radius - 0.5;
+			var surfaceDist = this.userData.hoverBlasterTable.radius;
+			shadow.position.z = surfaceDist - 0.5;
 			displacementRay.userData.shadow = shadow;
 			crazy.userData.displacementRay = displacementRay;
 		},
@@ -2772,10 +2998,47 @@ jumpStartBehavior({
 		{
 			delete jumpStart.behaviors.hoverBlasterTable.tables[this.name];
 
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.loopLeft);
+			this.userData.hoverBlasterTable.loopLeft = null;
+
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.loopRight);
+			this.userData.hoverBlasterTable.loopRight = null;
+
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.haloTop);
+			this.userData.hoverBlasterTable.haloTop = null;
+
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.haloBottom);
+			this.userData.hoverBlasterTable.haloBottom = null;
+
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.haloBack);
+			this.userData.hoverBlasterTable.haloBack = null;
+
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.topMarker);
+			this.userData.hoverBlasterTable.topMarker = null;
+
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.bottomMarker);
+			this.userData.hoverBlasterTable.bottomMarker = null;
+
+			jumpStart.removeInstance(this.userData.hoverBlasterTable.backMarker);
+			this.userData.hoverBlasterTable.backMarker = null;
+
 			//this.userData.hoverBlasterTable.playerBoardElem.parentNode.removeChild(table.userData.hoverBlasterTable.playerBoardElem);
 			//this.userData.hoverBlasterTable.playerBoardElem = null;
 
 			//jumpStart.removeInstance(this.userData.hoverBlasterTable.board);
+
+			if( !jumpStart.isAltspace && this.userData.hoverBlasterTable.originalCameraPosition !== null )
+			{
+				if( this.userData.hoverBlasterTable.originalCameraPosition !== null)
+					jumpStart.camera.position.copy(this.userData.hoverBlasterTable.originalCameraPosition);
+
+				if( this.userData.hoverBlasterTable.originalCameraQuaternion !== null )
+					jumpStart.camera.quaternion.copy(this.userData.hoverBlasterTable.originalCameraQuaternion);
+
+				this.userData.hoverBlasterTable.originalCameraPosition = null;
+				this.userData.hoverBlasterTable.originalCameraQuaternion = null;
+				jumpStart.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.autoWebCamera);
+			}
 
 			if( this.ownerID === jumpStart.localUser.userId )
 			{
@@ -2795,16 +3058,20 @@ jumpStartBehavior({
 				}
 
 				jumpStart.behaviors.hoverBlasterTable.focusedTableRef = null;
-
+/*
 				if( !jumpStart.isAltspace )
 				{
-					jumpStart.camera.position.copy(this.userData.hoverBlasterTable.originalCameraPosition);
-					jumpStart.camera.quaternion.copy(this.userData.hoverBlasterTable.originalCameraQuaternion);
+					if( this.userData.hoverBlasterTable.originalCameraPosition !== null)
+						jumpStart.camera.position.copy(this.userData.hoverBlasterTable.originalCameraPosition);
+
+					if( this.userData.hoverBlasterTable.originalCameraQuaternion !== null )
+						jumpStart.camera.quaternion.copy(this.userData.hoverBlasterTable.originalCameraQuaternion);
+
 					this.userData.hoverBlasterTable.originalCameraPosition = null;
 					this.userData.hoverBlasterTable.originalCameraQuaternion = null;
 					jumpStart.removeEventListener("tick", jumpStart.behaviors.hoverBlasterTable.autoWebCamera);
 				}
-
+*/
 				jumpStart.removeEventListener("gamepadbutton", jumpStart.behaviors.hoverBlasterTable.tableButtonListener);
 
 				jumpStart.removeInstance(this.userData.hoverBlasterTable.ship);
@@ -2925,7 +3192,7 @@ jumpStartBehavior({
 				text.userData.table = table;
 				text.position.copy(ship.position);
 				text.quaternion.copy(table.syncData.hoverBlasterTable.originalQuaternion);
-				text.rotateX(Math.PI);
+				//text.rotateX(Math.PI);
 				text.position.y += 10.0;
 //					text.lookAt(jumpStart.localUser.skeleton.getJoint("Eye"));
 
@@ -3001,16 +3268,49 @@ jumpStartBehavior({
 
 						var targetPosition = new THREE.Vector3(jumpStart.gamepad.position.x, jumpStart.gamepad.position.y, jumpStart.gamepad.position.z);
 						jumpStart.world.worldToLocal(targetPosition);
-//console.log(jumpStart.scene.scale.x);
-						var max = table.userData.hoverBlasterTable.radius * 2.0;//-jumpStart.worldOffset.y;
-						if( targetPosition.length() > max )
-						{
-							var posY = targetPosition.y;
-							targetPosition.normalize().multiplyScalar(max);
-							targetPosition.y = posY;
-						}
 
-						max = table.userData.hoverBlasterTable.radius * 2.0;
+
+						//var oldQuaternion = this.quaternion.clone();
+						//var oldPosition = this.position.clone();
+
+						// vertical
+						/*
+						var markerBottom = table.userData.hoverBlasterTable.haloBottom.userData.marker;
+						var markerTop = table.userData.hoverBlasterTable.haloTop.userData.marker;
+						var markerBack = table.userData.hoverBlasterTable.haloBack.userData.marker;
+
+						var distToBottom = this.position.distanceTo(markerBottom.position);
+						var distToBack = this.position.distanceTo(markerBack.position);
+
+						if(this.position.y - 10.0 < markerBottom.position.y )
+							this.position.y = markerBottom.position.y
+
+						if(targetPosition.y - 10.0 < markerBottom.position.y )
+							targetPosition.y = markerBottom.position.y;
+						*/
+
+
+						// horizontal
+						/*
+						var loopLeft = table.userData.hoverBlasterTable.loopLeft;
+						var loopLeftMarker = loopLeft.userData.marker;
+
+						var loopRight = table.userData.hoverBlasterTable.loopRight;
+						var loopRightMarker = loopRight.userData.marker;
+
+						var distToCenter = this.position.distanceTo(table.position);
+						var distToFarLeft = this.position.distanceTo(jumpStart.world.worldToLocal(loopLeftMarker.getWorldPosition()));
+						var distToFarRight = this.position.distanceTo(jumpStart.world.worldToLocal(loopRightMarker.getWorldPosition()));
+
+						var targetDistToCenter = targetPosition.distanceTo(table.position);
+						var targetDistToFarLeft = targetPosition.distanceTo(jumpStart.world.worldToLocal(loopLeftMarker.getWorldPosition()));
+						var targetDistToFarRight = targetPosition.distanceTo(jumpStart.world.worldToLocal(loopRightMarker.getWorldPosition()));
+						var targetDistToBottom = targetPosition.distanceTo(markerBottom.position);
+						var targetDistToBack = targetPosition.distanceTo(markerBack.position);
+						*/
+						
+						// maxdist
+						var max = table.userData.hoverBlasterTable.radius * 2.0;//-jumpStart.worldOffset.y;
 						if( targetPosition.length() > max )
 						{
 							var posY = targetPosition.y;
@@ -3024,6 +3324,7 @@ jumpStartBehavior({
 							targetPosition = targetPosition.sub(table.position).normalize().multiplyScalar(min);
 							targetPosition.add(table.position);
 						}
+
 						var currentPosition = this.position.clone();
 						currentPosition.lerp(targetPosition, 0.1);
 
@@ -3053,23 +3354,58 @@ jumpStartBehavior({
 
 						var positionRay = this.userData.positionRay;
 						var oldRotation = positionRay.rotation.clone();
-						positionRay.rotateY(pitchAxisValue * jumpStart.deltaTime);
 
-						//console.log(positionRay.rotation.y);
-						//var max = table.syncData.hoverBlasterTable.originalRotation.y + 0.3;
-						//var min = table.syncData.hoverBlasterTable.originalRotation.y - 0.3
-						//if( positionRay.rotation.y < min )
-						//	positionRay.rotation.y = min;//oldRotation.y;
-						//else if( positionRay.rotation.y > max )
-						//	positionRay.rotation.y = max;
+						var markerBottom = table.userData.hoverBlasterTable.haloBottom.userData.marker;
+						var markerTop = table.userData.hoverBlasterTable.haloTop.userData.marker;
+						var markerBack = table.userData.hoverBlasterTable.haloBack.userData.marker;
 
-						//var max = 0.7;
-						//if( Math.abs(table.syncData.hoverBlasterTable.originalRotation.y - positionRay.rotation.y) > max )
-						//	positionRay.rotation.copy(oldRotation);
+						var distToBottom = this.getWorldPosition().distanceTo(markerBottom.getWorldPosition());
+						var distToBack = this.getWorldPosition().distanceTo(markerBack.getWorldPosition());
 
+						if(this.position.y - 10.0 < markerBottom.position.y )
+						{
+							positionRay.rotation.copy(oldRotation);
+							positionRay.rotateX(-0.01);
+						}
+						else if( distToBack * 0.9 < distToBottom )
+						{
+							positionRay.rotation.copy(oldRotation);
+							positionRay.rotateX(0.01);
+						}
+						else
+							positionRay.rotateX(yawAxisValue * jumpStart.deltaTime);
 
+						// horizontal
 						oldRotation = positionRay.rotation.clone();
-						positionRay.rotateX(yawAxisValue * jumpStart.deltaTime);
+						var loopLeft = table.userData.hoverBlasterTable.loopLeft;
+						var loopLeftMarker = loopLeft.userData.marker;
+
+						var loopRight = table.userData.hoverBlasterTable.loopRight;
+						var loopRightMarker = loopRight.userData.marker;
+
+						var distToCenter = this.position.distanceTo(table.position);
+						//var distToLeft = this.position.distanceTo(loopLeft.position);
+						var distToFarLeft = this.position.distanceTo(jumpStart.world.worldToLocal(loopLeftMarker.getWorldPosition()));
+
+						//var distToRight = this.position.distanceTo(loopRight.position);
+						var distToFarRight = this.position.distanceTo(jumpStart.world.worldToLocal(loopRightMarker.getWorldPosition()));
+
+						//if(distToFarLeft < distToCenter)
+						if( distToCenter > distToFarLeft )
+						{
+							//this.position.y = jumpStart.world.worldToLocal(marker.getWorldPosition()).y;
+							positionRay.rotation.copy(oldRotation);
+							positionRay.rotateY(0.01);
+						}
+						else if(distToCenter > distToFarRight)
+						{
+							positionRay.rotation.copy(oldRotation);
+							positionRay.rotateY(-0.01);
+						}
+						else
+							positionRay.rotateY(pitchAxisValue * jumpStart.deltaTime);
+
+						//positionRay.rotateY(pitchAxisValue * jumpStart.deltaTime);
 
 						//max = -1.2;
 						//var min = -0.2;
@@ -3100,7 +3436,11 @@ jumpStartBehavior({
 						//this.rotation.z = 0;
 						//this.rotateY(Math.PI);
 						//this.rotateX(-Math.PI / 3.0);
+						//this.up = new THREE.Vector3(1, 0, 0);
+						this.up = loopRight.position.clone().sub(table.position);
 						this.lookAt(table.position);
+						this.rotateZ(-Math.PI / 2.0);
+						//this.rotateY(Math.PI);
 						this.rotateX(-Math.PI / 2.8);
 						var quaternion = this.quaternion.clone();
 
@@ -3193,6 +3533,14 @@ jumpStartBehavior({
 			if( !!!table )
 				return;
 			
+			// auto camera
+			if( !jumpStart.isAltspace && table.userData.hoverBlasterTable.originalCameraPosition === null )
+			{
+				table.userData.hoverBlasterTable.originalCameraPosition = jumpStart.camera.position.clone();
+				table.userData.hoverBlasterTable.originalCameraQuaternion = jumpStart.camera.quaternion.clone();
+				jumpStart.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.autoWebCamera);
+			}
+
 			// local apply
 			this.applyBehavior("asyncModel", {"modelFile": "models/hawk"});
 			//this.syncData.vehicleModel = "models/hawk"
@@ -3312,6 +3660,7 @@ jumpStartBehavior({
 			pos.y = positionRay.position.y + table.userData.hoverBlasterTable.radius;
 
 			positionRay.lookAt(pos);
+			//positionRay.rotateY(Math.PI);
 			//positionRay.rotateX(Math.PI);
 
 //displacementRay.rotateX(Math.PI * -0.1);
@@ -3353,6 +3702,7 @@ jumpStartBehavior({
 
 			ship.userData.positionRay = positionRay;
 
+
 			// FIXME: Why aren't the positionray and displacementray one and the same?
 			var displacementRay = jumpStart.spawnInstance(null);//new THREE.Ray(this.position.clone(), new THREE.Vector3(0, 0, 0));
 			displacementRay.position.copy(table.position);
@@ -3373,12 +3723,24 @@ jumpStartBehavior({
 			var shadowObject = new THREE.Mesh( geometry, material );
 			var shadow = jumpStart.spawnInstance(null, {"object": shadowObject, "parent": displacementRay});
 			shadow.scale.z = 0.01;//0.3;
+			shadow.scale.x = 0.01;
+			shadow.scale.y = 0.01;
+			shadow.addEventListener("tick", function()
+			{
+				if( this.scale.x < 1.0 )
+				{
+					this.scale.x += jumpStart.deltaTime;
+					this.scale.y += jumpStart.deltaTime;
+				}
+				else
+					this.removeEventListener("tick", arguments.callee);
+			});
 			shadow.position.z = table.userData.hoverBlasterTable.radius - 0.5;
 			displacementRay.userData.shadow = shadow;
 			ship.userData.displacementRay = displacementRay;
 
 			var sight = jumpStart.spawnInstance(null, {"parent": ship});
-			sight.applyBehavior("asyncModel", {"modelFile": "models/player_laser"});
+			sight.applyBehavior("asyncModel", {"modelFile": "models/laserSight"});
 			sight.scale.set(0.1, 0.1, 10.0);
 			sight.translateZ(200.0);
 			ship.userData.sight = sight;
@@ -3499,7 +3861,9 @@ jumpStartBehavior({
 				ship.quaternion.copy(this.quaternion);
 				//ship.rotation.x = 0;
 				//ship.translateZ(-400.0);
-				//ship.translateY(-this.userData.hoverBlasterTable.radius);
+				ship.rotateZ(Math.PI);
+				ship.translateY(this.userData.hoverBlasterTable.radius / 2.0);
+				ship.translateZ(-this.userData.hoverBlasterTable.radius * 1.4);
 
 				ship.syncData.dead = false;
 				ship.syncData.tableName = this.name;
@@ -3520,14 +3884,6 @@ jumpStartBehavior({
 				//var table = this;
 				jumpStart.behaviors.hoverBlasterTable.focusedTableRef = this;
 				jumpStart.addEventListener("gamepadbutton", jumpStart.behaviors.hoverBlasterTable.tableButtonListener);
-
-				// auto camera
-				if( !jumpStart.isAltspace )
-				{
-					this.userData.hoverBlasterTable.originalCameraPosition = (jumpStart.isAltspace) ? null : jumpStart.camera.position.clone();
-					this.userData.hoverBlasterTable.originalCameraQuaternion = (jumpStart.isAltspace) ? null : jumpStart.camera.quaternion.clone();
-					jumpStart.addEventListener("tick", jumpStart.behaviors.hoverBlasterTable.autoWebCamera);
-				}
 			}
 		},
 		"autoWebCamera": function()
@@ -3535,7 +3891,7 @@ jumpStartBehavior({
 			var oldPos = jumpStart.camera.position.clone();
 			var oldQuaternion = jumpStart.camera.quaternion.clone();
 
-			var table = jumpStart.behaviors.hoverBlasterTable.focusedTableRef;
+			var table = jumpStart.behaviors.hoverBlasterTable.focusedTableRef;	// this is why remote client's can't spectate anymore.
 			if( !!!table )
 				return;
 

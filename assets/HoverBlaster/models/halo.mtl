@@ -1,5 +1,5 @@
 # 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
-# File Created: 01.11.2016 00:21:10
+# File Created: 31.10.2016 16:45:15
 
 newmtl wire_255255255
 	Ns 32
@@ -10,4 +10,3 @@ newmtl wire_255255255
 	Ka 1.0000 1.0000 1.0000
 	Kd 1.0000 1.0000 1.0000
 	Ks 0.3500 0.3500 0.3500
-	map_Kd maps\rocksComplete.png

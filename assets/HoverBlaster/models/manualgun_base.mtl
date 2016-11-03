@@ -1,4 +1,13 @@
+# 3ds Max Wavefront OBJ Exporter v0.97b - (c)2007 guruware
+# File Created: 01.11.2016 06:39:24
+
 newmtl wire_006135113
-Kd 1 1 1
-illum 0
-map_Kd manualgun.jpg
+	Ns 32
+	d 1
+	Tr 0
+	Tf 1 1 1
+	illum 2
+	Ka 0.0235 0.5294 0.4431
+	Kd 1 1 1
+	Ks 0.3500 0.3500 0.3500
+	map_Kd maps\manualGunBaseComplete.png
