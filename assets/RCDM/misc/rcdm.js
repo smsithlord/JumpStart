@@ -118,6 +118,187 @@ jumpStartBehavior({
 				console.log("Added vehicle type " + vehicleType.name);
 			}
 		},
+		"applyFrontGunLogic": function()
+		{
+			// FRONTGUN LOGIC
+			function frontGunListener()
+			{
+				var vehicle = this.userData.vehicle;
+				var vehicleType = jumpStart.behaviors.rcdm.getVehicleType("rcdmChopper5");
+
+				if( this.userData.currentCooldown > 0 )
+					this.userData.currentCooldown -= jumpStart.deltaTime;
+
+				if( this.userData.currentCooldown <= 0 )
+				{
+					// charging is now complete
+					this.userData.currentCooldown = 0;
+				}
+
+				if( this.userData.currentShotsFired !== vehicle.syncData.rcdm.custom.parts[this.userData.partName].shotsFired )
+				{
+					this.userData.currentShotsFired = vehicle.syncData.rcdm.custom.parts[this.userData.partName].shotsFired;
+					
+					if( !!this.userData.asyncModel.visualObject )
+					{
+						this.userData.asyncModel.visualObject.position.z = -6.0;
+
+						// MAKE THE MUZZLE FLASH
+						var flash = this.userData.asyncModel.visualObject.userData.flash;
+						if( !!!flash )
+						{
+							var geometry = new THREE.SphereGeometry( 1.2, 5, 8, 0);
+							var material = new THREE.MeshBasicMaterial( {color: 0xff0000, transparent: true, opacity: 0.5} );
+							var flashObject = new THREE.Mesh( geometry, material );
+							flash = jumpStart.spawnInstance(null, {"object": flashObject, "parent": this.userData.asyncModel.visualObject});
+							flash.scale.z = 1.8;
+							flash.position.z = 16.0;
+							flash.userData.scaleDirection = 0;
+							flash.userData.originalScale = 0.0001;
+							flash.addEventListener("tick", function()
+							{
+								if( this.userData.scaleDirection === 0 )
+									return;
+
+								var delta = 3.0 * this.userData.scaleDirection * jumpStart.deltaTime;
+								delta = new THREE.Vector3(delta, delta, delta);
+
+								this.scale.add(delta);
+								if( this.userData.scaleDirection === 1.0 )
+								{
+									if( this.scale.x <= 1.5 )
+									{
+										this.userData.scaleDirection = -1.0;
+										this.scale.set(1.5, 1.5, 2.0 * 1.5);
+									}
+								}
+								else
+								{
+									if( this.scale.x <= this.userData.originalScale )
+									{
+										this.userData.scaleDirection = 0;
+										this.scale.set(this.userData.originalScale, this.userData.originalScale, 2.0 * this.userData.originalScale);
+									}
+								}
+							});
+
+							this.userData.asyncModel.visualObject.userData.flash = flash;
+						}
+
+						flash.userData.scaleDirection = 1.0;
+					}
+
+					// FIRE BULLET
+					var bullet = jumpStart.spawnInstance(null);
+					bullet.position.copy(jumpStart.world.worldToLocal(this.getWorldPosition()));
+					bullet.quaternion.copy(this.getWorldQuaternion());
+					bullet.translateZ(6.0);
+					bullet.userData.speed = 120.0;
+					bullet.userData.goodTime = 2.0;
+					bullet.userData.deathRotate = new THREE.Vector3(Math.random() * 2.0 * Math.PI * (Math.random() > 0.5) ? 1.0 : -1.0, Math.random() * 2.0 * Math.PI * (Math.random() > 0.5) ? 1.0 : -1.0, Math.random() * 2.0 * Math.PI * (Math.random() > 0.5) ? 1.0 : -1.0);
+
+					bullet.applyBehavior("asyncModel", {"modelFile": "models/player_laser", "callback": function(visualObject)
+						{
+							visualObject.applyBehavior("dropShadow", {"useParent": true});
+						}});					
+					bullet.addEventListener("tick", function()
+					{
+						// destroy us if we go out of bounds
+						if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )	// && this.ownerID === jumpStart.localUser.userID )
+						{
+							jumpStart.removeInstance(this);
+							return;
+						}
+			
+						this.translateZ(this.userData.speed * jumpStart.deltaTime);
+
+						if( this.userData.goodTime > 0 )
+						{
+							this.userData.goodTime -= jumpStart.deltaTime;
+
+							if( this.userData.goodTime <= 0 )
+							{
+								// good time has ended!!
+								this.userData.goodTime = 0;
+								this.applyBehavior("shrinkRemove", {"localMode": true});
+							}
+						}
+						else
+						{
+							if( this.userData.speed > 0.2 )
+							{
+								this.userData.speed -= 0.5 * jumpStart.deltaTime;
+								if( this.userData.speed < 0.2 )
+									this.userData.speed = 0.2;
+							}
+
+							this.rotateX(this.userData.deathRotate.x * jumpStart.deltaTime);
+							this.rotateY(this.userData.deathRotate.y * jumpStart.deltaTime);
+							this.rotateZ(6.0 * this.userData.deathRotate.z * jumpStart.deltaTime);
+						}
+					});
+				}
+
+				if( !!this.userData.asyncModel.visualObject && this.userData.asyncModel.visualObject.position.z < 0 )
+				{
+					this.userData.asyncModel.visualObject.position.z += 4.0 * jumpStart.deltaTime;
+					if( this.userData.asyncModel.visualObject.position.z >= 0 )
+					{
+						// recoil complete
+						this.userData.asyncModel.visualObject.position.z = 0;
+					}
+				}
+			}
+
+			function frontGunFire()
+			{
+				// return true if we can fire (and update a value on the ship for us to sync), false if we cannot (and leave synced data unchanged)
+				// we only get called from the local user
+
+				// "this" is frontGunX
+				if( this.userData.currentCooldown === 0 )
+				{
+					var vehicle = this.userData.vehicle;
+
+					// reset the local cooldown
+					this.userData.currentCooldown = vehicle.syncData.rcdm.custom.parts[this.userData.partName].cooldown;
+
+					// also adjust the reset of any siblings
+					var x, part;
+					for( x in vehicle.userData.rcdm.parts )
+					{
+						part = vehicle.userData.rcdm.parts[x];
+						if( x.indexOf("frontGun") === 0 && part !== this )
+							part.userData.currentCooldown += 0.2;
+					}
+
+					// update our shots fired
+					vehicle.syncData.rcdm.custom.parts[this.userData.partName].shotsFired++;
+					return true;
+				}
+				else
+					return false;
+			}
+
+			// TODO: this type of gun should be a behavior, so that its userdata can be better organized.
+			//this.userData.rcdm.parts.frontGun0.userData.currentCooldown = vehicleType.custom.parts.frontGun0.cooldown;
+			function spawnGun()
+			{
+				var vehicle = this.userData.vehicle;
+
+				this.userData.currentShotsFired = 0;
+				this.userData.currentCooldown = vehicle.syncData.rcdm.custom.parts[this.userData.partName].cooldown;
+				this.userData.fire = frontGunFire;
+				this.addEventListener("tick", frontGunListener);
+			}
+
+			var x;
+			for( x in this.userData.rcdm.parts )
+			{
+				if( x.indexOf("frontGun") === 0 )
+					spawnGun.call(this.userData.rcdm.parts[x]);
+			}
+		},
 		"getVehicleType": function(vehicleTypeName)
 		{
 			return jumpStart.behaviors.rcdm.vehicleTypes[vehicleTypeName];
@@ -420,6 +601,7 @@ jumpStartBehavior({
 			};
 
 			var geometry = new THREE.TextGeometry(this.syncData.rcdm.operatorName, params);
+			//var geometry = new THREE.TextGeometry("SM Sith Lord", params);
 			var material = new THREE.MeshBasicMaterial({color:'white'});
 			var mesh = new THREE.Mesh(geometry, material);
 			geometry.computeBoundingBox();

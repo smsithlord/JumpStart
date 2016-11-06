@@ -18,6 +18,7 @@ jumpStartBehavior({
 			table.position.copy(position);
 			table.position.y += 90.0;
 
+			/*
 			var pos;
 			if( jumpStart.isAltspace )
 				pos = jumpStart.localUser.skeleton.getJoint("Eye").getWorldPosition();
@@ -27,6 +28,9 @@ jumpStartBehavior({
 			pos.y = table.position.y;
 
 			table.lookAt(pos);
+			*/
+
+			//table.rotation.x = 0;
 			//table.rotateZ(Math.PI);
 			//table.rotateY(Math.PI);
 			//table.rotateY(Math.PI);

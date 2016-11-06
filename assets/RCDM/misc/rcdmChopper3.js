@@ -37,15 +37,18 @@ jumpStartBehavior({
 				part = jumpStart.spawnInstance(null, {"parent": this});
 				part.applyBehavior("asyncModel", {
 					"modelFile": this.syncData.rcdm.custom.parts[x].modelFile,
-					"callback": function()
+					"callback": function(visualObject)
 					{
-						//this.applyBehavior("dropShadow");
+						var vehicle = this.userData.vehicle;
+						if( !!vehicle.syncData.rcdm.custom.parts[this.userData.partName].colorCode )
+							this.setColor(new THREE.Color(vehicle.syncData.rcdm.custom.parts[this.userData.partName].colorCode));
 					}.bind(part)
 				});
 				part.position.copy(vehicleType.parts[x].offset);
 				part.rotateX(vehicleType.parts[x].rotate.x);
 				part.rotateY(vehicleType.parts[x].rotate.y);
 				part.rotateZ(vehicleType.parts[x].rotate.z);
+				part.userData.partName = x;
 				part.userData.vehicle = this;
 				
 				this.userData.rcdm.parts[x] = part;
@@ -74,6 +77,8 @@ jumpStartBehavior({
 
 				this.rotateY(rotSpeed * jumpStart.deltaTime);
 			});
+
+			jumpStart.behaviors.rcdm.applyFrontGunLogic.call(this);
 		},
 		"tickBehavior": function()
 		{
@@ -149,12 +154,26 @@ jumpStartBehavior({
 				ship.position.lerp(targetPos, 0.1);
 				ship.quaternion.slerp(targetQuaternion, 0.1);
 
+				var needsSync = false;
+
+				// loop through all parts and if they have a cooldown, cool them down.
+				if( fireButton.value > 0.2 )
+				{
+					var x, part;
+					for( x in ship.syncData.rcdm.custom.parts )
+					{
+						if( !!ship.userData.rcdm.parts[x] && typeof ship.userData.rcdm.parts[x].userData.fire === "function" )
+							needsSync = needsSync | ship.userData.rcdm.parts[x].userData.fire.call(ship.userData.rcdm.parts[x]);	// the weapon is responsible for actually firing or not.
+					}
+				}
+
 				if( ship.userData.rcdm.clawDelay === 0 && clawButton && clawButton.value > 0.2 )
 				{
 					if( ship.syncData.rcdm.clawState === "none" || ship.syncData.rcdm.clawState === "retracted" )
 					{
 						this.syncData.rcdm.clawState = "extending";
-						this.sync({"syncData": true});
+						//this.sync({"syncData": true});
+						needsSync = true;
 
 						this.userData.rcdm.clawDelay = 1.0;
 					}
@@ -166,7 +185,8 @@ jumpStartBehavior({
 							console.log("drop it");
 							this.userData.rcdm.clawDelay = Infinity;	// delay until sync gets handled
 							this.syncData.rcdm.clawGripped = "";
-							this.sync({"syncData": true});
+							//this.sync({"syncData": true});
+							needsSync = true;
 						}
 						else
 						{
@@ -174,10 +194,14 @@ jumpStartBehavior({
 
 							this.userData.rcdm.clawDelay = Infinity;	// delay until sync gets handled
 							this.syncData.rcdm.clawState = "retracting";
-							this.sync({"syncData": true});
+							//this.sync({"syncData": true});
+							needsSync = true;
 						}
 					}
 				}
+
+				if( needsSync )
+					this.sync({"syncData": true});	// TODO: What if a part's fire funtion alterted stuff other than syncData?
 			}
 		}
 	}
