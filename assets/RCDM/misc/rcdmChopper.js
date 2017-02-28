@@ -37,17 +37,20 @@ jumpStartBehavior({
 				part = jumpStart.spawnInstance(null, {"parent": this});
 				part.applyBehavior("asyncModel", {
 					"modelFile": this.syncData.rcdm.custom.parts[x].modelFile,
-					"callback": function()
+					"callback": function(visualObject)
 					{
-						//this.applyBehavior("dropShadow");
+						var vehicle = this.userData.vehicle;
+						if( !!vehicle.syncData.rcdm.custom.parts[this.userData.partName].colorCode )
+							this.setColor(new THREE.Color(vehicle.syncData.rcdm.custom.parts[this.userData.partName].colorCode));
 					}.bind(part)
 				});
 				part.position.copy(vehicleType.parts[x].offset);
 				part.rotateX(vehicleType.parts[x].rotate.x);
 				part.rotateY(vehicleType.parts[x].rotate.y);
 				part.rotateZ(vehicleType.parts[x].rotate.z);
+				part.userData.partName = x;
 				part.userData.vehicle = this;
-
+				
 				this.userData.rcdm.parts[x] = part;
 			}
 
@@ -86,7 +89,7 @@ jumpStartBehavior({
 
 				var fireButton;
 				var clawButton;
-				if( jumpStart.gamepad.mapping === "steamvr" )
+				if( jumpStart.gamepad.mapping === "steamvr" || jumpStart.gamepad.mapping === "touch" )
 				{
 					var yawAxisValue = jumpStart.gamepad.axes[0];
 					if( Math.abs(yawAxisValue) > 0.1 )
@@ -98,7 +101,7 @@ jumpStartBehavior({
 
 					var otherGamepad = jumpStart.gamepads.find(function(t)
 					{
-						return ( t.mapping === "steamvr" && t !== jumpStart.gamepad );
+						return ( t.mapping === jumpStart.gamepad.mapping && t !== jumpStart.gamepad );
 					});
 
 					if(otherGamepad)

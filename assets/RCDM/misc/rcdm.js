@@ -3,6 +3,7 @@ jumpStartBehavior({
 	{
 		"managerObjectName": "__rcdmManager",
 		"activeVehicles": {},
+		"playerBullets": {},
 		"vehicleTypes": {},
 		"getRandomVehicleTypeName": function()
 		{
@@ -58,30 +59,35 @@ jumpStartBehavior({
 				}
 				*/
 
+				var vehicleType = jumpStart.behaviors.rcdm.vehicleTypes[custom.vehicleTypeName];
+
 				this.syncData.rcdm = {
-					"operatorID": jumpStart.localUser.userID,
+					"operatorId": jumpStart.localUser.userID,
 					"operatorName": jumpStart.localUser.displayName,
+					"team": (!!options.team) ? options.team : 1,
 					"health": (!!options.health) ? options.health : 100,
 					"lerpSpeed": 20.0,	// gets overrided by vehicles
 					"clawState": (!!options.clawState) ? options.clawState : "none",
 					"clawGripped": "",
-					"custom": custom
+					"custom": custom,
+					"lerpSpeed": (!!vehicleType && !!vehicleType.speed) ? vehicleType.speed : 50.0
 				};
 
 
 				this.addEventListener("spawn", jumpStart.behaviors.rcdm.spawnBehavior);
 				this.addEventListener("remove", jumpStart.behaviors.rcdm.removeBehavior);
 				this.addEventListener("tick", jumpStart.behaviors.rcdm.tickBehavior);
-				this.applyBehavior("autoSync");
 				
-				if( !!jumpStart.behaviors.rcdm.vehicleTypes[this.syncData.rcdm.custom.vehicleTypeName] )
+				if( !!vehicleType )
 					this.applyBehavior(this.syncData.rcdm.custom.vehicleTypeName);
 
 				this.applyBehavior("lerpSync", {"speed": this.syncData.rcdm.lerpSpeed});	// now that avgSpeed has been overridden
+				this.applyBehavior("autoSync");
 			}
 
 			this.userData.rcdm = {
-				"parts": {}	// this will hold actual object3d refs that vehicle classes create
+				"parts": {},	// this will hold actual object3d refs that vehicle classes create
+				"oldHealth": this.syncData.rcdm.health
 			};
 
 			///////////////////////
@@ -91,18 +97,54 @@ jumpStartBehavior({
 			// lock controls
 			if( this.ownerID === jumpStart.localUser.userID && jumpStart.gamepad )
 			{
-				var preventAxis = [];
-				var numAxes = jumpStart.gamepad.axes.length;
-				for( var i= 0; i < numAxes; i++ )
-					preventAxis.push(true);
+				if( jumpStart.gamepad.mapping === "steamvr" || jumpStart.gamepad.mapping === "touch" )
+				{
+					function PreventGamepad(gamepad)
+					{
+						var preventAxis = [];
+						var numAxes = gamepad.axes.length;
+						for( var i= 0; i < numAxes; i++ )
+							preventAxis.push(true);
 
-				var preventButtons = [];
-				var numButtons = jumpStart.gamepad.buttons.length;
-				for( var i= 0; i < numButtons; i++ )
-					preventButtons.push(true);
+						var preventButtons = [];
+						var numButtons = gamepad.buttons.length;
+						for( var i= 0; i < numButtons; i++ )
+							preventButtons.push(true);
 
-				if( jumpStart.isAltspace && typeof jumpStart.gamepad.preventDefault === "function" )
-					jumpStart.gamepad.preventDefault(preventAxis, preventButtons);
+						if( jumpStart.isAltspace && typeof gamepad.preventDefault === "function" )
+						{
+							console.log("Preventing Axes: " + preventAxis);
+							gamepad.preventDefault(preventAxis, preventButtons);
+						}
+					}
+
+						console.log("Prevent Defaulted.");
+					var otherGamepad = jumpStart.gamepads.find(function(t)
+					{
+						return ( t.mapping === jumpStart.gamepad.mapping && t !== jumpStart.gamepad );
+					});
+
+					if( !!otherGamepad )
+					{
+						PreventGamepad(jumpStart.gamepad);
+						PreventGamepad(otherGamepad);
+					}
+				}
+				else
+				{
+					var preventAxis = [];
+					var numAxes = jumpStart.gamepad.axes.length;
+					for( var i= 0; i < numAxes; i++ )
+						preventAxis.push(true);
+
+					var preventButtons = [];
+					var numButtons = jumpStart.gamepad.buttons.length;
+					for( var i= 0; i < numButtons; i++ )
+						preventButtons.push(true);
+
+					if( jumpStart.isAltspace && typeof jumpStart.gamepad.preventDefault === "function" )
+						jumpStart.gamepad.preventDefault(preventAxis, preventButtons);
+				}
 			}
 
 			// FIXME: why isn't this calling itself anymore???
@@ -196,6 +238,25 @@ jumpStartBehavior({
 					bullet.userData.speed = 120.0;
 					bullet.userData.goodTime = 2.0;
 					bullet.userData.deathRotate = new THREE.Vector3(Math.random() * 2.0 * Math.PI * (Math.random() > 0.5) ? 1.0 : -1.0, Math.random() * 2.0 * Math.PI * (Math.random() > 0.5) ? 1.0 : -1.0, Math.random() * 2.0 * Math.PI * (Math.random() > 0.5) ? 1.0 : -1.0);
+					bullet.userData.team = vehicle.syncData.rcdm.team;
+					bullet.userData.firedById = vehicle.syncData.rcdm.operatorId;
+					bullet.userData.firedByName = vehicle.syncData.rcdm.operatorName;
+					bullet.userData.firedByVehicle = vehicle;
+					bullet.userData.power = 10;
+
+					jumpStart.behaviors.rcdm.playerBullets[bullet.uuid] = bullet;
+
+					bullet.addEventListener("remove", function()
+					{
+						delete jumpStart.behaviors.rcdm.playerBullets[this.uuid];
+					});
+
+					bullet.userData.onDamage = function()
+					{
+						// create the explosion
+						jumpStart.behaviors.rcdm.createExplosion.call(this);
+						jumpStart.removeInstance(this);
+					};
 
 					bullet.applyBehavior("asyncModel", {"modelFile": "models/player_laser", "callback": function(visualObject)
 						{
@@ -366,16 +427,25 @@ jumpStartBehavior({
 					target.unapplyBehavior("physics");
 
 				target.sync();
+
+				if( target.userData.consumable )//.userData.powerupType === "guns" )
+				{
+					vehicle.syncData.rcdm.clawState = "retracting";
+					vehicle.sync();
+				}
 			}
 		},
 		"ungraspClaw": function(vehicle, oldGripped)
 		{
 			var victim = jumpStart.behaviors.graspable.objects[oldGripped];
-			if( vehicle.ownerID === jumpStart.localUser.userID )
+			if( !!victim && !!jumpStart.objects[victim.uuid] )
 			{
-				victim.ownerID = jumpStart.localUser.userID;
-				victim.applyBehavior("physics", {"physicsScale": 0.8});
-				victim.sync();
+				if( vehicle.ownerID === jumpStart.localUser.userID )
+				{
+					victim.ownerID = jumpStart.localUser.userID;
+					victim.applyBehavior("physics", {"physicsScale": 0.8});
+					victim.sync();
+				}
 			}
 		},
 		"createClaw": function(vehicle)
@@ -575,6 +645,7 @@ jumpStartBehavior({
 		},
 		"spawnBehavior": function(isInitialSync)
 		{
+			console.log("chopper spawned!");
 			this.userData.rcdm = {
 				"oldClawState": "none",
 				"oldClawGripped": "",
@@ -642,17 +713,165 @@ jumpStartBehavior({
 			// collect what is gripped, or destroy the claw
 			if( vehicle.ownerID === jumpStart.localUser.userID )
 			{
-				vehicle.syncData.rcdm.clawState = "none";
-				vehicle.sync();
+				// consume or drop object.
+				var clawFade;
+				var target = jumpStart.behaviors.graspable.objects[vehicle.syncData.rcdm.clawGripped];
+				if( !!target )
+				{
+					if( target.userData.consumable )
+					{
+						jumpStart.removeInstance(target);
+						vehicle.userData.rcdm.clawDelay = 1.0;
+						vehicle.syncData.rcdm.clawGripped = "";
+						clawFade = true;
+					}
+					else
+						clawFade = false;
+				}
+				else
+					clawFade = true;
+
+				if( clawFade )
+				{
+					vehicle.syncData.rcdm.clawState = "none";
+					vehicle.sync();
+				}
 			}
 		},
 		"tickBehavior": function()
 		{
 			// destroy us if we go out of bounds
-			if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )	// && this.ownerID === jumpStart.localUser.userID )
+			if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) && this.ownerID === jumpStart.localUser.userID )
 			{
 				jumpStart.removeInstance(this);
 				return;
+			}
+
+			if( this.userData.rcdm.oldHealth !== this.syncData.rcdm.health )
+			{
+				this.userData.rcdm.oldHealth = this.syncData.rcdm.health;
+
+				if( this.syncData.rcdm.health <= 0 && this.ownerID === jumpStart.localUser.userID )
+				{
+					jumpStart.removeInstance(this);
+					return;
+				}
+			}
+
+			// check for bullet collision
+			//var vehicleType;
+			//var vehicleTypeName;
+			var i, bullet, goodBodyRadius, hitCheckOrder, j, part, goodPartRadius;
+			//var originalPosition = new THREE.Vector3();
+			//var originalQuaternion = new THREE.Quaternion();
+			var playerBullets = Object.keys(jumpStart.behaviors.rcdm.playerBullets);
+			for( i = 0; i < playerBullets.length; i++ )
+			{
+				bullet = jumpStart.behaviors.rcdm.playerBullets[playerBullets[i]];
+
+				if( !!!bullet )
+					continue;
+
+				if( bullet.userData.firedById === this.ownerID )
+					continue;
+
+				goodBodyRadius = (!!this.boundingSphere) ? this.boundingSphere.radius : 10.0;
+				if( bullet.position.distanceTo(this.position) < goodBodyRadius * 0.7 )
+				{
+					var amount =jumpStart.behaviors.rcdm.onDamage.call(this, bullet.userData.power);
+					if( this.ownerID === jumpStart.localUser.userID )
+						console.log(this.syncData.rcdm.operatorName + " got damaged for " + amount + " by " + bullet.userData.firedByName);
+						//console.log(this);
+						//console.log(this.syncData.rcdm.operatorId + " got damaged for " + amount + " by " + bullet.userData.firedByName);
+						
+					if( typeof bullet.userData.onDamage === "function" )
+						bullet.userData.onDamage.call(bullet);
+
+					/*
+					// trigger shield impact NOW if this vehicle has shields
+					// NOTE: shields should only block ENEMY bullets, not friendly bullets (check bullet.userData.team)
+					if( false )
+					{
+						// FIXME: do work
+					}
+					else
+					{
+						// otherwise check for collision with a specific part
+						// check in increasing order of hit radius so that smaller parts can be hit properly
+						hitCheckOrder = Object.keys(this.userData.rcdm.parts);
+						hitCheckOrder.sort(function(a, b)
+						{
+							var partA = this.userData.rcdm.parts[a];
+							var partB = this.userData.rcdm.parts[b];
+							var radiusA = (!!partA.boundingSphere) ? partA.boundingSphere.radius : 10.0;
+							var radiusB = (!!partB.boundingSphere) ? partB.boundingSphere.radius : 10.0;
+
+							if( radiusA < radiusB )
+								return -1;
+							else if( radiusA > radiusB )
+								return 1;
+							else
+								return 0;
+						}.bind(this));
+
+						for( j = 0; j < hitCheckOrder.length; j++ )
+						{
+							// disable all parts execpt for BODY for now
+							if( hitCheckOrder[j] === "body" && hitCheckOrder.length !== 1 )
+								continue;
+
+							part = this.userData.rcdm.parts[hitCheckOrder[j]];
+							goodPartRadius = (!!part.boundingSphere) ? part.boundingSphere.radius : 10.0;
+							if( bullet.getWorldPosition().distanceTo(part.getWorldPosition()) < goodPartRadius * 0.7 )
+							{
+								// its within radius, check for height
+								//originalPosition.copy(bullet.position);
+								//originalQuaternion.copy(bullet.quaternion);
+
+								//bullet.
+
+								// PART HAS BEEN HIT!!
+								console.log("PART HIT!! " + bullet.getWorldPosition().distanceTo(part.getWorldPosition()) + ", " + goodPartRadius);
+
+								vehicleTypeName = this.syncData.rcdm.custom.vehicleTypeName;
+								vehicleType = jumpStart.behaviors.rcdm.getVehicleType(vehicleTypeName);
+
+								// if the part has a damage handler, use it
+								var amount = -1;
+								var didCollide = false;
+								if( typeof vehicleType.parts[hitCheckOrder[j]].onDamage === "function" )
+								{
+									if( this.ownerID === jumpStart.localUser.userID )
+										amount = vehicleType.parts[hitCheckOrder[j]].onDamage.call(part);
+
+									didCollide = true;
+								}
+								else if( typeof vehicleType.parts.body.onDamage === "function" )	// otherwise use the body's handler
+								{
+									if( this.ownerID === jumpStart.localUser.userID )
+										amount = vehicleType.parts.body.onDamage.call(part);
+
+									didCollide = true;
+								}
+
+								if( didCollide )
+								{
+									if( this.ownerID === jumpStart.localUser.userID )
+										console.log(this.syncData.rcdm.operatorName + "'s " + hitCheckOrder[j] + " got damaged for " + amount + " by " + bullet.userData.firedByName);
+									
+									if( typeof bullet.userData.onDamage === "function" )
+									{
+										bullet.userData.onDamage.call(bullet);
+										//jumpStart.removeInstance(bullet);
+									}
+
+									break;
+								}
+							}
+						}
+					}
+					*/
+				}
 			}
 
 			// recharge the claw
@@ -683,8 +902,8 @@ jumpStartBehavior({
 				{
 					if( this.userData.rcdm.claw )
 					{
-						this.userData.rcdm.wire.applyBehavior("shrinkRemove", {"speed": 2.0});
-						this.userData.rcdm.claw.applyBehavior("shrinkRemove", {"speed": 2.0});
+						this.userData.rcdm.wire.applyBehavior("shrinkRemove", {"speed": 2.0, "localMode": true});
+						this.userData.rcdm.claw.applyBehavior("shrinkRemove", {"speed": 2.0, "localMode": true});
 						this.userData.rcdm.clawDelay = 2.0;
 					}
 				}
@@ -715,12 +934,15 @@ jumpStartBehavior({
 			// copy default part settings from the vehicleType
 			var x, defaultPart, part, y;
 			for( x in defaultParts )
-			{
+			{				
 				part = {};
 				defaultPart = defaultParts[x];
 
 				for( y in defaultPart )
 				{
+					if( typeof defaultPart[y] === "function" )
+						continue;
+
 					if( typeof defaultPart[y].clone === "function" )
 						part[y] = defaultPart[y].clone();
 					else
@@ -753,6 +975,62 @@ jumpStartBehavior({
 			}
 
 			return parts;
+		},
+		"onDamage": function(amount)
+		{
+			//var amount = 10;
+			if( this.ownerID === jumpStart.localUser.userID )
+			{
+				console.log("damaged " + this.syncData.rcdm.health);
+				//this.syncData.rcdm.operatorName = "hitttt";
+				this.syncData.rcdm.health = this.syncData.rcdm.health - amount;
+				this.sync();//{"transform": truesyncData": true});
+			}
+
+			return amount;
+		},
+		"createExplosion": function()
+		{
+			//var explosion = jumpStart.spawnInstance(null);
+			//explosion.applyBehavior("asyncModel", {"modelFile": "models/explosion"});
+			var geometry = new THREE.SphereGeometry( 1.0, 5, 8, 0);
+			var material = new THREE.MeshBasicMaterial( {color: 0xff0000, transparent: true, opacity: 0.5} );
+			var explosionObject = new THREE.Mesh( geometry, material );
+			var explosion = jumpStart.spawnInstance(null, {"object": explosionObject});
+			explosion.position.copy(jumpStart.world.worldToLocal(this.getWorldPosition()));
+			explosion.scale.set(10, 10, 10);
+
+			explosion.userData.scaleSize = 0.01;
+			explosion.userData.scaleDirection = 1;
+			explosion.userData.maxScale = explosion.scale.x;
+			explosion.userData.speed = 10.0;
+			explosion.scale.set(explosion.userData.scaleSize, explosion.userData.scaleSize, explosion.userData.scaleSize);
+
+			explosion.addEventListener("tick", function()
+			{
+				if( this.userData.scaleDirection === 1 )
+				{
+					this.userData.scaleSize += this.userData.speed * jumpStart.deltaTime;
+					if( this.userData.scaleSize >= this.userData.maxScale )
+						this.userData.scaleDirection = -1;
+				}
+				else
+				{
+					this.userData.scaleSize -= 2.0 * this.userData.speed * jumpStart.deltaTime;
+
+					if( this.userData.scaleSize <= 0.001 )
+					{
+						jumpStart.removeInstance(this);
+						return;
+					}
+				}
+
+				this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+				this.rotateY(5.0 * jumpStart.deltaTime);
+				this.rotateX(15.0 * jumpStart.deltaTime);
+			});
+
+			return explosion;
 		}
 	}
 });

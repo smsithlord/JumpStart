@@ -306,7 +306,7 @@ jumpStartBehavior({
 
 			if( table.syncData.hoverBlasterTable.ownerID === jumpStart.localUser.userID )
 			{
-				if( jumpStart.gamepad.mapping === "steamvr" )
+				if( jumpStart.gamepad.mapping === "steamvr" || jumpStart.gamepad.mapping === "touch" )
 				{
 					//var preventButtons = [];
 
@@ -3265,7 +3265,7 @@ jumpStartBehavior({
 				var position, quaternion;
 				if( jumpStart.activeGamepadIndex > -1 )
 				{
-					if( jumpStart.gamepad.mapping === "steamvr" )
+					if( jumpStart.gamepad.mapping === "steamvr" || jumpStart.gamepad.mapping === "touch" )
 					{
 						var pos = jumpStart.gamepad.position;
 						var rot = jumpStart.gamepad.rotation;

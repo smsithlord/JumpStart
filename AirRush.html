@@ -1,0 +1,2817 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Nature Picnic Attack</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			var img = document.createElement("img");
+			img.id = "weave";
+			img.src = "assets/AirRush/misc/weave.jpg";
+			img.style.cssText = "position: absolute; visibility: hidden;";
+			img.hasLoaded = false;
+			img.addEventListener("load", function()
+			{
+				this.hasLoaded = true;
+			});
+
+
+			//var debugSlate = document.createElement("debugSlate");
+			//debugSlate.style.cssText = "text-align: left; background-color: #000; position: absolute; bottom: 200px; left: 0; font-size: 20px; font-weight: 900; font-face: Arial; padding: 20px;";
+			//debugSlate.innerHTML = "<u>DEBUG LOG</u>";
+
+			loadJumpStart({
+				"appID": "AirRush",
+				"multiuserOnly": false,
+				"sceneScale": 1.0,
+				"enclosureOnly": true,
+				"scaleWithEnclosure": true,
+				"debug": {"showCursorPlanes": false}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModelsEx(["models/enclosureBounds", "models/terrain", "models/water", "models/clouds", "models/rocks", "models/trunks", "models/canopy", "models/thai", "models/enemy_laser", "models/body", "models/beak", "models/eyes", "models/wing0Base", "models/wing0Tip", "models/wing1Base", "models/wing1Tip", "models/beeWing0", "models/beeWing1", "models/beeBlack", "models/beeYellow", "models/beeEyes", "models/blanketWhite", "models/blanketRed", "models/basketBlack", "models/basketDark", "models/basketLight", "models/stone"], function()
+				{
+					//debugSlate.innerHTML += "<br />All models loaded.";
+					jumpStart.doneCaching();
+				});
+
+/*
+				// Async
+				jumpStart.loadModels(["models/enclosureBounds", "models/terrain", "models/water", "models/clouds", "models/rocks", "models/trunks", "models/canopy", "models/thai", "models/enemy_laser", "models/body", "models/beak", "models/eyes", "models/wing0Base", "models/wing0Tip", "models/wing1Base", "models/wing1Tip", "models/beeWing0", "models/beeWing1", "models/beeBlack", "models/beeYellow", "models/beeEyes", "models/blanketWhite", "models/blanketRed", "models/basketBlack", "models/basketDark", "models/basketLight"]).then(function()
+				{
+					jumpStart.doneCaching();
+				});
+*/
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				//debugSlate.innerHTML += "<br />Initialize called.";
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			function throbHelper()
+			{
+				// don't throb if we're bubbling in still
+				if( !!this.userData.bubbleIn && this.userData.bubbleIn.scaleDirection !== 0 )
+					return;
+
+				var i;
+				var axes = this.userData.throb.axes;
+				var amount = this.userData.throb.rate * jumpStart.deltaTime * this.userData.throb.direction;
+				if( this.scale[axes[0]] + amount > this.userData.throb.maxScale )
+				{
+					this.userData.throb.direction = -1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.maxScale;
+				}
+				else if( this.scale[axes[0]] + amount < this.userData.throb.minScale )
+				{
+					this.userData.throb.direction = 1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.minScale;
+				}
+				else
+				{
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] += amount;
+				}
+			}
+
+			function makeThrob(options)
+			{
+				// Throb
+				// FIX ME: This should be a behavior, and needs to have info split between userData and syncData to do so.
+				options = {
+					"rate": (!!options.rate) ? options.rate : 25.0,
+					"maxScale": (!!options.maxScale) ? options.maxScale : 14.0,
+					"minScale": (!!options.minScale) ? options.minScale : 8.0,
+					"direction": (!!options.direction) ? options.direction : 1.0,
+					"axes": (!!options.axes) ? options.axes : "xyz"
+				};
+				this.userData.throb = options;
+
+				this.addEventListener("tick", throbHelper);
+			}
+
+			function unmakeThrob()
+			{
+				if( !!this.userData.throb )
+				{
+					delete this.userData.throb;
+					this.removeEventListener("tick", throbHelper);
+				}
+			}
+
+			function spawn3DText(text, color, options)
+			{
+				/*
+				var params = {
+					size: 10.0,
+					height: 1,
+					font: jumpStart.font,// "helvetiker",
+					curveSegments: (jumpStart.isGearVR) ? 1 : 2
+				};
+				*/
+
+				function paintVertexLight(geometry)
+				{
+					function generateColor(amp)
+					{
+						///* GREEN AND YELLOW
+						var colorNumber = 255 - parseInt(255 * amp);
+						if( colorNumber < 0 )
+							colorNumber = 0;
+						else if( colorNumber > 255 )
+							colorNumber = 255;
+
+						var colorText = "rgb(" + colorNumber + ", 255, 0)";
+						//*/
+
+						/* RED & BRIGHT RED/WHITE
+						var colorNumber = 255 - parseInt(255 * amp);
+						if( colorNumber < 0 )
+							colorNumber = 0;
+						else if( colorNumber > 255 )
+							colorNumber = 255;
+
+						var colorText = "rgb(255, " + colorNumber + ", " + colorNumber + ")";
+						*/
+
+						var color = new THREE.Color(colorText);
+						return color;
+					}
+
+					var yMax = geometry.boundingBox.max.y - geometry.boundingBox.min.y;
+
+					var count = geometry.faces.length;
+					var i, face, vertex, normal, vertexNormal, dot, color, yPos;
+					for( i = 0; i < count; i++ )
+					{
+						face = geometry.faces[i];
+						vertex = geometry.vertices[face.b];
+
+						color = generateColor((vertex.y / yMax));
+						face.vertexColors[0] = color;
+						face.vertexColors[1] = color;
+						face.vertexColors[2] = color;
+					}
+				}
+
+				var geometry = new THREE.TextGeometry(text, options);
+				//var material = new THREE.MeshBasicMaterial({"color": color});
+				var material = new THREE.MeshBasicMaterial({"color": color, "vertexColors": THREE.VertexColors});
+				var mesh = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				var textContainer = jumpStart.spawnInstance(null);
+				var textObject = jumpStart.spawnInstance(null, {"object": mesh, "parent": textContainer})
+
+				var offset = new THREE.Vector3().copy(displacement);
+				offset.multiply(textObject.scale);
+				textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				paintVertexLight(geometry);
+				return textContainer;
+			}
+
+			function bakeVertexLight(object, light)
+			{
+				function getLightValue(dot, dist)
+				{
+					var falloff = (!!light.userData.falloff) ? light.userData.falloff : 750.0;
+					var dist = dist / falloff;
+					var intensity = 1 / (dist * dist);
+
+					var midLight = 255 / 2.0;
+					var maxLight = 255 - midLight;
+					var colorNumber = parseInt((midLight + (maxLight * dot)) * intensity);
+
+					if( colorNumber > 255 )
+						colorNumber = 255;
+					else if( colorNumber < 0 )
+						colorNumber = 0;
+
+					return colorNumber / 255.0;
+				}
+
+				if( !!!object.geometry )
+				{
+					object.traverse(function(child)
+					{
+						if( !!child.geometry )
+							object = child;
+					});
+
+					if( !!!object.geometry )
+						return;
+				}
+
+				object.parent.updateMatrixWorld();
+
+			//	var dist = object.getWorldPosition().distanceTo(light.getWorldPosition());
+				//var dist = new THREE.Vector3();
+
+				var count = (!!!object.geometry.attributes) ? object.geometry.faces.length : object.geometry.attributes.position.count;
+
+				var keyLetters = ["a", "b", "c"];	// for structured geometry
+				var displacement = new THREE.Vector3();	// for array geometry
+				var vertexPosition = new THREE.Vector3();
+				var vertexNormal = new THREE.Vector3();
+				var normalLook = new THREE.Vector3();
+				var lightLook = new THREE.Vector3();
+
+				var normals = (!!object.geometry.attributes) ? object.geometry.attributes.normal.array : undefined;
+				
+				var positions = (!!object.geometry.attributes) ? object.geometry.attributes.position.array : undefined;
+
+				var i, face, j, dot, value;
+				for( i = 0; i < count; i++ )
+				{
+					if( !!!object.geometry.attributes )
+						face = object.geometry.faces[i];
+
+					for( j = 0; j < 3 || !!object.geometry.attributes; j++ )
+					{
+						// get vertexPosition
+						if(!!!object.geometry.attributes)
+							vertexPosition.copy(object.geometry.vertices[face[keyLetters[j]]]);
+						else
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+						vertexPosition.applyMatrix4(object.matrixWorld);
+
+						if( object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexPosition);
+
+						var dist = vertexPosition.distanceTo(light.position);
+
+						// get vertexNormal
+						if( !!!object.geometry.attributes )
+						{
+							vertexNormal.copy(object.geometry.vertices[face[keyLetters[j]]]);
+							vertexNormal.add(face.vertexNormals[j]);
+						}
+						else
+						{
+							displacement.set(normals[(3*i) + 0], normals[(3*i) + 1], normals[(3*i) + 2]);
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+							vertexNormal.add(displacement);
+						}
+
+						vertexNormal.applyMatrix4(object.matrixWorld);
+
+						if( object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexNormal);
+
+						// get vertexNormalLook
+						normalLook.copy(vertexPosition);
+						normalLook.sub(vertexNormal);
+						normalLook.normalize();
+
+						// get vertexLightLook
+						lightLook.copy(vertexPosition);
+						lightLook.sub(light.position);
+						lightLook.normalize();
+
+						// get dot
+						dot = normalLook.dot(lightLook);
+						value = getLightValue(dot, dist);	// a light value between 0.0 and 1.0
+
+						if( !!!object.geometry.attributes )
+						{
+							value = parseInt(255 * value);
+							value = "rgb(" + value + ", " + value + ", " + value + ")";
+
+							if( !!face.vertexColors[j] )
+							{
+								face.vertexColors[j].set(value);
+							}
+							else
+								face.vertexColors[j] = new THREE.Color(value);
+
+							object.geometry.colorsNeedUpdate = true;
+						}
+						else
+						{
+							object.geometry.attributes.color.array[(3*i) + 0] = value;
+							object.geometry.attributes.color.array[(3*i) + 1] = value;
+							object.geometry.attributes.color.array[(3*i) + 2] = value;
+							object.geometry.attributes.color.needsUpdate = true;
+							break;
+						}
+					}
+				}
+			}
+
+			function showScore()
+			{
+				var params = {
+					size: 300.0,
+					height: 50.0,
+					font: jumpStart.font,// "helvetiker",
+					curveSegments: (jumpStart.isGearVR) ? 1 : 4
+				};
+
+				g_scoreContainer = spawn3DText("" + g_ammoObjectLeft.userData.number, "white", params);
+				//g_scoreContainer = spawn3DText("420", "white", params);
+				g_scoreContainer.position.y = 300.0;
+				g_scoreContainer.rotateY(Math.PI / -4.0);
+
+				g_scoreContainer.applyBehavior("bubbleIn", {"maxScale": 0.9, "speed": 0.8});
+				makeThrob.call(g_scoreContainer, {"minScale": 0.9, "maxScale": 1.1, "rate": 0.05, "direction": -1.0});
+				
+				//makeThrob.call(imageObject, {"minScale": 0.65, "maxScale": 0.75, "rate": 0.05, "direction": -1.0});
+
+				setTimeout(function()
+				{
+					// clear the playfield, but leave the top score
+					var i;
+					var laserKeys = Object.keys(playerLasers);
+					for( i = 0; i < laserKeys.length; i++ )
+						playerLasers[laserKeys[i]].applyBehavior("shrinkRemove");
+
+
+					var orbKeys = Object.keys(g_orbs);
+					for( i = 0; i < orbKeys.length; i++ )
+						g_orbs[orbKeys[i]].applyBehavior("shrinkRemove");
+
+					// TODO: Make dispensers automatically clean up everything they've spawned. (MAYBE)
+					var beeKeys = Object.keys(g_bees);
+					for( i = 0; i < beeKeys.length; i++ )
+						g_bees[beeKeys[i]].applyBehavior("shrinkRemove");
+
+					var birdKeys = Object.keys(g_birds);
+					for( i = 0; i < birdKeys.length; i++ )
+						g_birds[birdKeys[i]].applyBehavior("shrinkRemove");
+
+					var gatorKeys = Object.keys(g_gators);
+					for( i = 0; i < gatorKeys.length; i++ )
+						g_gators[gatorKeys[i]].applyBehavior("shrinkRemove");
+
+					var dispenserKeys = Object.keys(g_dispensers);
+					for( i = 0; i < dispenserKeys.length; i++ )
+						jumpStart.removeInstance(g_dispensers[dispenserKeys[i]]);
+
+					setTimeout(function()
+					{
+						createStartButton();
+					}, 6000);
+				}, 4000);
+			}
+//setTimeout(function()
+//{
+//	showScore();
+//}, 3000);
+			function spawnBeeHorde()
+			{
+				var beeHorde = jumpStart.spawnInstance();
+				g_dispensers[beeHorde.uuid] = beeHorde;
+				beeHorde.addEventListener("remove", function()
+				{
+					delete g_dispensers[this.uuid];
+				});
+				beeHorde.userData.maxInterval = 3.0;
+
+				beeHorde.userData.spawnEnemyBee = function()
+				{
+					var enemyBee = jumpStart.spawnInstance();
+					g_bees[enemyBee.uuid] = enemyBee;
+/*
+					if( !g_hasHands )
+					{
+						var hitBoxMesh = new THREE.Mesh(
+							new THREE.BoxGeometry(60, 60, 20),
+							new THREE.MeshBasicMaterial({"color": "#ff2277"})//{"transparent": true, "opacity": 0})
+						);
+
+						var hitBox = jumpStart.spawnInstance(null, {"object": hitBoxMesh, "parent": enemyBee});
+						hitBox.addEventListener("tick", function()
+						{
+							if( g_cannon.getWorldPosition().distanceTo(this.getWorldPosition()) < 400.0 )
+								jumpStart.removeInstance(this);
+						});
+
+						hitBox.blocksLOS = true;
+						jumpStart.makeCollide(hitBox);
+						hitBox.addEventListener("cursordown", cannonFire);
+					}
+					*/
+
+					enemyBee.addEventListener("remove", function()
+					{
+						jumpStart.removeInstance(this.userData.bulb);
+						delete g_bees[this.uuid];
+					});
+
+					enemyBee.position.copy(this.position);
+					enemyBee.quaternion.copy(this.quaternion);
+
+					var maxBound = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
+					var maxDist = maxBound * 1.0;
+					var sign = (Math.random() > 0.5) ? 1.0 : -1.0;
+					enemyBee.translateX(maxBound * Math.random() * sign);
+					enemyBee.translateZ(maxBound * Math.random());
+
+					// make sure the bee isn't placed out of bounds
+					if( enemyBee.position.x > maxBound )
+						enemyBee.position.x = maxBound;
+					else if( enemyBee.position.x < -maxBound )
+						enemyBee.position.x = -maxBound;
+
+					if( enemyBee.position.z > maxBound )
+						enemyBee.position.z = maxBound;
+					else if( enemyBee.position.z < -maxBound )
+						enemyBee.position.z = -maxBound;
+
+					var bulb = jumpStart.spawnInstance(null);
+					//bulb.position.copy(this.position);
+					//bulb.quaternion.copy(this.quaternion);
+					//bulb.translateZ(-200);
+					//bulb.translateY(200);
+					bulb.userData.falloff = 8.0;
+					this.userData.bulb = bulb;
+					this.userData.alreadyBaked = false;
+
+					enemyBee.userData.body = null;
+					enemyBee.addEventListener("spawn", function()
+					{
+						this.updateMatrixWorld();	// so that it gets properly lit
+
+						bulb.position.copy(this.position);
+						//this.quaternion.copy(this.)
+						var body = jumpStart.spawnInstance("models/beeBlack", {"parent": this});
+						//body.children[0].geometry = body.children[0].geometry.clone();	// clone for unique lighting conditions
+						if( !this.userData.alreadyBaked )
+							bakeVertexLight(body.children[0], bulb);
+
+						body.userData.dead = false;
+						this.userData.body = body;
+
+						var yellow = jumpStart.spawnInstance("models/beeYellow", {"parent": body});
+						//yellow.children[0].geometry = yellow.children[0].geometry.clone();	// clone for unique lighting conditions
+						if( !this.userData.alreadyBaked )
+							bakeVertexLight(yellow.children[0], bulb);
+
+						var eyes = jumpStart.spawnInstance("models/beeEyes", {"parent": body});
+
+						var wing0 = jumpStart.spawnInstance("models/beeWing0", {"parent": body});
+						wing0.position.set(3.63, 5.956, -6.929);
+						//wing0.children[0].geometry = wing0.children[0].geometry.clone();	// clone for unique lighting conditions
+						bulb.userData.falloff = 28;
+						if( !this.userData.alreadyBaked )
+							bakeVertexLight(wing0.children[0], bulb);
+
+						wing0.userData.direction = -1.0;
+						wing0.addEventListener("tick", function()
+						{
+							if( this.parent.userData.dead )
+							{
+								this.removeEventListener("tick", arguments.callee);
+								return;
+							}
+							else
+							{
+								var speed = 3.0;
+								var max = 0.0;
+								var min = -0.4;
+								this.rotation.y += speed * jumpStart.deltaTime * this.userData.direction;
+								if( this.rotation.y > max || this.rotation.y < min )
+								{
+									this.rotation.y = (this.userData.direction > 0) ? max : min;
+									this.userData.direction *= -1.0;
+								}
+							}
+						});
+
+						var wing1 = jumpStart.spawnInstance("models/beeWing1", {"parent": body});
+						wing1.position.set(-3.63, 5.956, -6.929);
+
+						//wing1.children[0].geometry = wing1.children[0].geometry.clone();	// clone for unique lighting conditions
+						bulb.userData.falloff = 28;
+						if( !this.userData.alreadyBaked )
+							bakeVertexLight(wing1.children[0], bulb);
+
+						wing1.userData.direction = 1.0;
+						wing1.addEventListener("tick", function()
+						{
+							if( this.parent.userData.dead )
+							{
+								this.removeEventListener("tick", arguments.callee);
+								return;
+							}
+							else
+							{
+								var speed = 3.0;
+								var max = 0.4;
+								var min = 0.0;
+								this.rotation.y += speed * jumpStart.deltaTime * this.userData.direction;
+								if( this.rotation.y > max || this.rotation.y < min )
+								{
+									this.rotation.y = (this.userData.direction > 0) ? max : min;
+									this.userData.direction *= -1.0;
+								}
+							}
+						});
+
+						this.userData.alreadyBaked = true;
+					});
+
+					enemyBee.addEventListener("tick", function()
+					{
+						if( isDead )
+							return;
+
+						var speed = 40.0;
+						this.translateZ(speed * jumpStart.deltaTime);
+
+						if( this.position.y < 60.0 )
+							this.position.y = 60.0;
+
+						if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+							jumpStart.removeInstance(this);
+
+						// check for end-case
+						if( this.position.distanceTo(g_basket.position) < 45.0 )
+						{
+							//g_hitTests++;
+							//console.log("Hits: " + g_hitTests + ". End distance for " + this.uuid + " is (" + (100.0 * jumpStart.deltaTime) + "): ");
+							//console.log(this.position.distanceTo(g_basket.position));
+							//console.log("End distance is: ");
+							//console.log(this.position.distanceTo(g_basket.position));
+							//jumpStart.removeInstance(this);
+							isDead = true;
+							showScore();
+							return;
+						}
+						else
+						{
+							// slightly look at basket
+							var oldQuaternion = this.quaternion.clone();
+							this.lookAt(g_basket.position);
+							this.quaternion.slerp(oldQuaternion, 0.99);
+
+							function destroy(laser, force, hand)
+							{
+								hand = "Right";
+								if( !!laser && g_hasHands)
+									jumpStart.removeInstance(laser);
+
+								//createExplosion(this);
+								//jumpStart.removeInstance(this);
+
+								/*
+								var dummy = jumpStart.spawnInstance("models/thai");
+								dummy.position.copy(this.position);
+								dummy.scale.copy(this.scale);
+								dummy.quaternion.copy(this.quaternion);
+								*/
+
+								var dummy;
+								if( this.userData.body )
+								{
+									spawnOrb.call(this, hand);
+									spawnOrb.call(this, "Left");
+
+									dummy = this.userData.body;
+									dummy.userData.dead = true;
+									jumpStart.world.add(dummy);
+									dummy.position.copy(this.position);
+									dummy.quaternion.copy(this.quaternion);
+
+									if( !!force )
+										dummy.applyBehavior("physics", {"force": force});
+									else
+										dummy.applyBehavior("physics");
+									dummy.userData.lifeTimer = 3.0;
+									dummy.addEventListener("tick", function()
+									{
+										this.userData.lifeTimer -= jumpStart.deltaTime;
+
+										if( this.userData.lifeTimer <= 0 )
+										{
+											//jumpStart.removeInstance(this);
+											this.applyBehavior("shrinkRemove");
+											this.removeEventListener("tick", arguments.callee);
+										}
+										else if( this.position.y < 40.0 && !!this.behaviors.physics )
+										{
+											//this.userData.dead = true;
+											this.unapplyBehavior("physics");
+										}
+									});
+								}
+
+								jumpStart.removeInstance(this);
+							}
+
+							// check for collision w/ playerLasers
+							var worldPos = this.getWorldPosition();
+							var playerLaserKeys = Object.keys(playerLasers);
+							var max = playerLaserKeys.length;
+							var dist = (g_hasHands) ? 20.0 : 50.0;
+							var i, x, laser;
+							for( i = 0; i < max; i++ )
+							{
+								x = playerLaserKeys[i];
+								laser = playerLasers[x];
+
+								// check distance
+								if( laser.getWorldPosition().distanceTo(worldPos) < dist )
+								{
+									destroy.call(this, laser, undefined, laser.userData.hand);
+									return;
+								}
+							}
+
+							// check for collision w/ player hands
+							if( !!jumpStart.localUser.skeleton )
+							{
+								// use the base of the flip-off finger as the fist position (Hand0 is actually the wrist)
+								var rightHand = jumpStart.localUser.skeleton.getJoint("Middle", "Right", 1);
+								var leftHand = jumpStart.localUser.skeleton.getJoint("Middle", "Left", 1);
+
+								var force;
+								if( rightHand && jumpStart.world.worldToLocal(rightHand.position.clone()).distanceTo(this.position) < 20.0 )
+								{
+									force = this.position.clone();
+									force.sub(jumpStart.world.worldToLocal(rightHand.position.clone()));
+									force.multiplyScalar(0.1);
+
+									if( g_wristBand )
+									{
+										var instantVel = g_wristBand.position.clone().sub(g_wristBand.userData.prevPosition);
+										//instantVel.multiplyScalar(1.0);
+										force.add(instantVel);
+									}
+
+									destroy.call(this, undefined, force, "Right");
+								}
+								else if( leftHand && jumpStart.world.worldToLocal(leftHand.position.clone()).distanceTo(this.position) < 20.0 )
+								{
+									force = this.position.clone();
+									force.sub(jumpStart.world.worldToLocal(leftHand.position.clone()));
+									force.multiplyScalar(0.1);
+
+									if( g_wristBandLeft )
+									{
+										var instantVel = g_wristBandLeft.position.clone().sub(g_wristBandLeft.userData.prevPosition);
+										//instantVel.multiplyScalar(1.0);
+										force.add(instantVel);
+									}
+
+									destroy.call(this, undefined, force, "Left");
+								}
+							}
+						}
+					});
+
+					return enemyBee;
+				};
+
+					// DON'T DO THIS! it's invisible and/or for some reason.
+				//beeHorde.addEventListener("spawn", function()
+				//{
+				//	var enemyBee = this.userData.spawnEnemyBee.call(this);
+				//});
+
+				beeHorde.addEventListener("tick", function()
+				{
+					if( isDead )
+						return;
+
+					if( !!!this.userData.interval )
+						this.userData.interval = this.userData.maxInterval;
+
+					if( this.userData.interval === 0 )
+						return;
+
+					this.userData.interval -= jumpStart.deltaTime;
+
+					if( this.userData.interval <= 0 )
+					{
+						this.userData.interval = this.userData.maxInterval;
+						var enemyBee = this.userData.spawnEnemyBee.call(this);
+					}
+				});
+
+				return beeHorde;
+			}
+
+			function spawnGatorDispenser()
+			{
+				var gatorDispenser = jumpStart.spawnInstance();
+				g_dispensers[gatorDispenser.uuid] = gatorDispenser;
+				gatorDispenser.addEventListener("remove", function()
+				{
+					delete g_dispensers[this.uuid];
+				});
+
+				gatorDispenser.userData.maxInterval = 3.0;
+
+				gatorDispenser.userData.spawnGator = function()
+				{
+					var gator = jumpStart.spawnInstance();
+					g_gators[gator.uuid] = gator;
+					//gator.scale.set(0.8, 0.8, 0.8);
+					gator.position.copy(this.position);
+					gator.quaternion.copy(this.quaternion);
+
+					var range = 150;
+					if( Math.random() > 0.5 )
+						range *= -1.0;
+					gator.position.x += (range / 2.0) * Math.random();
+
+					//gator.userData.body = null;
+
+					gator.addEventListener("remove", function()
+					{
+						delete g_gators[this.uuid];
+					});
+/*
+					gator.addEventListener("tick", function()
+					{
+						if( isDead )
+							return;
+
+						this.translateZ(100.0 * jumpStart.deltaTime);
+					});
+*/
+					/*
+
+					enemyShip.addEventListener("spawn", function()
+					{
+					//	var tester = jumpStart.spawnInstance("models/thai", {"parent": this});
+					//	tester.position.x += 20.0;
+
+						var body = jumpStart.spawnInstance("models/body", {"parent": this});
+						body.userData.dead = false;
+						this.userData.body = body;
+
+						var eyes = jumpStart.spawnInstance("models/eyes", {"parent": body});
+						var beak = jumpStart.spawnInstance("models/beak", {"parent": body});
+
+						var wing0Base = jumpStart.spawnInstance("models/wing0Base", {"parent": body});
+						wing0Base.position.set(3.501, -4.198, 6.811);
+						wing0Base.userData.direction = 1.0;
+						wing0Base.addEventListener("tick", function()
+						{
+							if( this.parent.userData.dead )
+							{
+								var speed = 3.0;
+								var target = -1.3;
+								this.rotation.z -= speed * jumpStart.deltaTime;
+
+								if( this.rotation.z < target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+							{
+								var side = 1.0;
+								var speed = 1.0;
+								var max = 0.3;
+								var min = -1.0;
+								this.rotation.z += speed * jumpStart.deltaTime * this.userData.direction;
+								if( this.rotation.z > max || this.rotation.z < min )
+								{
+									this.rotation.z = (this.userData.direction > 0) ? max : min;
+									this.userData.direction *= -1.0;
+								}
+							}
+						});
+
+						var wing0Tip = jumpStart.spawnInstance("models/wing0Tip", {"parent": wing0Base});
+						wing0Tip.position.set(26.0, 19.0, 5.0);
+						wing0Tip.userData.base = wing0Base;
+						wing0Tip.addEventListener("tick", function()
+						{
+							if( this.parent.parent.userData.dead )
+							{
+								var speed = 4.0;
+								var target = -2.2;
+								this.rotation.z -= speed * jumpStart.deltaTime;
+
+								if( this.rotation.z < target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+								this.rotation.z += 2.0 * jumpStart.deltaTime * this.userData.base.userData.direction;
+						});
+
+						var wing1Base = jumpStart.spawnInstance("models/wing1Base", {"parent": body});
+						wing1Base.position.set(-3.501, -4.198, 6.811);
+						wing1Base.userData.direction = -1.0;
+						wing1Base.addEventListener("tick", function()
+						{
+							if( this.parent.userData.dead )
+							{
+								var speed = 2.9;
+								var target = 1.9;
+								this.rotation.z += speed * jumpStart.deltaTime;
+
+								if( this.rotation.z > target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+							{
+								var speed = 1.0;
+								var max = 1.0;
+								var min = -0.3;
+								this.rotation.z += speed * jumpStart.deltaTime * this.userData.direction;
+								if( this.rotation.z > max || this.rotation.z < min )
+								{
+									this.rotation.z = (this.userData.direction > 0) ? max : min;
+									this.userData.direction *= -1.0;
+								}
+							}
+						});
+
+						var wing1Tip = jumpStart.spawnInstance("models/wing1Tip", {"parent": wing1Base});
+						wing1Tip.position.set(-26.0, 19.0, 5.0);
+						wing1Tip.userData.base = wing1Base;
+						wing1Tip.addEventListener("tick", function()
+						{
+							if( this.parent.parent.userData.dead )
+							{
+								var speed = 3.9;
+								var target = 1.2;
+								this.rotation.z += speed * jumpStart.deltaTime;
+
+								if( this.rotation.z > target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+								this.rotation.z += 2.0 * jumpStart.deltaTime * this.userData.base.userData.direction;
+						});
+					});
+
+					// Look 45 degrees towards the attack corner
+					//var lookPos = enemyShip.position.clone();
+					//lookPos.x -= 100.0;
+					//lookPos.z += 100.0;
+					//enemyShip.lookAt(lookPos);
+*/
+					// tilt downward
+					//enemyShip.rotateX((Math.PI / 2.0) * 0.1);
+					gator.userData.turnDirection = 1.0;
+					gator.userData.turnPower = 0.25;
+					gator.userData.turnTime = 4.0;
+					gator.rotateY(Math.PI / -6.5);
+					gator.addEventListener("tick", function()
+					{
+						if( isDead )
+							return;
+
+						this.translateZ(20.0 * jumpStart.deltaTime);
+
+						if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+							jumpStart.removeInstance(this);
+
+
+						if( this.userData.turnDirection !== 0 && this.userData.turnTime > 0 )
+						{
+							this.userData.turnTime -= jumpStart.deltaTime;
+
+							this.rotateY(this.userData.turnPower * jumpStart.deltaTime * this.userData.turnDirection);
+
+							if( this.userData.turnTime < 0 )
+							{
+								this.userData.turnTime = 4.0;
+								this.userData.turnDirection *= -1.0;
+							}
+						}
+
+						// check if there's any dead shit in pouncing range
+						// DO WORK
+/*
+						function destroy(laser, force, hand)
+						{
+							hand = "Right";
+							
+							if( !!laser )
+								jumpStart.removeInstance(laser);
+
+							//var force;
+							//createExplosion(this);
+							//jumpStart.removeInstance(this);
+
+							var dummy;
+							if( this.userData.body )
+							{
+								spawnOrb.call(this, hand);
+								spawnOrb.call(this, "Left");
+
+								dummy = this.userData.body;
+								jumpStart.world.add(dummy);
+								dummy.position.copy(this.position);
+								dummy.quaternion.copy(this.quaternion);
+
+								if( !!force )
+									dummy.applyBehavior("physics", {"force": force});
+								else
+									dummy.applyBehavior("physics");
+								dummy.userData.lifeTimer = 3.0;
+								dummy.addEventListener("tick", function()
+								{
+									this.userData.lifeTimer -= jumpStart.deltaTime;
+
+									if( this.userData.lifeTimer <= 0 )
+									{
+										//jumpStart.removeInstance(this);
+										this.applyBehavior("shrinkRemove");
+										this.removeEventListener("tick", arguments.callee);
+									}
+									else if( this.position.y < 50.0 && !this.userData.dead )
+									{
+										this.userData.dead = true;
+										this.unapplyBehavior("physics");
+									}
+								});
+							}
+
+							console.log("Remove bad bird: " + this.uuid);
+							jumpStart.removeInstance(this);
+						}
+
+						// check for collision w/ playerLasers
+						var worldPos = this.getWorldPosition();
+						var playerLaserKeys = Object.keys(playerLasers);
+						var max = playerLaserKeys.length;
+						var i, x, laser;
+						for( i = 0; i < max; i++ )
+						{
+							x = playerLaserKeys[i];
+							laser = playerLasers[x];
+
+							// check distance
+							if( laser.getWorldPosition().distanceTo(worldPos) < 20.0 )
+							{
+								destroy.call(this, laser, undefined, laser.userData.hand);
+								return;
+							}
+						}
+
+						// check for collision w/ player hands
+						if( !!jumpStart.localUser.skeleton )
+						{
+							// use the base of the flip-off finger as the fist position (Hand0 is actually the wrist)
+							var rightHand = jumpStart.localUser.skeleton.getJoint("Middle", "Right", 1);
+							var leftHand = jumpStart.localUser.skeleton.getJoint("Middle", "Left", 1);
+
+							var force;
+							if( rightHand && jumpStart.world.worldToLocal(rightHand.position.clone()).distanceTo(this.position) < 26.0 )
+							{
+								force = this.position.clone();
+								force.sub(jumpStart.world.worldToLocal(rightHand.position.clone()));
+								force.multiplyScalar(0.1);
+
+								if( g_wristBand )
+								{
+									var instantVel = g_wristBand.position.clone().sub(g_wristBand.userData.prevPosition);
+									//instantVel.multiplyScalar(1.0);
+									force.add(instantVel);
+								}
+
+								destroy.call(this, undefined, force, "Right");
+								return;
+							}
+							else if( leftHand && jumpStart.world.worldToLocal(leftHand.position.clone()).distanceTo(this.position) < 26.0 )
+							{
+								force = this.position.clone();
+								force.sub(jumpStart.world.worldToLocal(leftHand.position.clone()));
+								force.multiplyScalar(0.1);
+
+								if( g_wristBandLeft )
+								{
+									var instantVel = g_wristBandLeft.position.clone().sub(g_wristBandLeft.userData.prevPosition);
+									//instantVel.multiplyScalar(1.0);
+									force.add(instantVel);
+								}
+
+								destroy.call(this, undefined, force, "Left");
+								return;
+							}
+						}
+						*/
+					});
+
+					return gator;
+				};
+
+				//shipDispenser.addEventListener("spawn", function()
+				//{
+				//	var enemyShip = this.userData.spawnEnemyShip.call(this);
+				//});
+
+				gatorDispenser.addEventListener("tick", function()
+				{
+					if( isDead )
+						return;
+
+					if( !!!this.userData.interval )
+						this.userData.interval = this.userData.maxInterval;
+
+					if( this.userData.interval === 0 )
+						return;
+
+					this.userData.interval -= jumpStart.deltaTime;
+
+					if( this.userData.interval <= 0 )
+					{
+						this.userData.interval = this.userData.maxInterval;
+						var gator = this.userData.spawnGator.call(this);
+					}
+				});
+
+				//shipDispenser.userData.spawnEnemyShip.call(shipDispenser);	// DON'T DO THIS! it's invisible and/or for some reason.
+				return gatorDispenser;
+			}
+
+			function spawnShipDispenser()
+			{
+				var shipDispenser = jumpStart.spawnInstance();
+				g_dispensers[shipDispenser.uuid] = shipDispenser;
+				shipDispenser.addEventListener("remove", function()
+				{
+					delete g_dispensers[this.uuid];
+				});
+
+				shipDispenser.userData.maxInterval = 1.0;
+				
+				shipDispenser.userData.spawnEnemyShip = function()
+				{
+					var enemyShip = jumpStart.spawnInstance();
+					g_birds[enemyShip.uuid] = enemyShip;
+					//enemyShip.scale.set(2.0, 2.0, 2.0);
+					enemyShip.scale.set(0.8, 0.8, 0.8);
+					enemyShip.position.copy(this.position);
+					enemyShip.quaternion.copy(this.quaternion);
+					enemyShip.userData.body = null;
+/*
+					if( !g_hasHands )
+					{
+						var hitBoxMesh = new THREE.Mesh(
+							new THREE.BoxGeometry(100, 60, 70),
+							new THREE.MeshBasicMaterial({"color": "#ff2277"})//{"transparent": true, "opacity": 0})
+						);
+
+						var hitBox = jumpStart.spawnInstance(null, {"object": hitBoxMesh, "parent": enemyShip});
+
+						hitBox.addEventListener("tick", function()
+						{
+							if( g_cannon.getWorldPosition().distanceTo(this.getWorldPosition()) < 400.0 )
+								jumpStart.removeInstance(this);
+						});
+
+						hitBox.blocksLOS = true;
+						jumpStart.makeCollide(hitBox);
+						hitBox.addEventListener("cursordown", cannonFire);
+					}
+					*/
+
+					enemyShip.addEventListener("remove", function()
+					{
+						delete g_birds[this.uuid];
+					});
+
+					enemyShip.addEventListener("spawn", function()
+					{
+					//	var tester = jumpStart.spawnInstance("models/thai", {"parent": this});
+					//	tester.position.x += 20.0;
+
+						var body = jumpStart.spawnInstance("models/body", {"parent": this});
+						body.userData.dead = false;
+						this.userData.body = body;
+
+						var eyes = jumpStart.spawnInstance("models/eyes", {"parent": body});
+						var beak = jumpStart.spawnInstance("models/beak", {"parent": body});
+
+						var wing0Base = jumpStart.spawnInstance("models/wing0Base", {"parent": body});
+						wing0Base.position.set(3.501, -4.198, 6.811);
+						wing0Base.userData.direction = 1.0;
+						wing0Base.addEventListener("tick", function()
+						{
+							if( this.parent.userData.dead )
+							{
+								var speed = 3.0;
+								var target = -1.3;
+								this.rotation.z -= speed * jumpStart.deltaTime;
+
+								if( this.rotation.z < target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+							{
+								var side = 1.0;
+								var speed = 1.0;
+								var max = 0.3;
+								var min = -1.0;
+								this.rotation.z += speed * jumpStart.deltaTime * this.userData.direction;
+								if( this.rotation.z > max || this.rotation.z < min )
+								{
+									this.rotation.z = (this.userData.direction > 0) ? max : min;
+									this.userData.direction *= -1.0;
+								}
+							}
+						});
+
+						var wing0Tip = jumpStart.spawnInstance("models/wing0Tip", {"parent": wing0Base});
+						wing0Tip.position.set(26.0, 19.0, 5.0);
+						wing0Tip.userData.base = wing0Base;
+						wing0Tip.addEventListener("tick", function()
+						{
+							if( this.parent.parent.userData.dead )
+							{
+								var speed = 4.0;
+								var target = -2.2;
+								this.rotation.z -= speed * jumpStart.deltaTime;
+
+								if( this.rotation.z < target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+								this.rotation.z += 2.0 * jumpStart.deltaTime * this.userData.base.userData.direction;
+						});
+
+						var wing1Base = jumpStart.spawnInstance("models/wing1Base", {"parent": body});
+						wing1Base.position.set(-3.501, -4.198, 6.811);
+						wing1Base.userData.direction = -1.0;
+						wing1Base.addEventListener("tick", function()
+						{
+							if( this.parent.userData.dead )
+							{
+								var speed = 2.9;
+								var target = 1.9;
+								this.rotation.z += speed * jumpStart.deltaTime;
+
+								if( this.rotation.z > target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+							{
+								var speed = 1.0;
+								var max = 1.0;
+								var min = -0.3;
+								this.rotation.z += speed * jumpStart.deltaTime * this.userData.direction;
+								if( this.rotation.z > max || this.rotation.z < min )
+								{
+									this.rotation.z = (this.userData.direction > 0) ? max : min;
+									this.userData.direction *= -1.0;
+								}
+							}
+						});
+
+						var wing1Tip = jumpStart.spawnInstance("models/wing1Tip", {"parent": wing1Base});
+						wing1Tip.position.set(-26.0, 19.0, 5.0);
+						wing1Tip.userData.base = wing1Base;
+						wing1Tip.addEventListener("tick", function()
+						{
+							if( this.parent.parent.userData.dead )
+							{
+								var speed = 3.9;
+								var target = 1.2;
+								this.rotation.z += speed * jumpStart.deltaTime;
+
+								if( this.rotation.z > target )
+								{
+									this.rotation.z = target;
+									this.removeEventListener("tick", arguments.callee);
+									return;
+								}
+							}
+							else
+								this.rotation.z += 2.0 * jumpStart.deltaTime * this.userData.base.userData.direction;
+						});
+					});
+					/*
+					enemyShip.position.x = -jumpStart.worldOffset.y - 50.0;
+					enemyShip.position.z = jumpStart.worldOffset.y + 50.0;
+					enemyShip.position.y = 450.0;
+					*/
+
+					// Look 45 degrees towards the attack corner
+					//var lookPos = enemyShip.position.clone();
+					//lookPos.x -= 100.0;
+					//lookPos.z += 100.0;
+					//enemyShip.lookAt(lookPos);
+
+					// tilt downward
+					//enemyShip.rotateX((Math.PI / 2.0) * 0.1);
+					enemyShip.userData.turnDirection = 1.0;
+					enemyShip.userData.turnPower = 1.0;
+					enemyShip.userData.turnTime = 1.0;
+					enemyShip.addEventListener("tick", function()
+					{
+						if( isDead )
+							return;
+
+						this.translateZ(100.0 * jumpStart.deltaTime);
+
+						if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+							jumpStart.removeInstance(this);
+
+						// check for basket collision
+						if( this.position.distanceTo(g_basket.position) < 65.0 )
+						{
+							//g_hitTests++;
+							//jumpStart.removeInstance(this);
+
+							//if( g_hitTests === 2 )
+							isDead = true;
+							showScore();
+							return;
+						}
+
+						// check if we're dive-bombing or not
+						var targetPos = g_basket.position.clone();
+						targetPos.y = this.position.y;
+
+						if( this.position.distanceTo(targetPos) < -jumpStart.worldOffset.y / 2.0 )
+						{
+							// moderately look at basket
+							var oldQuaternion = this.quaternion.clone();
+							this.lookAt(g_basket.position);
+							this.quaternion.slerp(oldQuaternion, 0.8);
+						}
+						else
+						{
+							if( this.userData.turnDirection !== 0 && this.userData.turnTime > 0 )
+							{
+								this.userData.turnTime -= jumpStart.deltaTime;
+
+								this.rotateY(this.userData.turnPower * jumpStart.deltaTime * this.userData.turnDirection);
+
+								if( this.userData.turnTime < 0 )
+								{
+									this.userData.turnTime = 1.0;
+									this.userData.turnDirection *= -1.0;
+								}
+							}
+						}
+
+						function destroy(laser, force, hand)
+						{
+							hand = "Right";
+							
+							if( !!laser && g_hasHands )
+								jumpStart.removeInstance(laser);
+
+							//var force;
+							//createExplosion(this);
+							//jumpStart.removeInstance(this);
+
+							/*
+							var dummy = jumpStart.spawnInstance("models/thai");
+							dummy.position.copy(this.position);
+							dummy.scale.copy(this.scale);
+							dummy.quaternion.copy(this.quaternion);
+							*/
+
+							var dummy;
+							if( this.userData.body )
+							{
+								spawnOrb.call(this, hand);
+								spawnOrb.call(this, "Left");
+
+								dummy = this.userData.body;
+								jumpStart.world.add(dummy);
+								dummy.position.copy(this.position);
+								dummy.quaternion.copy(this.quaternion);
+
+								if( !!force )
+									dummy.applyBehavior("physics", {"force": force});
+								else
+									dummy.applyBehavior("physics");
+								dummy.userData.lifeTimer = 3.0;
+								dummy.addEventListener("tick", function()
+								{
+									this.userData.lifeTimer -= jumpStart.deltaTime;
+
+									if( this.userData.lifeTimer <= 0 )
+									{
+										//jumpStart.removeInstance(this);
+										this.applyBehavior("shrinkRemove");
+										this.removeEventListener("tick", arguments.callee);
+									}
+									else if( this.position.y < 50.0 && !this.userData.dead )
+									{
+										this.userData.dead = true;
+										this.unapplyBehavior("physics");
+									}
+								});
+							}
+
+							//console.log("Remove bad bird: " + this.uuid);
+							jumpStart.removeInstance(this);
+						}
+
+						// check for collision w/ playerLasers
+						var worldPos = this.getWorldPosition();
+						var playerLaserKeys = Object.keys(playerLasers);
+						var max = playerLaserKeys.length;
+						var dist = (g_hasHands) ? 20.0 : 50.0;
+						var i, x, laser;
+						for( i = 0; i < max; i++ )
+						{
+							x = playerLaserKeys[i];
+							laser = playerLasers[x];
+
+							// check distance
+							if( laser.getWorldPosition().distanceTo(worldPos) < dist )
+							{
+								destroy.call(this, laser, undefined, laser.userData.hand);
+								return;
+							}
+						}
+
+						// check for collision w/ player hands
+						if( !!jumpStart.localUser.skeleton )
+						{
+							// use the base of the flip-off finger as the fist position (Hand0 is actually the wrist)
+							var rightHand = jumpStart.localUser.skeleton.getJoint("Middle", "Right", 1);
+							var leftHand = jumpStart.localUser.skeleton.getJoint("Middle", "Left", 1);
+
+							var force;
+							if( rightHand && jumpStart.world.worldToLocal(rightHand.position.clone()).distanceTo(this.position) < 26.0 )
+							{
+								force = this.position.clone();
+								force.sub(jumpStart.world.worldToLocal(rightHand.position.clone()));
+								force.multiplyScalar(0.1);
+
+								if( g_wristBand )
+								{
+									var instantVel = g_wristBand.position.clone().sub(g_wristBand.userData.prevPosition);
+									//instantVel.multiplyScalar(1.0);
+									force.add(instantVel);
+								}
+
+								destroy.call(this, undefined, force, "Right");
+								return;
+							}
+							else if( leftHand && jumpStart.world.worldToLocal(leftHand.position.clone()).distanceTo(this.position) < 26.0 )
+							{
+								force = this.position.clone();
+								force.sub(jumpStart.world.worldToLocal(leftHand.position.clone()));
+								force.multiplyScalar(0.1);
+
+								if( g_wristBandLeft )
+								{
+									var instantVel = g_wristBandLeft.position.clone().sub(g_wristBandLeft.userData.prevPosition);
+									//instantVel.multiplyScalar(1.0);
+									force.add(instantVel);
+								}
+
+								destroy.call(this, undefined, force, "Left");
+								return;
+							}
+						}
+					});
+
+					return enemyShip;
+				};
+
+				//shipDispenser.addEventListener("spawn", function()
+				//{
+				//	var enemyShip = this.userData.spawnEnemyShip.call(this);
+				//});
+
+				shipDispenser.addEventListener("tick", function()
+				{
+					if( isDead )
+						return;
+
+					if( !!!this.userData.interval )
+						this.userData.interval = this.userData.maxInterval;
+
+					if( this.userData.interval === 0 )
+						return;
+
+					this.userData.interval -= jumpStart.deltaTime;
+
+					if( this.userData.interval <= 0 )
+					{
+						this.userData.interval = this.userData.maxInterval;
+						var enemyShip = this.userData.spawnEnemyShip.call(this);
+					}
+				});
+
+				//shipDispenser.userData.spawnEnemyShip.call(shipDispenser);	// DON'T DO THIS! it's invisible and/or for some reason.
+				return shipDispenser;
+			}
+
+			function createExplosion(object)
+			{
+				//var explosion = jumpStart.spawnInstance(null);
+				//explosion.applyBehavior("asyncModel", {"modelFile": "models/explosion"});
+				var geometry = new THREE.SphereGeometry( 1.0, 5, 8, 0);
+				var material = new THREE.MeshBasicMaterial( {color: 0xff0000, transparent: true, opacity: 0.5} );
+				var explosionObject = new THREE.Mesh( geometry, material );
+				var explosion = jumpStart.spawnInstance(null, {"object": explosionObject});
+				explosion.position.copy(jumpStart.world.worldToLocal(object.getWorldPosition()));
+				explosion.scale.set(10, 10, 10);
+
+				explosion.userData.scaleSize = 0.01;
+				explosion.userData.scaleDirection = 1;
+				explosion.userData.maxScale = explosion.scale.x;
+				explosion.userData.speed = 10.0;
+				explosion.scale.set(explosion.userData.scaleSize, explosion.userData.scaleSize, explosion.userData.scaleSize);
+
+				explosion.addEventListener("tick", function()
+				{
+					if( this.userData.scaleDirection === 1 )
+					{
+						this.userData.scaleSize += this.userData.speed * jumpStart.deltaTime;
+						if( this.userData.scaleSize >= this.userData.maxScale )
+							this.userData.scaleDirection = -1;
+					}
+					else
+					{
+						this.userData.scaleSize -= 2.0 * this.userData.speed * jumpStart.deltaTime;
+
+						if( this.userData.scaleSize <= 0.001 )
+						{
+							jumpStart.removeInstance(this);
+							return;
+						}
+					}
+
+					this.scale.set(this.userData.scaleSize, this.userData.scaleSize, this.userData.scaleSize);
+					this.rotateY(5.0 * jumpStart.deltaTime);
+					this.rotateX(15.0 * jumpStart.deltaTime);
+				});
+
+				return explosion;
+			}
+
+			function ammoObjectTick()
+			{
+				if( this.userData.orphan )
+				{
+					var imgElem = document.getElementById("weave");
+					if( !imgElem.hasLoaded )
+						return;
+
+					// try to get adopted
+					if( g_hasHands )
+					{
+						var skeleton = jumpStart.localUser.skeleton;
+						if( !!skeleton )
+						{
+							var joint = skeleton.getJoint("Hand", this.userData.hand, 0);
+							if( !!joint )
+							{
+								// adopt us
+								this.userData.handObject = joint;
+								this.userData.orphan = false;
+								this.userData.stare = 0.0;
+								this.userData.scaleDirection = 1.0;
+
+								// spawn the label
+								var color = (this.userData.hand === "Right") ? "rgba(100,100,255,1.0)" : "rgba(255,255,100,1.0)";
+								color = "rgba(255, 255, 255, 1.0)";
+								//var textPlaneContainer = jumpStart.spawnInstance(null, {"parent": this});
+								var text = (this.userData.hand === "Right") ? "Ammo" : "Points";
+								var options = {
+									"width": (this.userData.hand === "Right") ? 16 : 18,
+									"height": 7,
+									"text": text,
+									"fontSize": 4,
+									"color": color,
+									"backgroundImageElem": imgElem,
+									"background": "rgba(0,0,0,1.0)",
+									"parent": this
+								};
+
+								var textPlane = jumpStart.spawnTextPlane(options);
+								if( this.userData.hand === "Right" )
+								{
+									textPlane.material.color.r = 100 / 255.0;
+									textPlane.material.color.g = 100 / 255.0;
+								}
+								else
+								{
+									textPlane.material.color.b = 100 / 255.0;
+								}
+
+								textPlane.scale.multiplyScalar(0.6 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+								textPlane.translateY(6.0 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+							}
+						}
+					}
+					else
+					{
+						//this.position.copy(g_cannon.position);
+
+						// adopt us
+						this.userData.handObject = g_cannon;
+						this.userData.orphan = false;
+						this.userData.stare = 0.0;
+						this.userData.scaleDirection = 1.0;
+
+						// spawn the label
+						var color = (this.userData.hand === "Right") ? "rgba(100,100,255,1.0)" : "rgba(255,255,100,1.0)";
+						color = "rgba(255, 255, 255, 1.0)";
+						//var textPlaneContainer = jumpStart.spawnInstance(null, {"parent": this});
+						var text = (this.userData.hand === "Right") ? "Ammo" : "Points";
+						var options = {
+							"width": (this.userData.hand === "Right") ? 16 : 18,
+							"height": 7,
+							"text": text,
+							"fontSize": 4,
+							"color": color,
+							"backgroundImageElem": imgElem,
+							"background": "rgba(0,0,0,1.0)",
+							"parent": this
+						};
+
+						var textPlane = jumpStart.spawnTextPlane(options);
+						if( this.userData.hand === "Right" )
+						{
+							textPlane.material.color.r = 100 / 255.0;
+							textPlane.material.color.g = 100 / 255.0;
+						}
+						else
+						{
+							textPlane.material.color.b = 100 / 255.0;
+						}
+								
+						textPlane.scale.multiplyScalar(0.6 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+						textPlane.translateY(6.0 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+					}
+
+					// abort if we are STILL an orphan
+					if( !this.userData.orphan )
+						setAmmoNumber.call(this, this.userData.number, this.userData.hand);
+					else
+						return;
+				}
+
+				// TODO: run tests to see if a changing skeleton rekts our parenting
+				var oldPos = this.position.clone();
+
+				if( g_hasHands )
+					this.position.copy(jumpStart.world.worldToLocal(this.userData.handObject.position.clone()));
+				else
+				{
+					if( this.userData.hand === "Right" )
+						this.position.copy(g_wristBand.position.clone());
+					else
+						this.position.copy(g_wristBandLeft.position.clone());
+				}
+
+				this.position.lerp(oldPos, 0.9);
+
+				// look at head
+				var joint;
+
+				var skeleton = jumpStart.localUser.skeleton;
+				if( !!skeleton )
+					joint = skeleton.getJoint("Head");
+				else
+					joint = jumpStart.camera;
+
+				if( !jumpStart.isAltspace )
+				{
+					//this.position.copy(g_cannon.position);
+					this.scale.set(1, 1, 1);
+				}
+
+				if( !!joint )
+				{						
+					var targetPos = jumpStart.world.worldToLocal(joint.position.clone());
+					var oldQuaternion = this.quaternion.clone();
+
+					this.lookAt(targetPos);
+					var directLookQuaternion = this.quaternion.clone();
+
+					if( jumpStart.isAltspace )
+						directLookQuaternion.inverse();
+
+					this.quaternion.copy(this.userData.handObject.quaternion);
+
+					if( g_hasHands )
+					{
+						this.rotateZ(Math.PI / -2.0);
+						this.rotateY(Math.PI / 2.0);
+					}
+					else
+						this.rotateY(Math.PI);
+
+					if( this.userData.hand !== "Right" )
+					{
+						if( g_hasHands )
+							this.rotateZ(Math.PI);
+
+						this.translateX(-2.0);
+					}
+					else
+						this.translateX(2.0);
+
+					this.quaternion.slerp(oldQuaternion, 0.9);
+
+					// shrink if we aren't looking at our hand
+					var quaternionA = this.quaternion.clone();
+					quaternionA.normalize();
+
+					var quaternionB = directLookQuaternion.clone();
+
+					var dotProduct = quaternionA.dot(quaternionB);
+//if( this.userData.hand === "Left")
+//console.log(dotProduct);
+					//if( (this.userData.hand === "Right" && Math.abs(dotProduct) > 0.9) || (this.userData.hand === "Left" && Math.abs(dotProduct) < 0.1))
+					//if( Math.abs(dotProduct) > 0.9 )
+					//if( (this.userData.hand === "Right" && Math.abs(dotProduct) > 0.9) || (this.userData.hand === "Left" && dotProduct < 0.3 && dotProduct > -0.4))
+
+					//
+
+					if( !g_hasHands || Math.abs(dotProduct) > 0.9 )
+					{
+						this.userData.stare += jumpStart.deltaTime;
+
+						if( this.userData.stare > 0.3 )
+						{
+							if( this.userData.scaleDirection !== 1.0 )
+								this.userData.scaleDirection = 1.0;
+						}
+					}
+					else if( this.userData.scaleDirection !== -1.0 )
+					{
+						this.userData.stare = 0.0;
+						this.userData.scaleDirection = -1.0;
+					}
+
+					if( (this.userData.scaleDirection === -1.0 && this.scale.x !== 0.0001) || (this.userData.scaleDirection === 1.0 && this.scale.x !== 1.0) )
+					{
+						var scaleAmount = 8.0 * jumpStart.deltaTime * this.userData.scaleDirection;
+
+						this.scale.add(new THREE.Vector3(scaleAmount, scaleAmount, scaleAmount));
+
+						if( this.scale.x < 0.0001 )
+						{
+							this.userData.scaleDirection = 0.0;
+							this.scale.set(0.0001, 0.0001, 0.0001)
+						}
+						else if( this.scale.x > 1.0 )
+						{
+							this.userData.scaleDirection = 0.0;
+							this.scale.set(1.0, 1.0, 1.0);
+						}
+					}
+				}
+
+				// just assume we're all good, for now.
+				//this.removeEventListener("tick", arguments.callee);
+			}
+
+			function spawnOrb(hand)
+			{
+				var geometry = new THREE.SphereGeometry( 3.0, 5, 8, 0);
+
+				var color = (hand === "Right") ? 0x7777ff : 0xffff77;
+				var material = new THREE.MeshBasicMaterial( {"color": color, "transparent": true, "opacity": 0.3} );
+				var orbObject = new THREE.Mesh( geometry, material );
+				var orb = jumpStart.spawnInstance(null, {"object": orbObject});
+				orb.position.copy(this.position);
+
+				g_orbs[orb.uuid] = orb;
+
+				var skeleton = jumpStart.localUser.skeleton;
+				if( !!skeleton )
+				{
+					var joint = skeleton.getJoint("Middle", hand, 1);
+					if( !!joint )
+					{
+						var targetPos = jumpStart.world.worldToLocal(joint.position.clone());
+						orb.lookAt(targetPos);
+					}
+				}
+
+				orb.userData.lifeTime = 3.0;
+				orb.userData.hand = hand;
+				orb.userData.prevPosition = new THREE.Vector3();//band.position.clone();
+				orb.addEventListener("tick", function()
+				{
+					if( !isPlaying || isDead )
+						return;
+
+					var instantVel = this.userData.prevPosition.distanceTo(this.position);
+					//console.log(instantVel);
+
+					this.userData.lifeTime -= jumpStart.deltaTime;
+
+					if( this.userData.lifeTime <= 0 )
+					{
+						jumpStart.removeInstance(this);
+						return;
+					}
+
+					// do seek work
+					var targetPos;
+					if( g_hasHands )
+					{
+						var skeleton = jumpStart.localUser.skeleton;
+						if( !!skeleton )
+						{
+							var joint = skeleton.getJoint("Middle", this.userData.hand, 1);
+							if( !!joint )
+								targetPos = jumpStart.world.worldToLocal(joint.position.clone());
+						}
+					}
+					else
+					{
+						if( this.userData.hand === "Right" )
+							targetPos = g_wristBand.position;
+						else
+							targetPos = g_wristBandLeft.position;
+						//targetPos = g_cannon.position;
+					}
+
+					if( !!targetPos )
+					{
+						var dist = this.position.distanceTo(targetPos);
+						if( dist < 20.0 )
+						{
+							jumpStart.removeInstance(this);
+							return;
+						}
+						else
+						{
+							var oldQuaternion = this.quaternion.clone();
+							this.lookAt(targetPos);
+							this.quaternion.slerp(oldQuaternion, 0.5);
+
+							var speed = (this.userData.hand === "Right") ? 400.0 : 600.0;
+							var factor = dist / 100.0;
+							if( factor < 1.0 )
+								factor = 1.0;
+
+							speed *= factor;
+
+							this.translateZ(speed * jumpStart.deltaTime);
+							var zScale = 0.005 * instantVel;
+							if( zScale < 1.0 )
+								zScale = 1.0;
+
+							this.scale.z = zScale;
+						}
+					}
+				});
+
+				orb.addEventListener("remove", function()
+				{
+					delete g_orbs[this.uuid];
+
+					if( !isPlaying || isDead )
+						return;
+
+					if( this.userData.hand === "Right" )
+					{
+						g_ammoObject.userData.number++;
+						setAmmoNumber.call(g_ammoObject, g_ammoObject.userData.number, "Right");
+					}
+					else
+					{
+						g_ammoObjectLeft.userData.number++;
+						setAmmoNumber.call(g_ammoObjectLeft, g_ammoObjectLeft.userData.number, "Left");
+					}
+				});
+
+				return orb;
+			}
+/*
+			function confirmAmmoObjectExists()
+			{
+				console.log("a");
+				if( !!!g_ammoObject )
+				{
+					console.log("b");
+					var skeleton = jumpStart.localUser.skeleton;
+					if( !!skeleton )
+					{
+						console.log("c");
+						var joint = skeleton.getJoint("Hand", "Right", 0);
+						if( !!joint )
+						{
+							g_ammoObject = jumpStart.spawnInstance(null, {"parent": joint});
+							g_ammoObject.userData.number = 0;
+							g_ammoObject.scale.set(3.0, 3.0, 3.0);
+							setAmmoNumber.call(g_ammoObject, g_ammoObject.userData.number);
+						}
+					}
+				}
+			}
+*/
+			function setAmmoNumber(number, hand)
+			{
+				var imgElem = document.getElementById("weave");
+				if( !imgElem.hasLoaded )
+				{
+					imgElem.onLoad = function()
+					{
+						setAmmoNumber.call(this, number, hand);
+					}.bind(this);
+					return;
+				}
+
+				if( !!this.userData.textPlane )
+					jumpStart.removeInstance(this.userData.textPlane);
+
+				var color = (hand === "Right") ? "rgba(100,100,255,1.0)" : "rgba(255,255,100,1.0)";
+				color = "rgba(255, 255, 255, 1.0)";
+
+				var textPlaneContainer = jumpStart.spawnInstance(null, {"parent": this});
+
+				var options = {
+					"width": "auto",
+					"height": 10,
+					"text": "" + number,
+					"fontSize": 10,
+					"color": color,
+					"background": "rgba(0,0,0,1.0)",
+					"backgroundImageElem": imgElem,
+					"parent": textPlaneContainer
+				};
+
+				var textPlane = jumpStart.spawnTextPlane(options);
+				if( hand === "Right" )
+				{
+					textPlane.material.color.r = 100 / 255.0;
+					textPlane.material.color.g = 100 / 255.0;
+				}
+				else
+				{
+					textPlane.material.color.b = 100 / 255.0;
+				}
+				textPlane.scale.multiplyScalar(0.6 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+				this.userData.textPlane = textPlaneContainer;
+			}
+
+			function cannonFire()
+			{
+				g_cannon.userData.fire.call(g_cannon);
+			}
+
+			function realFire()
+			{
+				if( this.userData.hasOwnProperty("realFireDelayed") && this.userData.realFireDelayed )
+				{
+					this.userData.realFireDelayed = false;
+					return;
+				}
+
+				if( isDead || !isPlaying
+					 )
+					return;
+
+				if( localShotRecharge > 0 )
+					return;
+
+				localShotRecharge = 0.2;
+				localShotsFired++;
+				g_ammoObject.userData.number--;
+				setAmmoNumber.call(g_ammoObject, g_ammoObject.userData.number, "Right");
+
+				if( g_ammoObject.userData.number === -1 && g_cannon )
+				{
+					// GAME OVER!!
+					isDead = true;
+					showScore();
+					return;
+				}
+
+				var isMobile = jumpStart.isGear;	// FIXME: isGear should be isMobile now!
+				var isHMD = g_hasHands;	// FIXME: Need to detect GearVR here now too!
+				var needsDelay = (isMobile && !isHMD) ? true : false;
+
+				this.scale.set(0.1, 0.1, 0.1);
+				var bullet = jumpStart.spawnInstance("models/stone");
+				bullet.position.copy(g_cannon.position);
+				bullet.quaternion.copy(g_cannon.quaternion);
+				bullet.boundingSphere.radius *= 2.0;
+				bullet.addEventListener("tick", function()
+				{
+					if( !!this.userData.physics && this.userData.physics.velocity.x === 0 )
+					{
+						this.position.y -= 9.8 * jumpStart.deltaTime * 20.0;
+						return;
+					}
+					//return;
+					//console.log( this.boundingSphere.radius);
+					var maxBound = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
+					var min = this.boundingSphere.radius;
+					if( this.position.y <= min )
+					{
+						if( !!this.userData.physics )
+						{
+							this.unapplyBehavior("physics");
+							this.position.y = min;
+							this.userData.afterLife = 2.0;
+						}
+						else
+						{
+							if( this.userData.afterLife > 0 )
+								this.userData.afterLife -= jumpStart.deltaTime;
+
+							if( this.userData.afterLife <= 0 )
+							{
+								this.applyBehavior("shrinkRemove");
+								this.removeEventListener("tick", arguments.callee);
+							}
+						}
+					}
+					else if( Math.abs(this.position.x) >= maxBound - min || Math.abs(this.position.z) >= maxBound - min )
+					{
+						// shrink to oblivion
+						this.userData.physics.velocity.set(0, 0, 0);
+						//this.unapplyBehavior("physics");
+						//this.removeEventListener("tick", arguments.callee);
+						this.applyBehavior("shrinkRemove");
+
+						// OR bounce off, losing momentum
+						//this.userData.physics.velocity.multiplyScalar(0.8);	
+					}
+				});
+/*
+				if( !isHMD )
+				{
+					force = bullet.position.clone();
+					bullet.translateZ(-100.0);
+					force.sub(bullet.position);
+					force.y += 50.0;
+					force.normalize();
+					force.multiplyScalar(10.0);
+
+					// put the bullet back...
+					bullet.position.copy(g_cannon.position);
+				}
+				else*/
+				if( !!jumpStart.localUser.cursorHit )
+				{
+					force = jumpStart.localUser.cursorHit.scaledPoint.clone().sub(bullet.position);
+					//force.y += 50.0 * mobileFudge;
+					force.normalize();
+
+					//if( isMobile || jumpStart.isAltspace )
+					//	force.multiplyScalar(7.0);	// FIXME: Physics system is messed up if mobile requires a different force scale!! (probably)
+					//else
+						force.multiplyScalar(15.0);
+
+				}
+				bullet.applyBehavior("physics", {"force": force, "physicsScale": 0.7});//0.7});
+
+				bullet.addEventListener("remove", function()
+				{
+					delete playerLasers[this.uuid];
+				});
+
+				playerLasers[bullet.uuid] = bullet;
+
+				if( this.hasEventListener("tick", realFire) )
+					this.removeEventListener("tick", realFire);
+			}
+
+			function joinGame()
+			{
+				if( g_scoreContainer )
+				{
+					//jumpStart.removeInstance(g_scoreContainer);
+					unmakeThrob.call(g_scoreContainer);
+					g_scoreContainer.applyBehavior("shrinkRemove");
+					delete g_scoreContainer;
+				}
+
+				// make sure we have hands...
+				//var hasHands = false;
+				var skeleton = jumpStart.localUser.skeleton;
+				if( !!skeleton )
+				{
+					var hand = skeleton.getJoint("Hand", "Right", 0);
+					var handLeft = skeleton.getJoint("Hand", "Left", 0);
+					if( !!hand && !!handLeft )
+						g_hasHands = true;
+				}
+
+				//if( !hasHands && jumpStart.isAltspace )
+				//	return;
+
+				if( !g_hasHands )
+				{
+					if( !!!g_cannon )
+					{
+						var floor = jumpStart.enclosureBoundaries["floor"];
+						if( !!!floor )
+							floor = jumpStart.enclosureBoundary("floor");
+						floor.scale.multiplyScalar(1.4);
+
+						floor.addEventListener("cursordown", cannonFire);
+
+						var backRight = jumpStart.enclosureBoundaries["east"];
+						if( !!!backRight )
+							backRight = jumpStart.enclosureBoundary("east");
+						backRight.scale.multiplyScalar(1.4);
+						//jumpStart.makeCollide(backRight);
+						backRight.addEventListener("cursordown", cannonFire);
+
+						var backLeft = jumpStart.enclosureBoundaries["south"];
+						if( !!!backLeft )
+							backLeft = jumpStart.enclosureBoundary("south");
+						backLeft.scale.multiplyScalar(1.4);
+						//jumpStart.makeCollide(backLeft);
+						backLeft.addEventListener("cursordown", cannonFire);
+
+						g_cannon = jumpStart.spawnInstance("models/stone");
+
+						var bulb = jumpStart.scene.getObjectByName("bulb");
+						bulb.position.copy(g_cannon.position);
+						bulb.quaternion.copy(g_cannon.quaternion);
+						//bulb.position.y += 80.0;
+						bulb.translateZ(80.0);
+
+						bulb.userData.falloff = 80.0;
+						bakeVertexLight(g_cannon, bulb);
+
+						g_cannon.userData.oldPosition = new THREE.Vector3();
+						g_cannon.userData.oldQuaternion = new THREE.Quaternion();
+						g_cannon.addEventListener("tick", function()
+						{
+							if( this.scale.x < 1.0 )
+								this.scale.multiplyScalar(1.0 + (jumpStart.deltaTime * 2.0));
+
+							if( this.scale.x >= 1.0 )
+							{
+								this.scale.x = 1.0;
+								// rdy 2 fire again
+							}
+						});
+
+						g_cannon.userData.fire = function()
+						{
+							// wait 1 tick if we are on a device that only receives cursormove
+							// events when the action button is pressed!!
+
+							var isMobile = jumpStart.isGear;	// FIXME: isGear should be isMobile now!
+							var isHMD = g_hasHands;	// FIXME: Need to detect GearVR here now too!
+							var needsDelay = (isMobile && !isHMD) ? true : false;
+
+							if( needsDelay )
+							{
+								this.userData.realFireDelayed = true;
+								this.addEventListener("tick", realFire);
+							}
+							else
+								realFire.call(this);
+							
+						};
+
+						g_cannon.addEventListener("tick", function()
+						{
+							if( localShotRecharge > 0 )
+								localShotRecharge -= jumpStart.deltaTime;
+
+							if( localShotRecharge <= 0 )
+							{
+								// make it exactly 0
+								localShotRecharge = 0;
+							}
+
+							var isMobile = jumpStart.isGear;	// FIXME: isGear should be isMobile now!
+							var isHMD = g_hasHands;	// FIXME: Need to detect GearVR here now too!
+							var needsDelay = (isMobile && !isHMD) ? true : false;
+
+							var targetObject;
+							if( jumpStart.isAltspace )
+							{
+								var skeleton = jumpStart.localUser.skeleton;
+								if( !!skeleton )
+								{
+									targetObject = skeleton.getJoint("Eye", "Center");
+								}
+							}
+							else
+								targetObject = jumpStart.camera;
+
+							var targetPosition = jumpStart.world.worldToLocal(targetObject.position.clone());
+							//targetPosition.y -= 10.0 * (jumpStart.enclosure.pixelsPerMeter / 100.0);
+
+
+							var maxBound = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
+
+							//if( !jumpStart.isWorldPosInsideOfEnclosure(targetPosition) )
+							//	targetPosition.y += -maxBound / 6.0;
+
+							var max = maxBound - 30.0;
+							if( targetPosition.x > max )
+								targetPosition.x = max;
+							else if( targetPosition.x < -max )
+								targetPosition.x = -max;
+
+							if( targetPosition.y > max )
+								targetPosition.y = max;
+							else if( targetPosition.y < -max )
+								targetPosition.y = -max;
+
+							if( targetPosition.z > max )
+								targetPosition.z = max;
+							else if( targetPosition.z < -max )
+								targetPosition.z = -max;
+
+							this.userData.oldPosition.copy(this.position);
+							this.userData.oldQuaternion.copy(this.quaternion);
+
+							this.position.copy(targetPosition);
+							this.quaternion.copy(targetObject.quaternion);
+
+							if( !jumpStart.isAltspace )
+							{
+								this.translateZ(-60.0 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+								this.translateY(-40.0 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+							}
+							else
+							{
+								this.translateZ(30.0 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+								this.translateY(-20.0 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+							}
+
+
+							//this.rotateX(0.9);
+							//this.updateMatrixWorld();
+
+							if( jumpStart.localUser.cursorHit )
+								this.lookAt(jumpStart.localUser.cursorHit.scaledPoint);
+
+							this.quaternion.slerp(this.userData.oldQuaternion, 0.9);
+							this.position.lerp(this.userData.oldPosition, 0.98);
+						});
+					}
+/*
+					var hitPlane = jumpStart.spawnCursorPlane({"width": 1024, "height": 1024});
+					hitPlane.position.y = -jumpStart.worldOffset.y / 2.0;
+					hitPlane.position.x = jumpStart.worldOffset.y / 3.6;
+					hitPlane.position.z = -jumpStart.worldOffset.y / 3.6;
+					hitPlane.rotateY(Math.PI / -4.7);
+					hitPlane.rotateX((Math.PI / 2.0) + 1.2);
+					*/
+				}
+
+				// setup ammo stuff
+				g_ammoObject = jumpStart.spawnInstance();
+				g_ammoObject.userData.number = (g_hasHands) ? 0 : 10;
+				g_ammoObject.scale.set(0.0001, 0.0001, 0.0001);
+				g_ammoObject.userData.scaleDirection = 1.0;
+				g_ammoObject.userData.hand = "Right";
+				g_ammoObject.userData.orphan = true;
+				g_ammoObject.addEventListener("tick", ammoObjectTick);
+
+				g_ammoObjectLeft = jumpStart.spawnInstance();
+				g_ammoObjectLeft.userData.number = 0;
+				g_ammoObjectLeft.scale.set(0.0001, 0.0001, 0.0001);
+				g_ammoObjectLeft.userData.scaleDirection = 1.0;
+				g_ammoObjectLeft.userData.hand = "Left";
+				g_ammoObjectLeft.userData.orphan = true;
+				g_ammoObjectLeft.addEventListener("tick", ammoObjectTick);
+
+				// start the sequence
+				startSequence();
+
+				//jumpStart.removeInstance(this);
+
+				var titleContainer = this.parent;
+				unmakeThrob.call(titleContainer);
+				titleContainer.applyBehavior("shrinkRemove");
+				isPlaying = true;
+
+				this.removeEventListener("cursorup", joinGame);
+			}
+
+			function startSequence()
+			{
+				var shipDispenser = spawnShipDispenser();
+
+				var maxBound = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
+				shipDispenser.position.set(maxBound - 50, 520.0, -maxBound + 50.0);
+				shipDispenser.rotateY(-1.25);
+				shipDispenser.rotateX((Math.PI / 2.0) * 0.16);
+				shipDispenser.userData.onSpent = function()
+				{
+					console.log("SHIP DISPENSER SPENT!");
+				};
+
+				/*
+				var gatorDispenser = spawnGatorDispenser();
+				var min = 120.0;
+				var max = 250.0;
+				var dif = (max - min);
+				gatorDispenser.position.set(min + (dif / 2.0), 24.0, 500.0);
+				gatorDispenser.rotateY((Math.PI / -2.0) + (Math.PI / -4.8));
+				*/
+
+				var beeHorde = spawnBeeHorde();
+
+				var maxBound = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
+
+				beeHorde.position.y = 94.0;
+				beeHorde.rotation.y = Math.PI / -4.0;
+				beeHorde.translateZ(-maxBound * 0.8);
+
+				// wrist bands
+				function spawnWristBand(hand)
+				{
+					var geometry = new THREE.SphereGeometry( 4.0, 12, 12);
+
+					var color = (hand === "Right") ? 0x7777ff : 0xffff77;
+					var material = new THREE.MeshBasicMaterial( {"color": color, "transparent": true, "opacity": 0.3} );
+					var mesh = new THREE.Mesh( geometry, material );
+					var band = jumpStart.spawnInstance();
+					band.scale.set(10.0, 10.0, 10.0);
+
+					var visualBand = jumpStart.spawnInstance(null, {"object": mesh, "parent": band});
+					visualBand.scale.multiplyScalar(0.6 * (jumpStart.enclosure.pixelsPerMeter / 100.0));
+
+					band.userData.hand = hand;
+					band.userData.prevPosition = new THREE.Vector3();//band.position.clone();
+					band.addEventListener("tick", function()
+					{
+						//var instantVel = this.userData.prevPosition.distanceTo(this.position);
+						//console.log(instantVel);
+
+						this.userData.prevPosition.copy(this.position);
+
+
+						var targetPosition;
+						if( g_hasHands )
+						{
+							var skeleton = jumpStart.localUser.skeleton;
+							if( !!skeleton )
+							{
+								var joint = skeleton.getJoint("Hand", this.userData.hand, 0);
+								if( !!joint )
+									targetPosition = jumpStart.world.worldToLocal(joint.position.clone());
+							}
+						}
+						else
+						{
+							var original = g_cannon.position.clone();
+							var offsetDir = (this.userData.hand === "Right") ? -1.0 : 1.0;
+							g_cannon.translateX(30.0 * offsetDir);
+							g_cannon.translateZ(50.0);
+							targetPosition = g_cannon.position.clone();
+							g_cannon.position.copy(original);
+						}
+
+						var pos = this.position.clone();
+						var dist = pos.distanceTo(targetPosition);
+
+						// look where we're going
+						this.lookAt(targetPosition);
+
+						pos.lerp(targetPosition, 0.1);
+						this.position.copy(pos);
+
+						// update z-scale
+						var zScale = dist / 6.0;
+						if( zScale < 1 )
+							zScale = 1.0
+
+						var lowScale = 1.0 / (dist / 16.0);
+						if( lowScale < 0.4 )
+							lowScale = 0.4;
+						else if( lowScale > 1 )
+							lowScale = 1.0;
+
+						this.scale.set(lowScale, lowScale, zScale);
+//						this.scale.z = zScale;
+						//}
+						//else if( g_cannon )
+						//{
+						//	this.position.copy(g_cannon.position);
+						//}
+					});
+
+					if( hand === "Right" )
+						g_wristBand = band;
+					else
+						g_wristBandLeft = band;
+					return band;
+				}
+				
+				spawnWristBand("Right");
+				spawnWristBand("Left");
+			}
+
+			var g_orbs = {};
+			var g_hasHands = false;
+			var g_cannon;
+			var g_gators = {};
+			var g_scoreContainer;
+			var g_dispensers = {};
+			var g_bees = {};
+			var g_birds = {};
+			var playerLasers = {};
+			var g_basket;
+			var g_hitTests = 0; 	// OBSOLETE!!
+			var g_ammoObject;
+			var g_ammoObjectLeft;
+			var g_wristBand;
+			var g_wristBandLeft;
+			var isPlaying = false;
+			var isDead = false;
+			var localShotsFired = 0;
+			var localShotRecharge = 0.2;
+			function createStartButton()
+			{
+				if( !!g_ammoObject )
+				{
+					jumpStart.removeInstance(g_ammoObject);
+					g_ammoObject = undefined;
+				}
+
+				if( !!g_ammoObjectLeft )
+				{
+					jumpStart.removeInstance(g_ammoObjectLeft);
+					g_ammoObjectLeft = undefined;
+				}
+
+				if( !!g_wristBand )
+				{
+					jumpStart.removeInstance(g_wristBand);
+					g_wristBand = undefined;
+				}
+
+				if( !!g_wristBandLeft )
+				{
+					jumpStart.removeInstance(g_wristBandLeft);
+					g_wristBandLeft = undefined;
+				}
+
+				if( !!g_cannon )
+				{
+					var floor = jumpStart.enclosureBoundaries["floor"];
+					if( !!floor )
+					{
+						floor.scale.set(1, 1, 1);
+						floor.removeEventListener("cursordown", cannonFire);
+					}
+
+					var backRight = jumpStart.enclosureBoundaries["east"];
+					{
+						backRight.scale.set(1, 1, 1);
+						backRight.removeEventListener("cursordown", cannonFire);
+					}
+
+					var backLeft = jumpStart.enclosureBoundaries["south"];
+					if( !!backLeft )
+					{
+						backLeft.scale.set(1, 1, 1);
+						backLeft.removeEventListener("cursordown", cannonFire);
+					}
+
+					jumpStart.removeInstance(g_cannon);
+					g_cannon = undefined;
+					//delete g_cannon;
+				}
+
+				// reset stuff
+				isPlaying = false;
+				isDead = false;
+				localShotsFired = 0;
+				localShotRecharge = 0.2;
+
+				// create the start button
+				function spawnTitleLayer(layerNumber, titleContainer)
+				{
+					var imageFile = "assets/AirRush/misc/titleLayer" + layerNumber + ".png";
+					var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), transparent: true, opacity: 1.0});
+					var imageGeometry = new THREE.PlaneGeometry(512, 512, 1 , 1);
+					var imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+					var imageObject = jumpStart.spawnInstance(null, {"object": imagePlane, "parent": titleContainer});
+
+					return imageObject;
+				}
+
+				var titleContainer = jumpStart.spawnInstance();
+
+				var maxBound = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
+				var offset = maxBound * 0.3;
+				titleContainer.position.set(-offset, 300.0, offset);
+				titleContainer.rotateY(Math.PI / -4.0);
+				titleContainer.scale.set(0.4, 0.4, 0.4);
+
+				var layer0 = spawnTitleLayer(0, titleContainer);
+				layer0.position.z += -5.0;
+
+				var layer1 = spawnTitleLayer(1, titleContainer);
+				layer1.position.z += -10.0;
+
+				var layer2 = spawnTitleLayer(2, titleContainer);
+				layer2.position.z += -20.0;
+
+				var layer3 = spawnTitleLayer(3, titleContainer);
+				layer3.position.z += -30.0;
+
+				var layer4 = spawnTitleLayer(4, titleContainer);
+				layer4.position.z += -40.0;
+
+				layer3.blocksLOS = true;
+				jumpStart.makeCollide(layer3);
+
+				titleContainer.applyBehavior("bubbleIn", {"maxScale": 0.4, "speed": 0.8});
+				makeThrob.call(titleContainer, {"minScale": 0.35, "maxScale": 0.45, "rate": 0.05, "direction": -1.0, "axes": "xy"});
+
+				layer3.userData.hovered = false;
+				layer3.addEventListener("cursorup", joinGame);
+				layer3.addEventListener("cursorenter", function()
+				{
+					this.userData.hovered = true;
+				});
+
+				layer3.addEventListener("cursorexit", function()
+				{
+					this.userData.hovered = false;
+				});
+
+				layer3.addEventListener("tick", function()
+				{
+					var titleContainer = this.parent;
+					if( !!titleContainer.userData.bubbleIn && titleContainer.userData.bubbleIn.scaleDirection !== 0 )
+						return;
+
+					var moveSpeed = 100.0;
+					var speed = 2.0;
+					var max = 3.5;
+					var min = 1.0;
+
+					if( !this.userData.hovered )
+					{
+						if( titleContainer.scale.z > min )
+						{
+							titleContainer.scale.z -= speed * jumpStart.deltaTime;
+							titleContainer.translateZ(-moveSpeed * jumpStart.deltaTime);
+						}
+					}
+					else
+					{
+						if( titleContainer.scale.z < max )
+						{
+							titleContainer.scale.z += speed * jumpStart.deltaTime;
+							titleContainer.translateZ(moveSpeed * jumpStart.deltaTime);
+						}
+					}
+				});
+			}
+
+			jumpStart.addEventListener("ready", function()
+			{
+				//debugSlate.innerHTML += "<br />READY called.";
+				var bulb = jumpStart.spawnInstance();
+				bulb.name = "bulb";
+				bulb.position.y += 800.0;
+				bulb.position.x -= 100.0;
+				bulb.position.z += 100.0;
+
+				var container = jumpStart.spawnInstance();
+
+				//var bounds = jumpStart.spawnInstance("models/enclosureBounds");
+				var terrain = jumpStart.spawnInstance("models/terrain");
+				terrain.position.y += 24.0;
+				//console.log(terrain.children[0]);
+				bakeVertexLight(terrain.children[0], bulb);
+
+//debugSlate.innerHTML += "<br />Checkpoint B.";
+				var water = jumpStart.spawnInstance("models/water", {"parent": terrain});
+				bakeVertexLight(water, bulb);
+
+				var clouds = jumpStart.spawnInstance("models/clouds", {"parent": terrain});
+				bakeVertexLight(clouds.children[0], bulb);
+
+				var rocks = jumpStart.spawnInstance("models/rocks", {"parent": terrain});
+				bakeVertexLight(rocks.children[0], bulb);
+
+				var trunks = jumpStart.spawnInstance("models/trunks", {"parent": terrain});
+				bakeVertexLight(trunks.children[0], bulb);
+
+				var blanketRed = jumpStart.spawnInstance("models/blanketRed", {"parent": terrain});
+				bakeVertexLight(blanketRed.children[0], bulb);
+
+				var blanketWhite = jumpStart.spawnInstance("models/blanketWhite", {"parent": terrain});
+				bakeVertexLight(blanketWhite.children[0], bulb);
+
+				var canopy = jumpStart.spawnInstance("models/canopy", {"parent": terrain});
+				bulb.userData.falloff = 350.0;
+				bulb.position.y = 600;//1024.0;
+				//bulb.position.x = -300;
+				//bulb.position.z = 300;
+				bakeVertexLight(canopy.children[0], bulb);
+
+				var basket = jumpStart.spawnInstance("models/basketBlack", {"parent": terrain});
+				basket.position.set(-420.0, 28.753, 460.0);
+				basket.rotation.y = -0.4;
+
+				bulb.position.copy(basket.position);
+				bulb.userData.falloff = 150.0;
+				bulb.position.y = 200.0;
+				bakeVertexLight(basket.children[0], bulb);
+				basket.addEventListener("spawn", function()
+				{
+					var dark = jumpStart.spawnInstance("models/basketDark", {"parent": this});
+					bakeVertexLight(dark.children[0], bulb);
+
+					var light = jumpStart.spawnInstance("models/basketLight", {"parent": this});
+					bakeVertexLight(light.children[0], bulb);
+				});
+
+				g_basket = basket;
+
+				// foot prints
+				var imageFile = "assets/AirRush/misc/feet.png";
+				var x, imageMaterial, imageGeometry, imagePlane;
+				var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), transparent: true, opacity: 1.0});
+				var imageGeometry = new THREE.PlaneGeometry(70, 70, 1 , 1);
+				var imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+				var feetObject = jumpStart.spawnInstance(null, {"object": imagePlane});
+				feetObject.position.set(-380.0, 28.753, 380.0);
+				feetObject.rotateX(Math.PI / -2.0);
+				feetObject.rotateZ(Math.PI / -4.0);
+
+				function makeWall(parent)
+				{
+					var wallMesh = new THREE.Mesh(
+						new THREE.BoxGeometry(jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale, 40.0, 4.0),
+						new THREE.MeshBasicMaterial({"color": "#222222"})
+					);
+
+					var wall = jumpStart.spawnInstance(null, {"object": wallMesh, "parent": parent});
+					return wall;
+				}
+
+				var offset = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
+
+				var frontWall = makeWall(terrain);
+				frontWall.position.z = offset - 2.0;
+				frontWall.position.y = (-40.0 / 2.0) + 18.0;
+
+				var backWall = makeWall(terrain);
+				backWall.position.z = -offset + 2.0;
+				backWall.position.y = (-40.0 / 2.0) + 18.0;
+
+				var leftWall = makeWall(terrain);
+				leftWall.position.x = -offset + 2.0;
+				leftWall.position.y = (-40.0 / 2.0) + 18.0;
+				leftWall.rotateY(Math.PI / 2.0);
+
+				var rightWall = makeWall(terrain);
+				rightWall.position.x = offset - 2.0;
+				rightWall.position.y = (-40.0 / 2.0) + 18.0;
+				rightWall.rotateY(Math.PI / -2.0);
+
+				// make the floor solid so people can re-focus the app if they need to
+				var floor = jumpStart.enclosureBoundary("floor");
+				jumpStart.makeCollide(floor);
+
+				var backRight = jumpStart.enclosureBoundaries["east"];
+				if( !!!backRight )
+					backRight = jumpStart.enclosureBoundary("east");
+				jumpStart.makeCollide(backRight);
+
+				var backLeft = jumpStart.enclosureBoundaries["south"];
+				if( !!!backLeft )
+					backLeft = jumpStart.enclosureBoundary("south");
+				jumpStart.makeCollide(backLeft);
+
+				console.log("System ready...");
+
+				createStartButton();
+
+/*
+				imageObject.userData.originalTurnAmount = imageObject.rotation.y;
+				//imageObject.userData.turnAmount = 0.0;
+				imageObject.addEventListener("tick", function()
+				{
+					var skeleton = jumpStart.localUser.skeleton;
+					if( !!skeleton )
+					{
+						var joint = skeleton.getJoint("Head");//, "Center", 0);
+						if( !!joint )
+						{
+
+							var targetPos = jumpStart.world.worldToLocal(joint.position.clone());
+							targetPos.y = this.position.y;
+
+							this.lookAt(targetPos);
+
+							var difference = this.userData.originalTurnAmount - this.rotation.y;
+							var sign = (difference > 0) ? 1.0 : -1.0;
+							console.log(difference);
+							if( Math.abs(difference) > 0.2 )
+								this.rotation.y = this.userData.originalTurnAmount + (0.2 * -sign);
+						}
+					}
+				});
+*/
+
+				//g_ammoObjectLeft.userData.number = 0;
+				//setAmmoNumber.call(g_ammoObjectLeft, g_ammoObjectLeft.userData.number);
+
+				/* ATTACH MESH TO SKELETON (WORKING!!)
+					// try to get adopted
+					var geometry = new THREE.SphereGeometry( 3.0, 5, 8, 0);
+					var material = new THREE.MeshBasicMaterial( {color: 0x7777ff, transparent: true, opacity: 0.8} );
+					var mesh = new THREE.Mesh( geometry, material );
+
+					var skeleton = jumpStart.localUser.skeleton;
+					if( !!skeleton )
+					{
+						jumpStart.scene.add(skeleton);	// NOTE: this type of attachment ONLY works if the skeleton is added to the scene!
+
+						var joint = skeleton.getJoint("Hand", "Right", 0);
+						if( !!joint )
+						{
+							console.log(mesh.position);
+							jumpStart.scene.add(mesh);
+
+							// adopt us
+							joint.add(mesh);
+						}
+					}
+				*/
+
+				// shooting behavior
+				jumpStart.addEventListener("tick", function()
+				{
+					if( !isPlaying || isDead )
+						return;
+
+					if( localShotRecharge > 0 )
+						localShotRecharge -= jumpStart.deltaTime;
+
+					if( localShotRecharge <= 0 )
+					{
+						// make it exactly 0
+						localShotRecharge = 0;
+					}
+					else if( localShotRecharge > 0 )
+						return;
+
+					// get the skeleton
+					var skeleton = jumpStart.localUser.skeleton;
+
+					// confirm skeleton exists
+					/*
+					if( !!!skeleton )
+					{
+						console.log("No skeleton detected!");
+						return;
+					}
+					else
+					{
+						// DETECT HAND GESTURE
+					}
+					*/
+
+					///*
+					// is a fist made?
+					var gamepad = jumpStart.gamepad;
+					if( !!gamepad && (gamepad.mapping === "steamvr" || gamepad.mapping === "touch"))
+					{
+						//if( gamepad.buttons.length > 1 && gamepad.buttons[1].value > 0.5 )	// disabled until skeleton fixed
+						if( true )
+						{
+							// is the thumb down?
+							var thumbIsDown = false;
+
+							// TODO: A skeletal approach would be gamepad agnostic (and work with Leap)
+							if( gamepad.mapping === "steamvr" || gamepad.mapping === "touch" )
+							{
+								// steamvr thumb means any x/y value other than 0/0
+								if( gamepad.axes.length > 1 )
+									thumbIsDown = (gamepad.axes[0] !== 0 || gamepad.axes[1] !== 0);
+							}
+							else if( gamepad.mapping === "touch" )	// inactive due to prior condition ^
+							{
+								// touch might have a different way to detect thumb being closed.
+							}
+
+							if( thumbIsDown )
+							{
+								// thumb is down AND a fist is being made...
+
+								if( g_ammoObject.userData.number > 0 )
+								{
+									// get the skeleton
+									var skeleton = jumpStart.localUser.skeleton;
+
+									// confirm skeleton exists
+									if( !!!skeleton )
+									{
+										console.log("No skeleton detected!");
+										return;
+									}
+
+									localShotRecharge = 0.2;
+									localShotsFired++;
+									g_ammoObject.userData.number--;
+									setAmmoNumber.call(g_ammoObject, g_ammoObject.userData.number, "Right");
+
+									//g_ammoObjectLeft.userData.number = 0;
+									//g_ammoObjectLeft.call(g_ammoObjectLeft, g_ammoObjectLeft.userData.number);
+
+									//if( localShotsFired === 1 )
+										//startSequence();
+
+									// get the tracking joints
+									//var trackingJoints = skeleton.trackingJoints;
+									// right index 0-3
+									var rightIndex3 = skeleton.getJoint("Index", "Right", 3);
+									var rightIndex2 = skeleton.getJoint("Index", "Right", 2);
+
+									var laser = jumpStart.spawnInstance("models/enemy_laser");
+									laser.position.copy(jumpStart.world.worldToLocal(rightIndex2.position.clone()));
+									laser.lookAt(jumpStart.world.worldToLocal(rightIndex3.position.clone()));
+									laser.scale.set(0.2, 0.2, 4.0);
+									laser.translateZ(80.0);
+									laser.userData.hand = "Right";
+
+									laser.addEventListener("tick", function()
+									{
+										if( isDead )
+											return;
+
+										this.translateZ(1600.0 * jumpStart.deltaTime);
+										this.rotateZ(4.0 * jumpStart.deltaTime);
+
+										if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+											jumpStart.removeInstance(this);
+									});
+
+									laser.addEventListener("remove", function()
+									{
+										delete playerLasers[this.uuid];
+									});
+
+									playerLasers[laser.uuid] = laser;
+								}
+							}
+						}
+					}//*/
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+		</script>
+	</head>
+
+	<body style="background-color: transparent;">
+		<!--
+		<div id="debugSlate" style="text-align: left; background-color: #000; position: absolute; bottom: 200px; left: 0; font-size: 20px; font-weight: 900; font-face: Arial; padding: 20px;"><u>Debug Log</u>:</div>
+		-->
+		<script>
+			document.body.appendChild(img);
+			//document.body.appendChild(debugSlate);
+			//debugSlate = document.body.querySelector("#debugSlate");
+
+			if( !!!window.altspace )
+				document.body.style.backgroundColor = "cyan";
+		</script>
+	</body>
+</html>

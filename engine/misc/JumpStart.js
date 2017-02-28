@@ -44,9 +44,9 @@ function JumpStart(options, appBehaviors)
 		"renderer",
 		"clock",
 		"raycaster",
-		"fontLoader",
-		"fontUrl",
-		"font",
+		//"fontLoader",	// preset during load
+		//"fontUrl",	// preset during load
+		//"font",	// preset during load
 		"cursorRay",
 		"enclosure",
 		"localUser",
@@ -68,6 +68,7 @@ function JumpStart(options, appBehaviors)
 
 	// List all PRIVATE member variables
 	var privateVariables = [
+		"sessionKey",
 		"state",	// 0: ready for setOptions	1: ready for precacheFile and doneCaching	2: ready for run	3: running // IS THIS ACTUALLY USED?
 		"options",
 		"futureCursorRay",
@@ -120,9 +121,10 @@ function JumpStart(options, appBehaviors)
 	this.previousGamepadStates = [];
 	this.hoveredObject = null;
 	this.clickedObject = null;
-	this.fontUrl = "https://cdn.rawgit.com/mrdoob/three.js/r74/examples/fonts/helvetiker_regular.typeface.js";
+	//this.fontUrl = "https://cdn.rawgit.com/mrdoob/three.js/r74/examples/fonts/helvetiker_regular.typeface.js";
 
 	// Set as many synchronous non-null PRIVATE member veriables as possible 
+	this.sessionKey = "key" + Math.random() + "-" + Math.random() + "-" + Math.random() + "-" + Math.random();
 	this.options =
 	{
 		"appID": "example",
@@ -180,8 +182,6 @@ function JumpStart(options, appBehaviors)
 		{
 			"applyBehavior": function(options)
 			{
-				console.log("apply football pass");
-				console.log(options);
 				// REQUIRED: targetPosition, originalPosition
 				if( !!options )
 				{
@@ -275,12 +275,24 @@ function JumpStart(options, appBehaviors)
 				this.ownerID = jumpStart.localUser.userID;
 				
 				// Remove us the next tick cycle, to avoid immediate respawn issues.
+				//console.log("Auto removed!");
+			//	this.userData.autoRemoval.removerID = jumpStart.localUser.userID;
+				//this.sync();
+				//jumpStart.removeInstance(this);
+
+				this.userData.pendingDelete = 0.5;
+				this.userData.autoRemoval.removerID = jumpStart.localUser.userID;
 				this.addEventListener("tick", function()
 				{
-					jumpStart.removeInstance(this);
-				});
+					this.userData.pendingDelete -= jumpStart.deltaTime;
 
-				this.sync();
+					if( this.userData.pendingDelete <= 0 )
+					{
+						console.log("Auto removed!");
+						//this.userData.autoRemoval.removerID = jumpStart.localUser.userID;
+						jumpStart.removeInstance(this);
+					}
+				});
 			},
 			"onUserDisconnect": function(val)
 			{
@@ -318,7 +330,14 @@ function JumpStart(options, appBehaviors)
 				{
 					this.addEventListener("spawn", jumpStart.behaviors.autoRemoval.spawnBehavior);
 					this.addEventListener("userdisconnect", jumpStart.behaviors.autoRemoval.onUserDisconnect);
+					this.syncData.autoRemoval = {
+						"sessionKey": jumpStart.sessionKey
+					};
 				}
+
+				this.userData.autoRemoval = {
+					"removerID": ""
+				};
 
 				return true;
 			},
@@ -326,6 +345,8 @@ function JumpStart(options, appBehaviors)
 			{
 				this.removeEventListener("spawn", jumpStart.behaviors.autoRemoval.spawnBehavior);
 				this.removeEventListener("userdisconnect", jumpStart.behaviors.autoRemoval.onUserDisconnect);
+				delete this.syncData["autoRemoval"];
+				delete this.userData["autoRemoval"];
 				return true;
 			},
 			"spawnBehavior": function(isInitialSync)
@@ -338,7 +359,7 @@ function JumpStart(options, appBehaviors)
 				for( x in jumpStart.users )
 				{
 					user = jumpStart.users[x];
-					if( user.id === this.ownerID )
+					if( user.id === this.ownerID && (this.ownerID !== jumpStart.localUser.userID || this.syncData.autoRemoval.sessionKey === jumpStart.sessionKey) )
 					{
 						needsRemoval = false;
 						break;
@@ -381,6 +402,9 @@ function JumpStart(options, appBehaviors)
 			},
 			"tickBehavior": function()
 			{
+				if( !!this.userData.autoRemoval && !!this.userData.autoRemoval.removerID && this.userData.autoRemoval.removerID === jumpStart.localUser.userID )
+					return;
+				
 			//	if( !!!this.userData.autoSync )
 			//		this.userData.autoSync = {};
 
@@ -492,7 +516,7 @@ function JumpStart(options, appBehaviors)
 				var syncableData = (!!this.userData.shrinkRemove.syncableData) ? this.userData.shrinkRemove.syncableData : this.syncData.shrinkRemove;
 				var isLocalMode = syncableData.localMode;
 
-				if( !syncableData.localMode && this.scale.x <= 0.0001 && syncableData.ownerRemoveOnly && jumpStart.localUser.userID !== this.ownerID )
+				if( this.scale.x <= 0.0001 || (!syncableData.localMode && syncableData.ownerRemoveOnly && jumpStart.localUser.userID !== this.ownerID) )
 					return;
 
 				this.userData.shrinkRemove.remaining -= jumpStart.deltaTime;
@@ -699,7 +723,7 @@ function JumpStart(options, appBehaviors)
 			},
 			"tickBehavior": function()
 			{
-				if( !this.syncData.bubbleIn )
+				if( !this.syncData.bubbleIn || this.userData.bubbleIn.scaleDirection === 0 )
 					return;
 
 				var ds = this.syncData.bubbleIn.speed * jumpStart.deltaTime * this.userData.bubbleIn.scaleDirection;
@@ -720,6 +744,7 @@ function JumpStart(options, appBehaviors)
 				}
 				else if( this.userData.bubbleIn.scaleDirection < 0 && this.scale.x <= this.syncData.bubbleIn.maxScale )
 				{
+					this.userData.bubbleIn.scaleDirection = 0;
 					this.scale.set(this.syncData.bubbleIn.maxScale, this.syncData.bubbleIn.maxScale, this.syncData.bubbleIn.maxScale);
 					this.removeEventListener("tick", jumpStart.behaviors.bubbleIn.tickBehavior);
 				}
@@ -728,9 +753,9 @@ function JumpStart(options, appBehaviors)
 		"physics": {
 			"applyBehavior": function(options)
 			{
-				console.log("Apply physics");
-				console.log(options);
-				console.log(this.syncData.physics);
+				//console.log("Apply physics");
+				//console.log(options);
+				//console.log(this.syncData.physics);
 				this.updateMatrixWorld();
 				if( !!options )
 				{
@@ -752,13 +777,13 @@ function JumpStart(options, appBehaviors)
 					"rotVelocity": new THREE.Vector3(rotation.x, rotation.y, rotation.z)
 				};
 
-				console.log(this.syncData.physics);
+				//console.log(this.syncData.physics);
 
 				return true;
 			},
 			"unapplyBehavior": function()
 			{
-				console.log("unapply physics");
+				//console.log("unapply physics");
 				delete this.syncData["physics"];
 				delete this.userData["physics"];
 				this.removeEventListener("tick", jumpStart.behaviors.physics.tickBehavior);
@@ -796,7 +821,8 @@ console.log("Spawning");
 					return;
 
 			//	console.log(this.userData.physics.rotVelocity);
-				this.userData.physics.velocity.y -= 9.8 * jumpStart.deltaTime * this.syncData.physics.physicsScale;
+				//console.log(jumpStart.options.sceneScale);
+				this.userData.physics.velocity.y -= 9.8 * jumpStart.deltaTime * this.syncData.physics.physicsScale;// * jumpStart.options.sceneScale;
 
 				// Terminal velocity because we have no air drag
 				var airDrag = 8.0;
@@ -804,10 +830,9 @@ console.log("Spawning");
 				var velLen = this.userData.physics.velocity.length();
 				if( velLen > termVel )
 				{
-					console.log("term");
 					var drag = this.userData.physics.velocity.clone();
 					drag.normalize();
-					drag.multiplyScalar(airDrag * jumpStart.deltaTime);
+					drag.multiplyScalar(airDrag * jumpStart.deltaTime * this.syncData.physics.physicsScale * jumpStart.options.sceneScale);
 
 					this.userData.physics.velocity.sub(drag);//.multiplyScalar(0.9)
 				}
@@ -820,29 +845,39 @@ console.log("Spawning");
 //console.log(this.userData.physics.rotVelocity);
 				// Update the rotation
 				//console.log(this.rotation);
-				this.rotateX((this.userData.physics.rotVelocity.x * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
-				this.rotateY((this.userData.physics.rotVelocity.y * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
-				this.rotateZ((this.userData.physics.rotVelocity.z * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale);
+				this.rotateX((this.userData.physics.rotVelocity.x * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale * jumpStart.options.sceneScale);
+				this.rotateY((this.userData.physics.rotVelocity.y * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale * jumpStart.options.sceneScale);
+				this.rotateZ((this.userData.physics.rotVelocity.z * 5.0) * jumpStart.deltaTime * this.syncData.physics.physicsScale * jumpStart.options.sceneScale);
 				//var testerQuaternion = this.quaternion.clone();
 				//console.log(this.rotation);
 
 				// Bounce us off of walls
+				//var derOffset = ((jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0);
 				var radius = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
 				var maximums = {
-					"x": (jumpStart.enclosure.innerWidth / 2.0) - radius,
-					"y": (jumpStart.enclosure.innerHeight / 2.0) - radius,
-					"z": (jumpStart.enclosure.innerDepth / 2.0) - radius
+					//"x": ((jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0) - radius,
+					//"y": ((jumpStart.enclosure.scaledHeight * jumpStart.options.sceneScale) / 2.0) - radius,
+					//"z": ((jumpStart.enclosure.scaledDepth * jumpStart.options.sceneScale) / 2.0) - radius
+					//"x": (jumpStart.enclosure.scaledWidth / 2.0) - radius,
+					//"y": (jumpStart.enclosure.scaledHeight / 2.0) - radius,
+					//"z": (jumpStart.enclosure.scaledDepth / 2.0) - radius
+					"x": (jumpStart.enclosure.innerWidth * jumpStart.options.sceneScale / 2.0) - radius,
+					"y": (jumpStart.enclosure.innerHeight / 2.0) - radius,	// y axis doesn't move w/ encosure scale
+					"z": (jumpStart.enclosure.innerDepth * jumpStart.options.sceneScale / 2.0) - radius
 				};
 
 				//this.updateMatrixWorld();	// FIX ME: This was needed for some reason, but it messes with the physics behavior on network clients.
-				var pos = new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+				var pos = this.getWorldPosition();//new THREE.Vector3().setFromMatrixPosition(this.matrixWorld);
+				//jumpStart.world.worldToLocal(pos);
 
 				var magicFactor = (jumpStart.isAltspace) ? 160.0 : 80.0;// * 1 / jumpStart.scene.scale;//80.0;
 				var deltaPos = this.userData.physics.velocity.clone();
 				//deltaPos.normalize();
-				deltaPos.multiplyScalar(magicFactor);// * jumpStart.deltaTime);
-				deltaPos.add(this.userData.physics.velocity);
-				deltaPos.multiplyScalar(jumpStart.deltaTime);
+//deltaPos.multiplyScalar(100.0);
+				deltaPos.multiplyScalar(100.0);// * this.syncData.physics.physicsScale);
+				//deltaPos.multiplyScalar(magicFactor);// * jumpStart.deltaTime);
+				//deltaPos.add(this.userData.physics.velocity);
+				deltaPos.multiplyScalar(jumpStart.deltaTime * this.syncData.physics.physicsScale * jumpStart.options.sceneScale);
 				//var magicFactor = 1.0;
 				//var delta = magicFactor * jumpStart.deltaTime * this.syncData.physics.physicsScale;
 				//var deltaPos = this.userData.physics.velocity.clone();
@@ -900,6 +935,9 @@ console.log("Spawning");
 //console.log(pos);
 				pos.multiplyScalar(1 / jumpStart.options.sceneScale);
 				pos.sub(jumpStart.world.position);
+				//jumpStart.world.worldToLocal(pos);
+
+
 				//pos.add(jumpStart.worldOffset);
 				//pos = jumpStart.world.worldToLocal(pos);
 //console.log(pos);
@@ -913,7 +951,7 @@ console.log("Spawning");
 						if( x === "y" )
 							pos[x] = (this.boundingSphere) ? this.boundingSphere.radius * 0.5 : 0.0;
 						else
-							pos[x] = -maximums[x];
+							pos[x] = -maximums[x] * (1 / jumpStart.options.sceneScale);
 						//pos[x] = -Math.abs(jumpStart.worldOffset[x]);
 					}
 				}
@@ -928,7 +966,7 @@ console.log("Spawning");
 							pos[x] = (-2.0 * jumpStart.worldOffset.y) - tempRad;
 						}
 						else
-							pos[x] = maximums[x];
+							pos[x] = maximums[x] * (1 / jumpStart.options.sceneScale);
 						//pos[x] = Math.abs(jumpStart.worldOffset[x]);
 					}
 				}
@@ -986,7 +1024,6 @@ console.log("Spawning");
 				if( !!this.userData.lerpSync )
 					return true;
 
-				console.log("Apply lerpsync");
 				if( !!options )
 				{
 					this.syncData.lerpSync = {
@@ -997,12 +1034,11 @@ console.log("Spawning");
 				}
 
 				this.userData.lerpSync = {
-					"targetPosition": new THREE.Vector3(),
-					"targetQuaternion": new THREE.Quaternion(),
-					"originalPosition": new THREE.Vector3(),
-					"originalQuaternion": new THREE.Quaternion(),
-					"time": 1.0,
-					"amount": 1.0
+					"targetPosition": this.position.clone(),
+					"targetQuaternion": this.quaternion.clone(),
+					"originalPosition": this.position.clone(),
+					"originalQuaternion": this.quaternion.clone(),
+					"amount": 0.0
 				};
 
 				//this.addEventListener("tick", jumpStart.behaviors.lerpSync.tickBehavior);
@@ -1018,24 +1054,29 @@ console.log("Spawning");
 			},
 			"tickBehavior": function()
 			{
-				if( this.userData.lerpSync.amount < 1.0 )
+				if( this.ownerID === jumpStart.localUser.userID || this.userData.lerpSync.amount >= 1.0 )
+					return;
+
+			//	console.log(this.syncData.lerpSync.speed);
+				//this.position.lerp(this.userData.lerpSync.targetPosition, 1.0 / this.syncData.lerpSync.speed);
+				this.userData.lerpSync.amount += (this.syncData.lerpSync.speed * 0.05) * jumpStart.deltaTime;//1.0 / this.syncData.lerpSync.speed;//jumpStart.deltaTime / this.userData.lerpSync.time;
+
+				if( this.userData.lerpSync.amount >= 1.0 )
 				{
-					this.userData.lerpSync.amount += jumpStart.deltaTime / this.userData.lerpSync.time;
+					//console.log("maxed ");
+					this.userData.lerpSync.amount = 1.0;
+					this.position.copy(this.userData.lerpSync.targetPosition);
+					this.quaternion.copy(this.userData.lerpSync.targetQuaternion)
+				}
+				else
+				{
+					//console.log("NOT maxed");
+					this.position.lerpVectors(this.userData.lerpSync.originalPosition, this.userData.lerpSync.targetPosition, this.userData.lerpSync.amount);
+					//this.position.lerp(this.userData.lerpSync.targetPosition, this.userData.lerpSync.amount);
 
-					if( this.userData.lerpSync.amount >= 1.0 )
-					{
-						this.userData.lerpSync.amount = 1.0;
-						this.position.copy(this.userData.lerpSync.targetPosition);
-						this.quaternion.copy(this.userData.lerpSync.targetQuaternion)
-					}
-					else
-					{
-						this.position.lerpVectors(this.userData.lerpSync.originalPosition, this.userData.lerpSync.targetPosition, this.userData.lerpSync.amount);
-
-						var currentQuaternion = this.userData.lerpSync.originalQuaternion.clone();
-						currentQuaternion.slerp(this.userData.lerpSync.targetQuaternion, this.userData.lerpSync.amount);
-						this.quaternion.copy(currentQuaternion);
-					}
+					var currentQuaternion = this.userData.lerpSync.originalQuaternion.clone();
+					currentQuaternion.slerp(this.userData.lerpSync.targetQuaternion, this.userData.lerpSync.amount);
+					this.quaternion.copy(currentQuaternion);
 				}
 			}
 		}
@@ -1097,6 +1138,12 @@ console.log("Spawning");
 	loadHeadFiles.call(this).then(function()
 	{
 		// THREE & Firebase are now loaded.
+
+		//modify the MTLLoader...
+		//THREE.MTLLoader.MaterialCreator.prototype = 
+		//{
+
+		//};
 
 		resolveEnvironment.call(this).then(function()
 		{
@@ -1307,7 +1354,12 @@ console.log("Spawning");
 								{
 									var val = snapshot.val();
 									if( val )
-										this.users = val;
+									{
+										var k;
+										for( k in val )
+											this.users[k] = val[k];
+										//this.users = val;
+									}
 								}.bind(this));
 
 								var initialKeys = {};
@@ -1573,12 +1625,12 @@ console.log("Spawning");
 
 				this.clock = new THREE.Clock();
 				this.raycaster = new THREE.Raycaster();
-				this.fontLoader = new THREE.FontLoader();
+				//this.fontLoader = new THREE.FontLoader();
 
 				// load a font in
-				this.fontLoader.load(this.fontUrl, function(font)
-				{
-					this.font = font;
+			//	this.fontLoader.load(this.fontUrl, function(font)
+			//	{
+			//		this.font = font;
 
 					// FIX ME: It might be worth it for all blocksLOS objects to always know the distance from themselves to the player's eye so that we can perform the raycasts in order of distance, and only on objects within range.
 					this.raycaster.intersectObjectsAdv = function(objects, recursive, recursiveCompare)
@@ -1650,7 +1702,7 @@ console.log("Spawning");
 					}
 					else
 						this.renderer = altspace.getThreeJSRenderer();
-				}.bind(this));
+				//}.bind(this));
 			}
 		}.bind(this));
 	}.bind(this));
@@ -1672,9 +1724,10 @@ console.log("Spawning");
 						// Define the list of JavaScript files
 						var baseScripts = [
 							"https://cdn.firebase.com/js/client/2.3.2/firebase.js",
-							"https://cdn.rawgit.com/mrdoob/three.js/r74/build/three.min.js",
-							"https://cdn.rawgit.com/mrdoob/three.js/r74/examples/js/loaders/MTLLoader.js",
-							"https://cdn.rawgit.com/mrdoob/three.js/r74/examples/js/loaders/OBJLoader.js",
+							"https://cdn.rawgit.com/mrdoob/three.js/r84/build/three.min.js",
+							"https://cdn.rawgit.com/mrdoob/three.js/r84/examples/js/loaders/MTLLoader.js",
+							"https://cdn.rawgit.com/mrdoob/three.js/r84/examples/js/loaders/OBJLoader.js",
+							//"engine/misc/UltimateLoader.min.js",
 							"http://altspacevr.github.io/AltspaceSDK/dist/altspace.min.js"
 							/*
 							"http://sdk.altvr.com/libs/three.js/r73/build/three.min.js",
@@ -1691,8 +1744,16 @@ console.log("Spawning");
 						// Load all the JavaScript files
 						this.loadJavaScripts(baseScripts).then(function(result)
 							{
-								console.log("JumpStart: Loaded " + baseScripts.length + " JavaScript(s).");
-								loadHeadFilesCallback();
+								// Load the font right away
+								this.fontUrl = "https://cdn.rawgit.com/mrdoob/three.js/r74/examples/fonts/helvetiker_regular.typeface.js";
+								this.fontLoader = new THREE.FontLoader();
+								this.fontLoader.load(this.fontUrl, function(font)
+								{
+									this.font = font;
+
+									console.log("JumpStart: Loaded " + baseScripts.length + " JavaScript(s) and 1 font.");
+									loadHeadFilesCallback();
+								}.bind(this));
 							}.bind(this));
 					}.bind(this));
 				}.bind(this)
@@ -1983,7 +2044,8 @@ JumpStart.prototype.spawnTextPlane = function(options)
 		"fontSize": 12,
 		"color": "rgba(255,255,255,1.0)",
 		"background": "rgba(0,0,0,1.0)",
-		"backgroundImageElem": null
+		"backgroundImageElem": null,
+		"parent": null
 	};
 
 	if( !!options )
@@ -2032,10 +2094,12 @@ JumpStart.prototype.spawnTextPlane = function(options)
 	var material = new THREE.MeshBasicMaterial({map: scoreTexture, visible: true});
 
 	var scoreSlate = new THREE.Mesh(geometry, material);
-	var scoreboard = this.spawnInstance(null, {"object": scoreSlate});
+	var scoreboard = this.spawnInstance(null, {"object": scoreSlate, "parent": options.parent});
 	scoreboard.userData.scoreCanvas = scoreCanvas;
 	scoreboard.userData.scoreContext = scoreContext;
 	scoreboard.userData.scoreTexture = scoreTexture;
+
+	//scoreboard.userData.options = options;
 
 /*
 	scoreboard.traverse(function(child)
@@ -2627,11 +2691,18 @@ JumpStart.prototype.doPendingUpdates = function()
 					(instance.ignoreSync.transform.scale && !data.vitalData.ignoreSync.transform.scale)
 					)
 				{
-					var distance = instance.position.distanceTo(instance.userData.lerpSync.targetPosition);
-					var autoSpeed = instance.syncData.lerpSync.speed + (0.9 * distance);
-					instance.userData.lerpSync.time = distance / autoSpeed;
-					if( instance.userData.lerpSync.time === 0 )
-						instance.userData.lerpSync.time = 0.25;
+					//var distance = instance.position.distanceTo(instance.userData.lerpSync.targetPosition);
+					//var autoSpeed = instance.syncData.lerpSync.speed + (0.9 * distance);
+					//instance.userData.lerpSync.time = 1.0 / instance.syncData.lerpSync.speed;//distance / autoSpeed;
+					//if( instance.userData.lerpSync.time === 0 )
+					//	instance.userData.lerpSync.time = 0.25;
+					instance.userData.lerpSync.targetPosition.x = data.transform.position.x;
+					instance.userData.lerpSync.targetPosition.y = data.transform.position.y;
+					instance.userData.lerpSync.targetPosition.z = data.transform.position.z;
+					instance.userData.lerpSync.targetQuaternion._x = data.transform.quaternion._x;
+					instance.userData.lerpSync.targetQuaternion._y = data.transform.quaternion._y;
+					instance.userData.lerpSync.targetQuaternion._z = data.transform.quaternion._z;
+					instance.userData.lerpSync.targetQuaternion._w = data.transform.quaternion._w;
 					instance.userData.lerpSync.amount = 0.0;
 					instance.userData.lerpSync.originalPosition.copy(instance.position);
 					instance.userData.lerpSync.originalQuaternion.copy(instance.quaternion);
@@ -2817,6 +2888,8 @@ JumpStart.prototype.onTick = function()
 						for( listenerName in object.listeners.userdisconnect )
 							object.listeners.userdisconnect[listenerName].call(object, eventCategory[y]);
 					}
+
+					delete jumpStart.users[eventCategory[y].id];
 				}
 				else if( x === "userconnect" )
 				{
@@ -2826,6 +2899,8 @@ JumpStart.prototype.onTick = function()
 						for( listenerName in object.listeners.userconnect )
 							object.listeners.userconnect[listenerName].call(object, eventCategory[y]);
 					}
+
+					jumpStart.users[eventCategory[y].id] = eventCategory[y];
 				}
 			}
 
@@ -2851,6 +2926,8 @@ JumpStart.prototype.onTick = function()
 			{
 				if( freshObject.behaviors[x] )
 				{
+					if( x === "lerpSync" )
+						console.log("Applying lerpsync " + isInitialSync);
 					jumpStart.behaviors[x].applyBehavior.call(freshObject);
 				}
 			}
@@ -2927,7 +3004,9 @@ JumpStart.prototype.onTick = function()
 		this.listeners.tick[listenerName]();
 
 	requestAnimationFrame( function(){ jumpStart.onTick(); } );
-	this.renderer.render( this.scene, this.camera );
+
+	if( this.renderer )
+		this.renderer.render( this.scene, this.camera );
 
 	this.elapsedTime = this.clock.elapsedTime;
 	this.deltaTime = this.clock.getDelta();
@@ -3028,7 +3107,7 @@ JumpStart.prototype.onMouseUp = function(e)
 
 JumpStart.prototype.processCursorMove = function()
 {
-	if( !this.isRunning )
+	if( !this.isRunning || !this.renderer )
 		return;
 
 	this.cursorRay = this.futureCursorRay;
@@ -3244,6 +3323,8 @@ JumpStart.prototype.loadModelsEx = function(fileNames, callback)
 	found = location.pathname.lastIndexOf("/");
 	var urlPath = (found > 0) ? location.pathname.substring(1, found) : "";
 
+//	var defaultMaterial = new THREE.MeshBasicMaterial({"color": "rgb(255, 255, 255)", "vertexColors": THREE.VertexColors});
+
 	var multiloader = this.multiloader;//altspace.utilities.multiloader;
 	if( !!!multiloader )
 	{
@@ -3253,14 +3334,503 @@ JumpStart.prototype.loadModelsEx = function(fileNames, callback)
 		this.OBJMTLLoader = (function(){
 			 function load(objFile, mtlFile, callback, progress, error)
 			 {
+			 	//console.log(THREE.MTLLoader.prototype.parse);
+			 	//console.log(THREE.MTLLoader.prototype);
+			 	//console.log(THREE.MTLLoader.MaterialCreator.prototype);
+///*
+				THREE.MTLLoader.MaterialCreator.prototype.createMaterial_ = function ( materialName )
+				{
+
+					// Create material
+
+					var scope = this;
+					var mat = this.materialsInfo[ materialName ];
+					var params = {
+
+						name: materialName,
+						side: this.side,
+						"vertexColors": THREE.VertexColors
+
+					};
+
+					function resolveURL( baseUrl, url ) {
+
+						if ( typeof url !== 'string' || url === '' )
+							return '';
+
+						// Absolute URL
+						if ( /^https?:\/\//i.test( url ) ) return url;
+
+						return baseUrl + url;
+
+					}
+
+					function setMapForType( mapType, value ) {
+
+						if ( params[ mapType ] ) return; // Keep the first encountered texture
+
+						var texParams = scope.getTextureParams( value, params );
+						var map = scope.loadTexture( resolveURL( scope.baseUrl, texParams.url ) );
+
+						map.repeat.copy( texParams.scale );
+						map.offset.copy( texParams.offset );
+
+						map.wrapS = scope.wrap;
+						map.wrapT = scope.wrap;
+
+						params[ mapType ] = map;
+
+					}
+
+					for ( var prop in mat ) {
+
+						var value = mat[ prop ];
+
+						if ( value === '' ) continue;
+
+						switch ( prop.toLowerCase() ) {
+
+							// Ns is material specular exponent
+
+							case 'kd':
+
+								// Diffuse color (color under white light) using RGB values
+
+								params.color = new THREE.Color().fromArray( value );
+
+								break;
+
+							case 'ks':
+
+								// Specular color (color when light is reflected from shiny surface) using RGB values
+								params.specular = new THREE.Color().fromArray( value );
+
+								break;
+
+							case 'map_kd':
+
+								// Diffuse texture map
+
+								setMapForType( "map", value );
+
+								break;
+
+							case 'map_ks':
+
+								// Specular map
+
+								setMapForType( "specularMap", value );
+
+								break;
+
+							case 'map_bump':
+							case 'bump':
+
+								// Bump texture map
+
+								setMapForType( "bumpMap", value );
+
+								break;
+
+							case 'ns':
+
+								// The specular exponent (defines the focus of the specular highlight)
+								// A high exponent results in a tight, concentrated highlight. Ns values normally range from 0 to 1000.
+
+								params.shininess = parseFloat( value );
+
+								break;
+
+							case 'd':
+
+								if ( value < 1 ) {
+
+									params.opacity = value;
+									params.transparent = true;
+
+								}
+
+								break;
+
+							case 'Tr':
+
+								if ( value > 0 ) {
+
+									params.opacity = 1 - value;
+									params.transparent = true;
+
+								}
+
+								break;
+
+							default:
+								break;
+
+						}
+
+					}
+
+					params.vertexColors = true;
+
+					this.materials[ materialName ] = new THREE.MeshBasicMaterial( params );
+					return this.materials[ materialName ];
+
+				};
+				//*/
+
 				var mtlLoader = new THREE.MTLLoader();
+
 				var baseUrl = mtlFile.split('/').slice(0, -1).join('/');
 				mtlLoader.setBaseUrl(baseUrl + '/');
-				mtlLoader.load(mtlFile, function (materials)
+				mtlLoader.load(mtlFile, function (materialCreator)
 				{
+					// test some stuff with vertexcolors
+					THREE.OBJLoader.prototype.parse = function ( text )
+					{
+						//console.time( 'OBJLoader' );
+
+						var state = this._createParserState();
+
+						if ( text.indexOf( '\r\n' ) !== - 1 ) {
+
+							// This is faster than String.split with regex that splits on both
+							text = text.replace( /\r\n/g, '\n' );
+
+						}
+
+						if ( text.indexOf( '\\\n' ) !== - 1) {
+
+							// join lines separated by a line continuation character (\)
+							text = text.replace( /\\\n/g, '' );
+
+						}
+
+						var lines = text.split( '\n' );
+						var line = '', lineFirstChar = '', lineSecondChar = '';
+						var lineLength = 0;
+						var result = [];
+
+						// Faster to just trim left side of the line. Use if available.
+						var trimLeft = ( typeof ''.trimLeft === 'function' );
+
+						for ( var i = 0, l = lines.length; i < l; i ++ ) {
+
+							line = lines[ i ];
+
+							line = trimLeft ? line.trimLeft() : line.trim();
+
+							lineLength = line.length;
+
+							if ( lineLength === 0 ) continue;
+
+							lineFirstChar = line.charAt( 0 );
+
+							// @todo invoke passed in handler if any
+							if ( lineFirstChar === '#' ) continue;
+
+							if ( lineFirstChar === 'v' ) {
+
+								lineSecondChar = line.charAt( 1 );
+
+								if ( lineSecondChar === ' ' && ( result = this.regexp.vertex_pattern.exec( line ) ) !== null ) {
+
+									// 0                  1      2      3
+									// ["v 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
+
+									state.vertices.push(
+										parseFloat( result[ 1 ] ),
+										parseFloat( result[ 2 ] ),
+										parseFloat( result[ 3 ] )
+									);
+
+								} else if ( lineSecondChar === 'n' && ( result = this.regexp.normal_pattern.exec( line ) ) !== null ) {
+
+									// 0                   1      2      3
+									// ["vn 1.0 2.0 3.0", "1.0", "2.0", "3.0"]
+
+									state.normals.push(
+										parseFloat( result[ 1 ] ),
+										parseFloat( result[ 2 ] ),
+										parseFloat( result[ 3 ] )
+									);
+
+								} else if ( lineSecondChar === 't' && ( result = this.regexp.uv_pattern.exec( line ) ) !== null ) {
+
+									// 0               1      2
+									// ["vt 0.1 0.2", "0.1", "0.2"]
+
+									state.uvs.push(
+										parseFloat( result[ 1 ] ),
+										parseFloat( result[ 2 ] )
+									);
+
+								} else {
+
+									throw new Error( "Unexpected vertex/normal/uv line: '" + line  + "'" );
+
+								}
+
+							} else if ( lineFirstChar === "f" ) {
+
+								if ( ( result = this.regexp.face_vertex_uv_normal.exec( line ) ) !== null ) {
+
+									// f vertex/uv/normal vertex/uv/normal vertex/uv/normal
+									// 0                        1    2    3    4    5    6    7    8    9   10         11         12
+									// ["f 1/1/1 2/2/2 3/3/3", "1", "1", "1", "2", "2", "2", "3", "3", "3", undefined, undefined, undefined]
+
+									state.addFace(
+										result[ 1 ], result[ 4 ], result[ 7 ], result[ 10 ],
+										result[ 2 ], result[ 5 ], result[ 8 ], result[ 11 ],
+										result[ 3 ], result[ 6 ], result[ 9 ], result[ 12 ]
+									);
+
+								} else if ( ( result = this.regexp.face_vertex_uv.exec( line ) ) !== null ) {
+
+									// f vertex/uv vertex/uv vertex/uv
+									// 0                  1    2    3    4    5    6   7          8
+									// ["f 1/1 2/2 3/3", "1", "1", "2", "2", "3", "3", undefined, undefined]
+
+									state.addFace(
+										result[ 1 ], result[ 3 ], result[ 5 ], result[ 7 ],
+										result[ 2 ], result[ 4 ], result[ 6 ], result[ 8 ]
+									);
+
+								} else if ( ( result = this.regexp.face_vertex_normal.exec( line ) ) !== null ) {
+
+									// f vertex//normal vertex//normal vertex//normal
+									// 0                     1    2    3    4    5    6   7          8
+									// ["f 1//1 2//2 3//3", "1", "1", "2", "2", "3", "3", undefined, undefined]
+
+									state.addFace(
+										result[ 1 ], result[ 3 ], result[ 5 ], result[ 7 ],
+										undefined, undefined, undefined, undefined,
+										result[ 2 ], result[ 4 ], result[ 6 ], result[ 8 ]
+									);
+
+								} else if ( ( result = this.regexp.face_vertex.exec( line ) ) !== null ) {
+
+									// f vertex vertex vertex
+									// 0            1    2    3   4
+									// ["f 1 2 3", "1", "2", "3", undefined]
+
+									state.addFace(
+										result[ 1 ], result[ 2 ], result[ 3 ], result[ 4 ]
+									);
+
+								} else {
+
+									throw new Error( "Unexpected face line: '" + line  + "'" );
+
+								}
+
+							} else if ( lineFirstChar === "l" ) {
+
+								var lineParts = line.substring( 1 ).trim().split( " " );
+								var lineVertices = [], lineUVs = [];
+
+								if ( line.indexOf( "/" ) === - 1 ) {
+
+									lineVertices = lineParts;
+
+								} else {
+
+									for ( var li = 0, llen = lineParts.length; li < llen; li ++ ) {
+
+										var parts = lineParts[ li ].split( "/" );
+
+										if ( parts[ 0 ] !== "" ) lineVertices.push( parts[ 0 ] );
+										if ( parts[ 1 ] !== "" ) lineUVs.push( parts[ 1 ] );
+
+									}
+
+								}
+								state.addLineGeometry( lineVertices, lineUVs );
+
+							} else if ( ( result = this.regexp.object_pattern.exec( line ) ) !== null ) {
+
+								// o object_name
+								// or
+								// g group_name
+
+								// WORKAROUND: https://bugs.chromium.org/p/v8/issues/detail?id=2869
+								// var name = result[ 0 ].substr( 1 ).trim();
+								var name = ( " " + result[ 0 ].substr( 1 ).trim() ).substr( 1 );
+
+								state.startObject( name );
+
+							} else if ( this.regexp.material_use_pattern.test( line ) ) {
+
+								// material
+
+								state.object.startMaterial( line.substring( 7 ).trim(), state.materialLibraries );
+
+							} else if ( this.regexp.material_library_pattern.test( line ) ) {
+
+								// mtl file
+
+								state.materialLibraries.push( line.substring( 7 ).trim() );
+
+							} else if ( ( result = this.regexp.smoothing_pattern.exec( line ) ) !== null ) {
+
+								// smooth shading
+
+								// @todo Handle files that have varying smooth values for a set of faces inside one geometry,
+								// but does not define a usemtl for each face set.
+								// This should be detected and a dummy material created (later MultiMaterial and geometry groups).
+								// This requires some care to not create extra material on each smooth value for "normal" obj files.
+								// where explicit usemtl defines geometry groups.
+								// Example asset: examples/models/obj/cerberus/Cerberus.obj
+
+								var value = result[ 1 ].trim().toLowerCase();
+								state.object.smooth = ( value === '1' || value === 'on' );
+
+								var material = state.object.currentMaterial();
+								if ( material ) {
+
+									material.smooth = state.object.smooth;
+
+								}
+
+							} else {
+
+								// Handle null terminated files without exception
+								if ( line === '\0' ) continue;
+
+								throw new Error( "Unexpected line: '" + line  + "'" );
+
+							}
+
+						}
+
+						state.finalize();
+
+						var container = new THREE.Group();
+						container.materialLibraries = [].concat( state.materialLibraries );
+
+						for ( var i = 0, l = state.objects.length; i < l; i ++ ) {
+
+							var object = state.objects[ i ];
+							var geometry = object.geometry;
+							var materials = object.materials;
+							var isLine = ( geometry.type === 'Line' );
+
+							// Skip o/g line declarations that did not follow with any faces
+							if ( geometry.vertices.length === 0 ) continue;
+
+							var buffergeometry = new THREE.BufferGeometry();
+
+							var vertexColors = [];
+							for( var j = 0; j < geometry.vertices.length; j++ )
+							{
+								vertexColors.push(parseFloat(1));
+							}
+							buffergeometry.addAttribute( 'position', new THREE.BufferAttribute( new Float32Array( geometry.vertices ), 3 ) );
+							buffergeometry.addAttribute( 'color', new THREE.BufferAttribute( new Float32Array( vertexColors ), 3 ) );
+
+							if ( geometry.normals.length > 0 ) {
+
+								buffergeometry.addAttribute( 'normal', new THREE.BufferAttribute( new Float32Array( geometry.normals ), 3 ) );
+
+							} else {
+
+								buffergeometry.computeVertexNormals();
+
+							}
+
+							if ( geometry.uvs.length > 0 ) {
+
+								buffergeometry.addAttribute( 'uv', new THREE.BufferAttribute( new Float32Array( geometry.uvs ), 2 ) );
+
+							}
+
+							// Create materials
+
+							var createdMaterials = [];
+
+							for ( var mi = 0, miLen = materials.length; mi < miLen ; mi++ ) {
+
+								var sourceMaterial = materials[mi];
+								var material = undefined;
+
+								if ( this.materials !== null ) {
+
+									material = this.materials.create( sourceMaterial.name );
+
+									// mtl etc. loaders probably can't create line materials correctly, copy properties to a line material.
+									if ( isLine && material && ! ( material instanceof THREE.LineBasicMaterial ) ) {
+
+										var materialLine = new THREE.LineBasicMaterial();
+										materialLine.copy( material );
+										material = materialLine;
+
+									}
+
+								}
+
+								if ( ! material ) {
+
+									material = ( ! isLine ? new THREE.MeshPhongMaterial() : new THREE.LineBasicMaterial() );
+									material.name = sourceMaterial.name;
+
+								}
+								//console.log(material);
+//material.vertexColors = THREE.VertexColors;
+								material.shading = sourceMaterial.smooth ? THREE.SmoothShading : THREE.FlatShading;
+
+								createdMaterials.push(material);
+
+							}
+
+							// Create mesh
+
+							var mesh;
+
+							if ( createdMaterials.length > 1 ) {
+
+								for ( var mi = 0, miLen = materials.length; mi < miLen ; mi++ ) {
+
+									var sourceMaterial = materials[mi];
+									buffergeometry.addGroup( sourceMaterial.groupStart, sourceMaterial.groupCount, mi );
+
+								}
+
+								var multiMaterial = new THREE.MultiMaterial( createdMaterials );
+								mesh = ( ! isLine ? new THREE.Mesh( buffergeometry, multiMaterial ) : new THREE.LineSegments( buffergeometry, multiMaterial ) );
+
+							} else {
+
+								mesh = ( ! isLine ? new THREE.Mesh( buffergeometry, createdMaterials[ 0 ] ) : new THREE.LineSegments( buffergeometry, createdMaterials[ 0 ] ) );
+							}
+
+							mesh.name = object.name;
+
+							container.add( mesh );
+
+						}
+
+						//console.timeEnd( 'OBJLoader' );
+
+						return container;
+
+					};
+
 					var objLoader = new THREE.OBJLoader();
-					objLoader.setMaterials(materials);
-					objLoader.load(objFile, callback);
+					objLoader.setMaterials(materialCreator);
+					objLoader.load(objFile, function(obj)
+					{
+						/*
+						obj.traverse(function(child)
+						{
+							if( child instanceof THREE.Mesh )
+							{
+								console.log("yar");
+								child.material = defaultMaterial.clone();
+							}
+						});
+						//console.log(obj);
+						*/
+						callback(obj);
+					});
 					
 		        }, progress, error);
 		    }
@@ -3792,7 +4362,10 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 			return;
 		}
 		else
-			instance = existingModel.object.clone();
+		{
+			instance = existingModel.object.clone();	// is this optimal w/ altspace???
+			//instance.geometry = existingMode.object.geometry;
+		}
 	}
 	else
 		instance = new THREE.Group();
@@ -3997,7 +4570,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		},
 		"sync": function(options)
 		{
-			if( !jumpStart.options.multiuserOnly )
+			if( !jumpStart.options.multiuserOnly || !jumpStart.objects.hasOwnProperty(this.uuid) )
 				return;
 
 			//if( this.name === "da bomb" )
@@ -4126,7 +4699,7 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 				
 				jumpStart.selfSyncingObject = false;
 
-				//console.log("JumpStart: Syncing object with key " + this.syncKey + ".");
+//				console.log("JumpStart: Syncing object with key " + this.syncKey + ".");
 			}
 			else
 			{

@@ -4,7 +4,7 @@ jumpStartBehavior({
 		"applyBehavior": function(options)
 		{
 			if( this.ownerID === jumpStart.localUser.userID )
-				this.syncData.rcdm.lerpSpeed = 10.0;
+				this.syncData.rcdm.lerpSpeed = 50.0;
 			
 			this.addEventListener("spawn", jumpStart.behaviors.rcdmPlane6.spawnBehavior);
 			this.addEventListener("tick", jumpStart.behaviors.rcdmPlane6.tickBehavior);
@@ -40,17 +40,20 @@ jumpStartBehavior({
 				part = jumpStart.spawnInstance(null, {"parent": this});
 				part.applyBehavior("asyncModel", {
 					"modelFile": this.syncData.rcdm.custom.parts[x].modelFile,
-					"callback": function()
+					"callback": function(visualObject)
 					{
-						//this.applyBehavior("dropShadow");
+						var vehicle = this.userData.vehicle;
+						if( !!vehicle.syncData.rcdm.custom.parts[this.userData.partName].colorCode )
+							this.setColor(new THREE.Color(vehicle.syncData.rcdm.custom.parts[this.userData.partName].colorCode));
 					}.bind(part)
 				});
 				part.position.copy(vehicleType.parts[x].offset);
 				part.rotateX(vehicleType.parts[x].rotate.x);
 				part.rotateY(vehicleType.parts[x].rotate.y);
 				part.rotateZ(vehicleType.parts[x].rotate.z);
+				part.userData.partName = x;
 				part.userData.vehicle = this;
-
+				
 				this.userData.rcdm.parts[x] = part;
 			}
 
@@ -120,7 +123,7 @@ jumpStartBehavior({
 				var userRotation = new THREE.Vector3();
 				var userTranslation = new THREE.Vector3();
 
-				if( jumpStart.gamepad.mapping === "steamvr" )
+				if( jumpStart.gamepad.mapping === "steamvr" || jumpStart.gamepad.mapping === "touch" )
 				{
 					fireButton = jumpStart.gamepad.buttons[0];
 					var yawAxisValue = jumpStart.gamepad.axes[0];
@@ -135,7 +138,7 @@ jumpStartBehavior({
 
 					var otherGamepad = jumpStart.gamepads.find(function(t)
 					{
-						return ( t.mapping === "steamvr" && t !== jumpStart.gamepad );
+						return ( t.mapping === jumpStart.gamepad.mapping && t !== jumpStart.gamepad );
 					});
 
 					if(otherGamepad)

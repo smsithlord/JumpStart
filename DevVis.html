@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Gamepads</title>
+		<script src="engine/misc/JumpStart.js"></script>
+		<script>
+			loadJumpStart({
+				"appID": "DevVis",
+				"multiuserOnly": false,
+				"sceneScale": 1.0,
+				"enclosureOnly": true,
+				"scaleWithEnclosure": true,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return true;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			function spawnEnclosure()
+			{
+				var enclosureBoxSize = new THREE.Vector3(
+						jumpStart.enclosure.scaledWidth,
+						jumpStart.enclosure.scaledHeight,
+						jumpStart.enclosure.scaledDepth
+					);
+
+				var enclosureBoxMesh = new THREE.Mesh(
+					new THREE.BoxGeometry(enclosureBoxSize.x, enclosureBoxSize.y, enclosureBoxSize.z),
+					new THREE.MeshBasicMaterial({"color": "#00ff00", "transparent": true, "opacity": 0.2})
+				);
+
+				var enclosureBox = jumpStart.spawnInstance(null, {"object": enclosureBoxMesh});
+				enclosureBox.position.y = jumpStart.enclosure.scaledHeight / 2.0;
+				enclosureBox.scale.set(0.0001, 0.0001, 0.0001);
+				enclosureBox.addEventListener("tick", function()
+				{
+					var speed = 0.2 * jumpStart.deltaTime;
+					if( this.scale.x < 1.0 )
+						this.scale.add(new THREE.Vector3(speed, speed, speed));
+
+					if( this.scale.x >= 1.0 )
+					{
+						this.scale.set(1, 1, 1);
+						this.removeEventListener("tick", arguments.callee);
+						return;
+					}
+				});
+
+				var params = {
+					size: 20.0,
+					height: 2.0,
+					font: jumpStart.font,
+					curveSegments: (jumpStart.isGearVR) ? 1 : 2
+				};
+
+				var padding = 20.0;
+				var text = spawn3DText("ENCLOSURE", "white", params);
+				text.position.x = (jumpStart.enclosure.scaledWidth / 2.0) - (text.userData.offset.x / 2.0) - padding;
+				text.position.y = -(jumpStart.enclosure.scaledHeight / 2.0) + (params.size / 2.0) + padding;
+				text.position.z = (jumpStart.enclosure.scaledDepth / 2.0) - (params.height / 2.0) - padding;
+				text.userData.totalOffset = (params.size / 2.0) + padding;
+				text.userData.totalXOffset = text.userData.offset.x / 2.0;
+
+				text.addEventListener("spawn", function()
+				{
+					var padding = 0.0;
+					var totalOffset = this.userData.totalOffset / 2.0;
+					var params, text;
+
+					function parseNumber(num)
+					{
+						return Number(num.toFixed(6));
+					}
+
+					params = {
+						size: 7.0,
+						height: 1.0,
+						font: jumpStart.font,
+						curveSegments: (jumpStart.isGearVR) ? 1 : 1
+					};
+
+					text = spawn3DText("World Dimensions: " + parseNumber(jumpStart.enclosure.innerWidth / (jumpStart.enclosure.pixelsPerMeter / 100.0)) + " x " + parseNumber(jumpStart.enclosure.innerHeight / (jumpStart.enclosure.pixelsPerMeter / 100.0)) + " x " + parseNumber(jumpStart.enclosure.innerDepth / (jumpStart.enclosure.pixelsPerMeter / 100.0)), "white", params);
+					totalOffset += (params.size * 2.0) + padding;
+					text.position.y = totalOffset;
+					text.position.x = this.userData.totalXOffset - (text.userData.offset.x / 2.0);
+					this.add(text);
+
+					text = spawn3DText("Inner Dimensions: " + parseNumber(jumpStart.enclosure.innerWidth) + " x " + parseNumber(jumpStart.enclosure.innerHeight) + " x " + parseNumber(jumpStart.enclosure.innerDepth), "white", params);
+					totalOffset += (params.size * 2.0) + padding;
+					text.position.y = totalOffset;
+					text.position.x = this.userData.totalXOffset - (text.userData.offset.x / 2.0);
+					this.add(text);
+
+					if( jumpStart.scene.scale.x != 1 )
+					{
+						text = spawn3DText("Scaled Dimensions: " + parseNumber(jumpStart.enclosure.scaledWidth) + " x " + parseNumber(jumpStart.enclosure.scaledHeight) + " x " + parseNumber(jumpStart.enclosure.scaledDepth), "white", params);
+						totalOffset += (params.size * 2.0) + padding;
+						text.position.y = totalOffset;
+						text.position.x = this.userData.totalXOffset - (text.userData.offset.x / 2.0);
+						this.add(text);
+
+						text = spawn3DText("Scene Scale: " + parseNumber(jumpStart.scene.scale.x), "white", params);
+						totalOffset += (params.size * 2.0) + padding;
+						text.position.y = totalOffset;
+						text.position.x = this.userData.totalXOffset - (text.userData.offset.x / 2.0);
+						this.add(text);
+					}
+
+					text = spawn3DText("Pixels / Meter: " + jumpStart.enclosure.pixelsPerMeter, "white", params);
+					totalOffset += (params.size * 2.0) + padding;
+					text.position.y = totalOffset;
+					text.position.x = this.userData.totalXOffset - (text.userData.offset.x / 2.0);
+					this.add(text);
+
+					text = spawn3DText("Enclosure Scale: " + parseNumber(1 / (jumpStart.enclosure.pixelsPerMeter / 100.0)), "white", params);
+					totalOffset += (params.size * 2.0) + padding;
+					text.position.y = totalOffset;
+					text.position.x = this.userData.totalXOffset - (text.userData.offset.x / 2.0);
+					this.add(text);
+				});
+				enclosureBox.add(text);
+			}
+
+			function spawn3DText(text, color, options)
+			{
+				/*
+				var params = {
+					size: 10.0,
+					height: 1,
+					font: jumpStart.font,// "helvetiker",
+					curveSegments: (jumpStart.isGearVR) ? 1 : 2
+				};
+				*/
+
+				function paintVertexLight(geometry)
+				{
+					function generateColor(amp)
+					{
+						///* GREEN AND YELLOW
+						var colorNumber = 255 - parseInt(255 * amp);
+						if( colorNumber < 0 )
+							colorNumber = 0;
+						else if( colorNumber > 255 )
+							colorNumber = 255;
+
+						var colorText = "rgb(" + colorNumber + ", 255, 0)";
+						//*/
+
+						/* RED & BRIGHT RED/WHITE
+						var colorNumber = 255 - parseInt(255 * amp);
+						if( colorNumber < 0 )
+							colorNumber = 0;
+						else if( colorNumber > 255 )
+							colorNumber = 255;
+
+						var colorText = "rgb(255, " + colorNumber + ", " + colorNumber + ")";
+						*/
+
+						var color = new THREE.Color(colorText);
+						return color;
+					}
+
+					var yMax = geometry.boundingBox.max.y - geometry.boundingBox.min.y;
+
+					var count = geometry.faces.length;
+					var i, face, vertex, normal, vertexNormal, dot, color, yPos;
+					for( i = 0; i < count; i++ )
+					{
+						face = geometry.faces[i];
+						vertex = geometry.vertices[face.b];
+
+						color = generateColor((vertex.y / yMax));
+						face.vertexColors[0] = color;
+						face.vertexColors[1] = color;
+						face.vertexColors[2] = color;
+					}
+				}
+
+				var geometry = new THREE.TextGeometry(text, options);
+				//var material = new THREE.MeshBasicMaterial({"color": color});
+				var material = new THREE.MeshBasicMaterial({"color": color, "vertexColors": THREE.VertexColors});
+				var mesh = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				var textContainer = jumpStart.spawnInstance(null);
+				var textObject = jumpStart.spawnInstance(null, {"object": mesh, "parent": textContainer})
+
+				var offset = new THREE.Vector3().copy(displacement);
+				textContainer.userData.offset = offset;
+				offset.multiply(textObject.scale);
+				textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				//paintVertexLight(geometry);
+				return textContainer;
+			}
+
+			jumpStart.addEventListener("ready", function()
+			{
+				var enclosureLinkMesh = new THREE.Mesh(
+					new THREE.BoxGeometry(30, 30, 30),
+					new THREE.MeshBasicMaterial({"color": "#00ff00"})
+				);
+
+				var enclosureLink = jumpStart.spawnInstance(null, {"object": enclosureLinkMesh});
+				enclosureLink.position.y = jumpStart.enclosure.scaledHeight / 2.0;
+				enclosureLink.blocksLOS = true;
+				jumpStart.makeCollide(enclosureLink);
+				enclosureLink.addEventListener("cursordown", function()
+				{
+					spawnEnclosure();
+					jumpStart.removeInstance(this);
+				});
+
+				var joinTrackerMesh = new THREE.Mesh(
+					new THREE.BoxGeometry(2.0, 2.0, 2.0),
+					new THREE.MeshBasicMaterial({"color": "#ccff99"})
+				);
+///*
+				var jointTracker = jumpStart.spawnInstance(null, {"object": joinTrackerMesh});
+				jointTracker.addEventListener("tick", function()
+				{
+					var skeleton = jumpStart.localUser.skeleton;
+					if( !!skeleton )
+					{
+					//altspace.getThreeJSTrackingSkeleton().then(function(skeleton)
+					//{
+						var trackingJoints = (!!skeleton) ? skeleton.trackingJoints : undefined;
+
+						if( !!trackingJoints )
+						{
+							if( !!activeJoint && !!trackingJoints[activeJoint] )
+							{
+								var joint = trackingJoints[activeJoint];
+								this.position.copy(jumpStart.world.worldToLocal(joint.position.clone()));
+							}
+						}
+					//});
+					}
+				});
+/*
+				var plane = jumpStart.spawnCursorPlane();
+				plane.blocksLOS = true;
+				plane.position.y = -jumpStart.worldOffset.y;
+				plane.position.z = jumpStart.worldOffset.y;
+				plane.rotateZ(Math.PI / 2.0);
+				jumpStart.makeCollide(plane);
+				*/
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function GetGamepadIndex(gamepad)
+			{
+				var i;
+				for(i = 0; i < jumpStart.gamepads.length; i++)
+				{
+					if( jumpStart.gamepads[i] === gamepad )
+						return i;
+				}
+
+				return -1;
+			}
+
+			function trackJoint(name)
+			{
+				activeJoint = name;
+			}
+
+			var activeJoint = null;
+			var statusElem = null;
+			var skeletonStatusElem = null;
+			jumpStart.addEventListener("tick", function()
+			{
+				if( !statusElem || !skeletonStatusElem )
+				{
+					statusElem = document.querySelector("#status");
+					skeletonStatusElem = document.querySelector("#skeletonStatus");
+				}
+
+				if( !statusElem || !skeletonStatusElem )
+					return;
+
+				//statusElem.style.backgroundColor = "black";
+				var numGamepads = jumpStart.gamepads.length;
+				var html = "Total Gamepads Detected: " + numGamepads + "<br /><br />";
+				if( numGamepads === 0 )//!jumpStart.gamepad )
+					html += "Waiting for gamepad input...";
+				else
+				{
+					var j;
+					for( j = 0; j < numGamepads; j++ )
+					{
+						var gamepad = jumpStart.gamepads[j];
+						if( !gamepad )
+							continue;
+
+						html += "<div class='gamepadStatus'>";
+						html += "<centeR>Gamepad " + GetGamepadIndex(gamepad) + " (" + gamepad.mapping + ")</center>";
+
+						var width;
+						var numButtons = gamepad.buttons.length;
+						var i;
+
+						html += "Buttons: " + numButtons + "<br />";
+
+						if( numButtons > 0 )
+						{
+							html += "<table width='100%' border=0><tr>";
+
+							for( i = 0; i < numButtons; i++ )
+								html += "<td>" + i + "</td>";
+
+							html += "</tr><tr>";
+
+							width = 100 / numButtons;
+							for( i = 0; i < numButtons; i++ )
+								html += "<td>" + gamepad.buttons[i].value + "</td>";
+
+							html += "</tr></table>";
+						}
+
+						var numAxes = gamepad.axes.length;
+						html += "<br />Axes: " + numAxes + "<br />";
+
+						if( numAxes > 0 )
+						{
+							html += "<table width='100%' border=0><tr>";
+
+							for( i = 0; i < numAxes; i++ )
+								html += "<td>" + i + "</td>";
+
+							html += "</tr><tr>";
+
+							width = 100 / numAxes;
+							for( i = 0; i < numAxes; i++ )
+								html += "<td width='" + width + "%'>" + gamepad.axes[i] + "</td>";
+
+							html += "</tr></table>";
+						}
+						
+						html += "</div>";
+					}
+				}
+
+				statusElem.innerHTML = html;
+
+				// SKELETON STUFF NOW
+				html = "";
+
+				var skeleton = jumpStart.localUser.skeleton;
+				var trackingJoints = (!!skeleton) ? skeleton.trackingJoints : undefined;
+
+				if( !!trackingJoints )
+				{
+					var orderedJoints = [];
+					var x;
+					for( x in trackingJoints )
+						orderedJoints.push({"id": x, "joint": trackingJoints});
+
+					orderedJoints.sort(function(a, b)
+					{
+						if( a.id < b.id )
+							return -1;
+						else if( a.id > b.id )
+							return 1;
+						else
+							return 0;
+					});
+
+					if( !!activeJoint && !!trackingJoints[activeJoint] )
+					{
+						joint = trackingJoints[activeJoint];
+						html += "<br />" + activeJoint + ": " + joint.position.x + "/" + joint.position.y + "/" + joint.position.z + "<br /><br />";
+					}
+
+					//var x, joint;
+					//for( x in trackingJoints )
+					var x, i, joint;
+					for( i = 0; i < orderedJoints.length; i++ )
+					{
+						x = orderedJoints[i].id;
+						joint = orderedJoints[i].joint;//trackingJoints[x];
+						html += "<div onmousedown=\"trackJoint('" + x + "');\" style='background-color: black; color: white; display: inline-block; padding: 5px; margin: 3px;'>" + x + "</div>";
+					}
+				}
+
+				skeletonStatusElem.innerHTML = html;
+			});
+		</script>
+
+		<style>
+			.statusContainer
+			{
+				position: absolute;
+				bottom: 0;
+				/*margin-left: auto;
+				margin-right: auto;*/
+				left: 0;
+				width: 400px;
+				font-weight: 900;
+				font-family: Arial;
+				font-size: 10px;
+			}
+
+			.skeletonStatusContainer
+			{
+				position: absolute;
+				bottom: 0;
+				/*margin-left: auto;
+				margin-right: auto;*/
+				right: 0;
+				width: 400px;
+				font-weight: 900;
+				font-family: Arial;
+				font-size: 10px;
+			}
+
+			.gamepadStatus
+			{
+				background-color: rgba(255, 0, 0, 0.8);
+				text-align: left;
+			}
+
+			.skeletonStatus
+			{
+				background-color: rgba(0, 0, 255, 0.8);
+				text-align: left;
+			}
+		</style>
+	</head>
+
+	<body style="background-color: transparent;">
+		<script>
+			if( !jumpStart.isAltspace )
+				document.body.style.backgroundColor = "#000";
+		</script>
+
+		<div id="status" class="statusContainer">
+			Total Gamepads Detected: 0<br /><br />
+		</div>
+
+		<div id="skeletonStatus" class="skeletonStatusContainer">
+			Loading skeleton...
+		</div>
+
+	</body>
+</html>

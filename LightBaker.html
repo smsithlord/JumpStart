@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Light Baker</title>
+		<script src="engine/misc/JumpStart.js"></script>
+
+		<script>
+			loadJumpStart({
+				"appID": "LightBaker",
+				"multiuserOnly": false,
+				"sceneScale": 1.0,
+				"enclosureOnly": true,
+				"scaleWithEnclosure": true,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// Async
+				jumpStart.loadModelsEx(["models/clouds"], function()
+				{
+					jumpStart.doneCaching();
+				});
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				//return true;
+				return false;
+			});
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			function bakeVertexLight(object, light)
+			{
+				function getLightValue(dot, dist)
+				{
+					var falloff = 250.0;
+					var dist = dist / falloff;
+					var intensity = 1 / (dist * dist);
+
+					var midLight = 255 / 2.0;
+					var maxLight = 255 - midLight;
+					var colorNumber = parseInt((midLight + (maxLight * dot)) * intensity);
+
+					if( colorNumber > 255 )
+						colorNumber = 255;
+					else if( colorNumber < 0 )
+						colorNumber = 0;
+
+					return colorNumber / 255.0;
+				}
+
+				if( !!!object.geometry )
+				{
+					object.traverse(function(child)
+					{
+						if( !!child.geometry )
+							object = child;
+					});
+
+					if( !!!object.geometry )
+						return;
+				}
+
+				object.parent.updateMatrixWorld();
+
+			//	var dist = object.getWorldPosition().distanceTo(light.getWorldPosition());
+				//var dist = new THREE.Vector3();
+
+				var count = (!!!object.geometry.attributes) ? object.geometry.faces.length : object.geometry.attributes.position.count;
+
+				var keyLetters = ["a", "b", "c"];	// for structured geometry
+				var displacement = new THREE.Vector3();	// for array geometry
+				var vertexPosition = new THREE.Vector3();
+				var vertexNormal = new THREE.Vector3();
+				var normalLook = new THREE.Vector3();
+				var lightLook = new THREE.Vector3();
+
+				var normals = (!!object.geometry.attributes) ? object.geometry.attributes.normal.array : undefined;
+				
+				var positions = (!!object.geometry.attributes) ? object.geometry.attributes.position.array : undefined;
+
+				var i, face, j, dot, value;
+				for( i = 0; i < count; i++ )
+				{
+					if( !!!object.geometry.attributes )
+						face = object.geometry.faces[i];
+
+					for( j = 0; j < 3 || !!object.geometry.attributes; j++ )
+					{
+						// get vertexPosition
+						if(!!!object.geometry.attributes)
+							vertexPosition.copy(object.geometry.vertices[face[keyLetters[j]]]);
+						else
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+						vertexPosition.applyMatrix4(object.matrixWorld);
+						jumpStart.world.worldToLocal(vertexPosition);
+
+						//var dist = vertexPosition).distanceTo(light.getWorldPosition());
+						var dist = vertexPosition.distanceTo(light.position);
+
+						// get vertexNormal
+						if( !!!object.geometry.attributes )
+						{
+							vertexNormal.copy(object.geometry.vertices[face[keyLetters[j]]]);
+							vertexNormal.add(face.vertexNormals[j]);
+						}
+						else
+						{
+							displacement.set(normals[(3*i) + 0], normals[(3*i) + 1], normals[(3*i) + 2]);
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+							vertexNormal.add(displacement);
+						}
+						vertexNormal.applyMatrix4(object.matrixWorld);
+						jumpStart.world.worldToLocal(vertexNormal);
+
+						// get vertexNormalLook
+						normalLook.copy(vertexPosition);
+						normalLook.sub(vertexNormal);
+						normalLook.normalize();
+
+						// get vertexLightLook
+						lightLook.copy(vertexPosition);
+						lightLook.sub(light.position);
+						lightLook.normalize();
+
+						// get dot
+						dot = normalLook.dot(lightLook);
+						value = getLightValue(dot, dist);	// a light value between 0.0 and 1.0
+
+						if( !!!object.geometry.attributes )
+						{
+							value = parseInt(255 * value);
+							value = "rgb(" + value + ", " + value + ", " + value + ")";
+
+							if( !!face.vertexColors[j] )
+							{
+								face.vertexColors[j].set(value);
+							}
+							else
+								face.vertexColors[j] = new THREE.Color(value);
+
+							object.geometry.colorsNeedUpdate = true;
+						}
+						else
+						{
+							//console.log(object);
+							object.geometry.attributes.color.array[(3*i) + 0] = value;
+							object.geometry.attributes.color.array[(3*i) + 1] = value;
+							object.geometry.attributes.color.array[(3*i) + 2] = value;
+							object.geometry.attributes.color.needsUpdate = true;
+							break;
+						}
+					}
+				}
+
+			}
+/*
+			var g_debugMarker;
+			function getDebugMarker()
+			{
+				if( !!!g_debugMarker )
+				{
+					// create the global debugMarker to visualize stuff
+					var debugGeometry = new THREE.SphereGeometry( 2.0, 8, 8, 0);
+					var debugMaterial = new THREE.MeshBasicMaterial( {"color": new THREE.Color("rgb(0, 255, 0)")} );
+					var debugMesh = new THREE.Mesh( debugGeometry, debugMaterial );
+					g_debugMarker = jumpStart.spawnInstance(null, {"object": debugMesh});
+					g_debugMarker.scale.z = 30.0;
+				}
+
+				return g_debugMarker;
+			}
+*/
+			var g_selectedTextureName = "";
+			var g_selectedTexturePlane;
+			var g_aid;
+			var g_lights = {};
+			var g_lightable = {};
+			function makeLight()
+			{
+				if( !!g_lights[this.uuid] )
+				{
+					console.log("WARNING: object already is a light!!");
+					return;
+				}
+
+				this.addEventListener("remove", function()
+				{
+					delete g_lights[this.uuid];
+				});
+
+				g_lights[this.uuid] = this;
+			}
+
+			function makeLightable()
+			{
+				if( !!g_lightable[this.uuid] )
+				{
+					console.log("WARNING: object already is lightable!!");
+					return;
+				}
+
+				this.addEventListener("remove", function()
+				{
+					delete g_lightable[this.uuid];
+				});
+
+				g_lightable[this.uuid] = this;
+			}
+
+			function computeLighting()
+			{
+
+				var lightKeys = Object.keys(g_lights);
+				if( lightKeys.length < 1 )
+				{
+					console.log("ERROR: There are no lights!");
+					return;
+				}
+
+				var lightKey = lightKeys[0];
+				var light = g_lights[lightKey];
+
+				// create light-aid
+				if( !g_aid )
+				{
+					var aidMesh = new THREE.Mesh(
+						new THREE.SphereGeometry(32.0, 8, 8, 0),
+						new THREE.MeshBasicMaterial({"color": "#ffff00", "opacity": 0.5, "transparent": true})
+					);
+					g_aid = jumpStart.spawnInstance(null, {"object": aidMesh});
+					makeThrob.call(g_aid, {"minScale": 0.8, "maxScale": 1.2, "rate": 0.3,});
+				}
+
+				g_aid.position.copy(light.position);
+
+				var lightableKeys = Object.keys(g_lightable);
+				var i, x, object;
+				for( i = 0; i < lightableKeys.length; i++ )
+				{
+					x = lightableKeys[i];
+					object = g_lightable[x];
+					bakeVertexLight(object, light);
+				}
+			}
+
+			// klein function taken from https://github.com/oreilly-japan/learning-three-js-2e-ja-support/blob/master/chapter-06/06-parametric-geometries.html
+			// TODO: klein function should be in THREE.ParametricGeometry, if it were to be defined.
+			function klein(u, v)
+			{
+	            u *= Math.PI;
+	            v *= 2 * Math.PI;
+	            u = u * 2;
+	            var x, y, z;
+	            if (u < Math.PI) {
+	                x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(u) * Math.cos(v);
+	                z = -8 * Math.sin(u) - 2 * (1 - Math.cos(u) / 2) * Math.sin(u) * Math.cos(v);
+	            } else {
+	                x = 3 * Math.cos(u) * (1 + Math.sin(u)) + (2 * (1 - Math.cos(u) / 2)) * Math.cos(v + Math.PI);
+	                z = -8 * Math.sin(u);
+	            }
+	            y = -2 * (1 - Math.cos(u) / 2) * Math.sin(v);
+	            return new THREE.Vector3(x, y, z);
+			}
+
+			function spawn3DText(text, color, options)
+			{
+				/*
+				var params = {
+					size: 10.0,
+					height: 1,
+					font: jumpStart.font,// "helvetiker",
+					curveSegments: (jumpStart.isGearVR) ? 1 : 2
+				};
+				*/
+
+				function gradientColor(geometry)
+				{
+					function generateColor(amp)
+					{
+						///* GREEN AND YELLOW
+						var colorNumber = parseInt(255 * amp);
+						if( colorNumber < 0 )
+							colorNumber = 0;
+						else if( colorNumber > 255 )
+							colorNumber = 255;
+
+						var colorText = "rgb(255, 255, " + colorNumber + ")";	// YELLOW & WHITE
+						//var colorText = "rgb(" + colorNumber + ", 255, 0)";	// YELLOW & GREEN
+						//*/
+
+						/* RED & BRIGHT RED/WHITE
+						var colorNumber = 255 - parseInt(255 * amp);
+						if( colorNumber < 0 )
+							colorNumber = 0;
+						else if( colorNumber > 255 )
+							colorNumber = 255;
+
+						var colorText = "rgb(255, " + colorNumber + ", " + colorNumber + ")";
+						*/
+
+						var color = new THREE.Color(colorText);
+						return color;
+					}
+
+					var yMax = geometry.boundingBox.max.y - geometry.boundingBox.min.y;
+
+					var count = geometry.faces.length;
+					var i, face, vertex, normal, vertexNormal, dot, color, yPos;
+					for( i = 0; i < count; i++ )
+					{
+						face = geometry.faces[i];
+						vertex = geometry.vertices[face.b];
+
+						color = generateColor((vertex.y / yMax));
+						face.vertexColors[0] = color;
+						face.vertexColors[1] = color;
+						face.vertexColors[2] = color;
+					}
+				}
+
+				var geometry = new THREE.TextGeometry(text, options);
+				//var material = new THREE.MeshBasicMaterial({"color": color});
+				var material = new THREE.MeshBasicMaterial({"color": color, "vertexColors": THREE.VertexColors});
+				var mesh = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				var textContainer = jumpStart.spawnInstance(null);
+				var textObject = jumpStart.spawnInstance(null, {"object": mesh, "parent": textContainer})
+
+				var offset = new THREE.Vector3().copy(displacement);
+				offset.multiply(textObject.scale);
+				textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				gradientColor(geometry);
+				return textContainer;
+			}
+
+			function rebuildStage()
+			{
+				clearStage();
+				buildStage();
+			}
+
+			function resetStage()
+			{
+				g_selectedTextureName = "";
+				jumpStart.removeInstance(g_selectedTexturePlane);
+				g_selectedTexturePlane = undefined;
+				//delete window[g_selectedTexturePlane];
+
+				clearStage();
+				buildStage();
+			}
+
+			function clearStage()
+			{
+				var table = jumpStart.scene.getObjectByName("table");
+				if( !!!table )
+					return;
+
+				//jumpStart.removeInstance(table);
+				table.name = "";
+				table.addEventListener("tick", function()
+				{
+					jumpStart.removeInstance(this);
+				});
+				//table.applyBehavior("shrinkRemove");
+				g_lightable = {};
+			}
+
+			function createPrimative(geoType, geoOptions, matType, matOptions, parent)
+			{
+				// geoOptions needs a dummy -1 argument.  really, it does.
+				// http://stackoverflow.com/questions/5054926/javascript-create-instance-with-array-of-arguments
+				if( !!!geoOptions )
+					geoOptions = [-1];
+				else
+					geoOptions.unshift(-1);
+
+				// generate auto-colors if needed
+				if( !!matOptions && !!matOptions.color && matOptions.color === "auto" )
+				{
+					var seed = Math.abs(ezHash(geoType + geoOptions.join()));
+					if( seed < 20000 )
+						seed = 20000;
+
+					matOptions.color = new THREE.Color("rgb(" + parseInt(255 * Math.seededRandom(seed)) + ", " + parseInt(255 * Math.seededRandom(seed - 10000)) + ", " + parseInt(255 * Math.seededRandom(seed - 20000)) + ")");
+				}
+
+				// create the geometry
+				var geometry = new (THREE[geoType].bind.apply(THREE[geoType], geoOptions))();
+
+				// create the material
+				var material;
+				if( matType === "MeshBasicMaterial")
+					material = new THREE.MeshBasicMaterial(matOptions);
+				else
+				{
+					console.log("warning: default material case hit...");
+				}
+
+				// create the mesh
+				var mesh = new THREE.Mesh(geometry, material);
+
+				// create the jumpStart object
+				var object;
+				if( !!parent )
+					object = jumpStart.spawnInstance(null, {"object": mesh, "parent": parent});
+				else
+					object = jumpStart.spawnInstance(null, {"object": mesh});
+
+				return object;
+			}
+
+			// from http://stackoverflow.com/questions/7616461/generate-a-hash-from-string-in-javascript-jquery
+			function ezHash(str) {
+			  var hash = 0, i, chr, len;
+			  if (str.length === 0) return hash;
+			  for (i = 0, len = str.length; i < len; i++) {
+			    chr   = str.charCodeAt(i);
+			    hash  = ((hash << 5) - hash) + chr;
+			    hash |= 0; // Convert to 32bit integer
+			  }
+			  return hash;
+			}
+
+			// seededRandom from: http://indiegamr.com/generate-repeatable-random-numbers-in-js/
+			// the initial seed
+			//Math.seed = 7;	// lucky
+
+			// in order to work 'Math.seed' must NOT be undefined,
+			// so in any case, you HAVE to provide a Math.seed
+			Math.seededRandom = function(seed, max, min) {
+				Math.seed = seed;
+			    max = max || 1;
+			    min = min || 0;
+
+			    Math.seed = (Math.seed * 9301 + 49297) % 233280;
+			    var rnd = Math.seed / 233280;
+
+			    return min + rnd * (max - min);
+			}
+
+			function buildStage()
+			{
+				//createPrimative("Cylinder");
+				// build the stage
+				var table = jumpStart.spawnInstance();
+				table.name = "table";
+				//table.applyBehavior("bubbleIn");
+				table.position.y = 200.0;
+				//table.position.x += 300.0;
+				table.userData.lightedObjects = {};
+				table.addEventListener("spawn", function()
+				{
+					var blandMatType = "MeshBasicMaterial";
+					var blandMatOptions = {
+						"color": new THREE.Color("rgb(255, 255, 255)"),
+						"vertexColors": THREE.VertexColors
+					};
+
+					var matType = "MeshBasicMaterial";
+
+					var matOptions;
+					if( g_selectedTextureName !== "" )
+						matOptions = {
+							"map": THREE.ImageUtils.loadTexture("assets/LightBaker/misc/" + g_selectedTextureName),//checkerboard.png"),
+							"vertexColors": THREE.VertexColors
+						};
+
+					function getMatOptions()
+					{
+						if( !!matOptions )
+							return matOptions;
+
+						return {
+							"color": "auto",
+							"vertexColors": THREE.VertexColors
+						};
+					}
+
+
+
+					var tableTop = createPrimative("CylinderGeometry",
+						[200.0, 200.0, 20.0, 24, 0],
+						blandMatType, 
+						blandMatOptions,
+						this);
+					makeLightable.call(tableTop);
+
+
+					var tableBase = createPrimative("CylinderGeometry",
+						[70.0, 70.0, 200.0, 12, 0],
+						blandMatType, 
+						blandMatOptions,
+						tableTop);
+					tableBase.position.y -= 110;
+					makeLightable.call(tableBase);
+
+
+					var tableDeck = createPrimative("CylinderGeometry",
+						[150.0, 150.0, 10.0, 16, 0],
+						matType, 
+						getMatOptions(),
+						tableTop);
+					tableDeck.position.y += 15.0;
+					makeLightable.call(tableDeck);
+
+
+					var ball = createPrimative("SphereGeometry",
+						[40.0, 8, 8, 0],
+						matType, 
+						getMatOptions(),
+						tableTop);
+					ball.position.y = tableDeck.position.y + 45.0;
+					ball.position.z -= 50.0;
+					makeLightable.call(ball);
+
+
+
+					var box = createPrimative("BoxGeometry",
+						[40, 40, 40, 1, 1, 1],
+						matType, 
+						getMatOptions(),
+						tableTop);
+					box.position.y = tableDeck.position.y + 25.0;
+					box.position.x += 60.0;
+					box.position.z += 40.0;
+					box.rotation.y = 0.8;
+					makeLightable.call(box);
+
+
+
+					var pillar = createPrimative("BoxGeometry",
+						[20, 120, 20, 1, 1, 1],
+						matType, 
+						getMatOptions(),
+						tableTop);
+					pillar.position.y = tableDeck.position.y + 65.0;
+					pillar.position.x -= 70.0;
+					pillar.position.z += 10.0;
+					makeLightable.call(pillar);
+
+
+					var torus = createPrimative("TorusKnotGeometry",
+						[30, 10, 32, 16],
+						matType, 
+						getMatOptions(),
+						tableTop);
+					torus.position.y = tableDeck.position.y + 55.0;
+					torus.position.x -= 30.0;
+					torus.position.z += 80.0;
+					makeLightable.call(torus);
+
+
+					var cone = createPrimative("ConeGeometry",
+						[30, 80, 12],
+						matType, 
+						getMatOptions(),
+						tableTop);
+					cone.position.y = tableDeck.position.y + 45.0;
+					cone.position.x += 70.0;
+					cone.position.z -= 50.0;
+					makeLightable.call(cone);
+
+					/* UNTESTED
+					var parametric = createPrimative("ParametricGeometry",
+						[klein, 8, 12],
+						matType, 
+						getMatOptions(),
+						tableTop);
+					parametric.scale.multiplyScalar(6.0);
+					parametric.position.x -= 20.0;
+					parametric.position.z += 120.0;
+					makeLightable.call(math);
+					*/
+
+
+					//g_obj = jumpStart.spawnInstance("models/clouds", {"parent": tableTop});
+					//g_obj.position.y = 200;
+					//makeLightable.call(g_obj);
+/*
+UltimateLoader.load('assets/LightBaker/models/thai.DAE', function(object)
+{
+	var actualObject = object.children[0].children[0];
+	console.log(actualObject);
+	//console.log(actualObject);
+
+	//var material = actualObject.children[0].material;
+	//console.log(material);
+
+	var goodObject = jumpStart.spawnInstance(null, {"object": actualObject});
+	goodObject.position.y = 350.0;
+
+	g_obj = goodObject
+	//g_obj.position.y = 200;
+	makeLightable.call(g_obj);
+
+	//console.log("Do it.");
+	computeLighting();
+	console.log("Do it.");
+  // Do work...
+
+  //Example work
+ // object.position.set(x, y, z);
+ // scene.add(object);
+
+  // Do more work...
+});
+*/
+
+					computeLighting();
+
+					return table;
+				});
+
+				var tableButtonGeometry = new THREE.CylinderGeometry(204.0, 204.0, 2.0, 24, 0);
+				var tableButtonMaterial = new THREE.MeshBasicMaterial({"color": new THREE.Color("rgb(255, 255, 0)")});
+				var tableButtonMesh = new THREE.Mesh(tableButtonGeometry, tableButtonMaterial);
+				var tableButton = jumpStart.spawnInstance(null, {"object": tableButtonMesh});;
+				tableButton.position.copy(table.position);
+				tableButton.blocksLOS = true;
+				jumpStart.makeCollide(tableButton);
+
+				tableButton.addEventListener("cursordown", rebuildStage);
+			}
+
+			//var g_obj;
+			jumpStart.addEventListener("ready", function()
+			{
+				// make the floor solid so people can re-focus the app if they need to
+				//var floor = jumpStart.enclosureBoundary("floor");
+				//floor.scale.multiplyScalar(0.6);
+				//jumpStart.makeCollide(floor);
+
+				// create the light source
+				var bulbMesh = new THREE.Mesh(
+					new THREE.SphereGeometry(6.0, 8, 8, 0),
+					new THREE.MeshBasicMaterial({"color": "#ffff00"})
+				);
+
+				var bulb = jumpStart.spawnInstance(null, {"object": bulbMesh});
+				bulb.position.set(200, 400, 0);
+				makeLight.call(bulb);
+
+				bulb.addEventListener("spawn", function()
+				{
+					var imageFile = "assets/LightBaker/misc/sun.png";
+					var x, imageMaterial, imageGeometry, imagePlane;
+					var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), transparent: true, opacity: 1.0});
+					var imageGeometry = new THREE.PlaneGeometry(32, 32, 1 , 1);
+					var imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+					var imageObject = jumpStart.spawnInstance(null, {"object": imagePlane, "parent": this});
+
+					var params = {
+						size: 16.0,
+						height: 2.0,
+						font: jumpStart.font,
+						curveSegments: (jumpStart.isGearVR) ? 1 : 1
+					};
+
+					//var text = spawn3DText("light", "white", params);
+					//this.add(text);
+					//text.translateY(-30.0);
+						
+				});
+
+				bulb.addEventListener("tick", function()
+				{
+					//if( !jumpStart.isAltspace )
+					//{
+						// animate
+						if( !!!this.userData.direction )
+							this.userData.direction = -1.0;
+
+						var maxVal = jumpStart.worldOffset.y * 0.7;
+						this.position.x += 50.0 * jumpStart.deltaTime * this.userData.direction;
+						if( -Math.abs(this.position.x) < maxVal )
+						{
+							if( this.position.x > 0)
+								maxVal *= -1.0;
+
+							this.position.x = maxVal;
+							this.userData.direction *= -1.0;
+						}
+						
+						computeLighting();	// AUTOMATICALLY UPDATE EVERY FRAME
+					//}
+
+					// sprite behavior
+					var skeleton = jumpStart.localUser.skeleton;
+					if( !!skeleton )
+					{
+						var lookJoint = skeleton.getJoint("Head");
+						if( !!lookJoint )
+							this.lookAt(jumpStart.world.worldToLocal(lookJoint.position.clone()));
+					}
+				});
+
+				// recalculate button
+				var calcMesh = new THREE.Mesh(
+					new THREE.SphereGeometry(12.0, 8, 8, 0),
+					new THREE.MeshBasicMaterial({"color": new THREE.Color("rgb(255, 255, 0)"), "vertexColors": THREE.VertexColors})
+				);
+
+				var calc = jumpStart.spawnInstance(null, {"object": calcMesh});
+				calc.position.set(0, 200, 210);
+
+				calc.blocksLOS = true;
+				jumpStart.makeCollide(calc);
+				calc.addEventListener("cursordown", resetStage);
+
+				var params = {
+						size: 16.0,
+						height: 2.0,
+						font: jumpStart.font,
+						curveSegments: (jumpStart.isGearVR) ? 1 : 1
+					};
+
+				var text = spawn3DText("reset", "white", params);
+				text.position.y -= 20.0;
+				calc.add(text);
+
+				var table = buildStage();
+
+				// create a texturePanel
+				function spawnTexturePanel(file, titleContainer)
+				{
+					var imageFile = "assets/LightBaker/misc/" + file;
+					var imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile)});
+					var imageGeometry = new THREE.PlaneGeometry(64, 64, 1 , 1);
+					var imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+					var imageObject = jumpStart.spawnInstance(null, {"object": imagePlane, "parent": titleContainer});
+
+					return imageObject;
+				}
+
+
+				function createPanel(file, rot)
+				{
+					var panelContainerGeometry = new THREE.PlaneGeometry(84, 84, 1 , 1);
+					var panelContainerMaterial = new THREE.MeshBasicMaterial({"color": new THREE.Color("rgb(0, 0, 0)"), "side": THREE.DoubleSide});
+					var panelContainerMesh = new THREE.Mesh(panelContainerGeometry, panelContainerMaterial);
+					var panelContainer = jumpStart.spawnInstance(null, {"object": panelContainerMesh, "parent": table});
+					panelContainer.userData.textureName = file;
+					panelContainer.addEventListener("cursorup", function()
+					{
+						g_selectedTextureName = this.userData.textureName;
+						rebuildStage();
+					});
+
+					panelContainer.rotateY(rot);
+					panelContainer.translateZ(160.0);
+					panelContainer.position.y = 80.0;
+					panelContainer.blocksLOS = true;
+					jumpStart.makeCollide(panelContainer);
+
+					panelContainer.addEventListener("cursordown", function()
+					{
+						if( !!!g_selectedTexturePlane )
+						{
+							var selectPlaneGeometry = new THREE.PlaneGeometry(100, 100, 1 , 1);
+							var selectPlaneMaterial = new THREE.MeshBasicMaterial({"color": new THREE.Color("rgb(255, 255, 0)")});
+							var selectPlaneMesh = new THREE.Mesh(selectPlaneGeometry, selectPlaneMaterial);
+							var selectPlane = jumpStart.spawnInstance(null, {"object": selectPlaneMesh, "parent": this});
+							selectPlane.position.z -= 0.5;
+
+							g_selectedTexturePlane = selectPlane;
+						}
+						else
+							this.add(g_selectedTexturePlane);
+					});
+
+					panelContainer.addEventListener("tick", function()
+					{
+						var panelImage = this.userData.panelImage;
+						if( !!!panelImage )
+							return;
+
+						var speed = 1.0;
+						var xMax = 1.4;
+						var yMax = 1.4;
+						var zMax = 30.0;
+						var xMin = 1.0;
+						var yMin = 1.0;
+						var zMin = 1.0;
+						if( jumpStart.hoveredObject === this )
+						{
+							if( this.scale.x < xMax )
+								this.scale.x += speed * jumpStart.deltaTime;
+
+							if( this.scale.x > xMax )
+								this.scale.x = xMax;
+
+							if( this.scale.y < yMax )
+								this.scale.y += speed * jumpStart.deltaTime;
+
+							if( this.scale.y > yMax )
+								this.scale.y = yMax;
+
+							if( this.scale.z < zMax )
+								this.scale.z += speed * 40.0 * jumpStart.deltaTime;
+
+							if( this.scale.z > zMax )
+								this.scale.z = zMax;
+						}
+						else
+						{
+
+							if( this.scale.x > xMin )
+								this.scale.x -= speed * jumpStart.deltaTime;
+
+							if( this.scale.x < xMin )
+								this.scale.x = xMin;
+
+							if( this.scale.y > yMin )
+								this.scale.y -= speed * jumpStart.deltaTime;
+
+							if( this.scale.y < yMin )
+								this.scale.y = yMin;
+
+							if( this.scale.z > zMin )
+								this.scale.z -= speed * 40.0 * jumpStart.deltaTime;
+
+							if( this.scale.z < zMin )
+								this.scale.z = zMin;
+						}
+					});
+
+					var panelImage = spawnTexturePanel(file, panelContainer);
+					panelImage.position.z = 1.0;
+					panelContainer.userData.panelImage = panelImage;
+
+					return panelContainer;
+				}
+
+				var panel;
+				var amount = (Math.PI * 2.0) / 8.0;
+
+				createPanel("checkerboard.png", amount * 0);
+				createPanel("grass.jpg", amount * 1);
+				createPanel("wood.jpg", amount * 2);
+				createPanel("station.jpg", amount * 3);
+				createPanel("craft.jpg", amount * 4);
+				createPanel("crazycheckers.png", amount * 5);
+				createPanel("fire.jpg", amount * 6);
+				createPanel("water.jpg", amount * 7);
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function throbHelper()
+			{
+				// don't throb if we're bubbling in still
+				if( !!this.userData.bubbleIn && this.userData.bubbleIn.scaleDirection !== 0 )
+					return;
+
+				var i;
+				var axes = this.userData.throb.axes;
+				var amount = this.userData.throb.rate * jumpStart.deltaTime * this.userData.throb.direction;
+				if( this.scale[axes[0]] + amount > this.userData.throb.maxScale )
+				{
+					this.userData.throb.direction = -1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.maxScale;
+				}
+				else if( this.scale[axes[0]] + amount < this.userData.throb.minScale )
+				{
+					this.userData.throb.direction = 1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.minScale;
+				}
+				else
+				{
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] += amount;
+				}
+			}
+
+			function makeThrob(options)
+			{
+				// Throb
+				// FIX ME: This should be a behavior, and needs to have info split between userData and syncData to do so.
+				options = {
+					"rate": (!!options.rate) ? options.rate : 25.0,
+					"maxScale": (!!options.maxScale) ? options.maxScale : 14.0,
+					"minScale": (!!options.minScale) ? options.minScale : 8.0,
+					"direction": (!!options.direction) ? options.direction : 1.0,
+					"axes": (!!options.axes) ? options.axes : "xyz"
+				};
+				this.userData.throb = options;
+
+				this.addEventListener("tick", throbHelper);
+			}
+
+			function unmakeThrob()
+			{
+				if( !!this.userData.throb )
+				{
+					delete this.userData.throb;
+					this.removeEventListener("tick", throbHelper);
+				}
+			}
+		</script>
+	</head>
+
+	<body style="background-color: transparent;">
+		<script>
+			if( !!!window.altspace )
+				document.body.style.backgroundColor = "rgb(20, 20, 20)";
+		</script>
+	</body>
+</html>

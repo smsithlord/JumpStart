@@ -94,7 +94,7 @@ jumpStartBehavior({
 
 				var fireButton;
 				var clawButton;
-				if( jumpStart.gamepad.mapping === "steamvr" )
+				if( jumpStart.gamepad.mapping === "steamvr" || jumpStart.gamepad.mapping === "touch" )
 				{
 					var yawAxisValue = jumpStart.gamepad.axes[0];
 					if( Math.abs(yawAxisValue) > 0.1 )
@@ -106,7 +106,7 @@ jumpStartBehavior({
 
 					var otherGamepad = jumpStart.gamepads.find(function(t)
 					{
-						return ( t.mapping === "steamvr" && t !== jumpStart.gamepad );
+						return ( t.mapping === jumpStart.gamepad.mapping && t !== jumpStart.gamepad );
 					});
 
 					if(otherGamepad)

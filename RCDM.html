@@ -30,6 +30,10 @@
 				"debug": {"showCursorPlanes": true}
 			});
 
+			var g_maxPlayers = 1;
+
+			//var g_sessionKey = "key" + Math.random() + "-" + Math.random() + "-" + Math.random() + "-" + Math.random();
+
 			jumpStart.addEventListener("precache", function()
 			{
 				var vehicleType = {
@@ -454,7 +458,7 @@
 				jumpStart.behaviors.rcdm.addVehicleType(vehicleType);
 
 				// Async
-				jumpStart.loadModelsEx(["models/cauldron", "models/water", "models/player_laser", "models/pumpkin1", "models/pumpkin2", "models/pumpkin3", "models/pumpkin4", "models/pumpkin5", "models/pumpkinbomb", "models/button", "models/buttonFrame"], function()
+				jumpStart.loadModelsEx(["models/powerupGunBox", "models/powerupGunBullets", "models/powerupGunBarrels", "models/cauldron", "models/water", "models/player_laser", "models/pumpkin1", "models/pumpkin2", "models/pumpkin3", "models/pumpkin4", "models/pumpkin5", "models/pumpkinbomb", "models/button", "models/buttonFrame"], function()
 					{
 						jumpStart.doneCaching();
 					});
@@ -464,11 +468,1187 @@
 				return false;
 			});
 
+			function powerupGunSpawnBehavior()
+			{
+				this.userData.consumable = true;
+				this.userData.powerupType = "guns";
+				
+				var box = jumpStart.spawnInstance("models/powerupGunBox", {"parent": this});
+				jumpStart.spawnInstance("models/powerupGunBullets", {"parent": this});
+				jumpStart.spawnInstance("models/powerupGunBarrels", {"parent": this});
+				this.boundingSphere = box.boundingSphere.clone();
+			}
+
+			// HELPER: spawn an icon
+			function spawnLobbyIcon(menuParent, vehicleTypeName, clickable)
+			{
+				var lookTarget = new THREE.Vector3(0, 200.0, 800.0);
+
+				var iconFile = "assets/RCDM/misc/thumbs/" + vehicleTypeName + "Icon.png";
+				var x, icon, iconMaterial, iconGeometry, iconPlane;
+				var iconMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(iconFile), transparent: true, opacity: 0.95});
+				//iconMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(iconFile)});
+
+				var iconGeometry = new THREE.PlaneGeometry(32, 32, 1 , 1);
+				var iconPlane = new THREE.Mesh(iconGeometry, iconMaterial);
+				var iconObject = jumpStart.spawnInstance(null, {"object": iconPlane, "parent": menuParent});
+				iconObject.blocksLOS = true;
+				jumpStart.makeCollide(iconObject);
+				iconObject.userData.targetScale = new THREE.Vector3(0.6, 0.6, 0.6);
+				iconObject.userData.menuParent = menuParent;
+				iconObject.userData.vehicleTypeName = vehicleTypeName;
+				iconObject.applyBehavior("bubbleIn", {"speed": 4.0, "maxScale": 0.8});
+
+				if( clickable )
+				{
+					iconObject.addEventListener("cursorenter", function()
+					{
+						if( !!this.behaviors.bubbleIn )
+							this.unapplyBehavior("bubbleIn");
+
+						this.userData.targetScale.set(0.8, 0.8, 0.8);
+					});
+
+					iconObject.addEventListener("cursorexit", function()
+					{
+						if( !!this.behaviors.bubbleIn )
+							this.unapplyBehavior("bubbleIn");
+
+						this.userData.targetScale.set(0.6, 0.6, 0.6);
+					});
+
+					iconObject.addEventListener("tick", function()
+					{
+						this.scale.lerp(this.userData.targetScale, 0.1);
+					});
+
+					iconObject.addEventListener("cursorup", function()
+					{
+						var action = this.userData.menuParent.userData.action;
+						takeSlot.call(action);
+						//spawnAutoStartButton.call(action);
+						//slotJoin.addEventListener("cursorup", spawnAutoStartButton);
+					});
+				}
+				/*
+					var parentButton = this.userData.menuParent.userData.parentButton;
+					if( parentButton.syncData.rcdmStartButton.isActive )
+						return;
+
+					parentButton.syncData.rcdmStartButton.isActive = true;
+					parentButton.applyBehavior("shrinkRemove", {"speed": 4.0});
+					parentObject.userData.rcdmStartButton.menu = null;
+					this.userData.menuParent.applyBehavior("shrinkRemove", {"speed": 6.0});
+
+					if( !!!this.userData.menuParent.userData.choosenCallback || this.userData.menuParent.userData.choosenCallback.call(parentButton.userData.parentObject, this.userData.vehicleTypeName) )
+					{
+						// spawn the vehicle
+						var vehicle = jumpStart.spawnInstance(null);
+						vehicle.applyBehavior("rcdm", {"custom": {"vehicleTypeName": this.userData.vehicleTypeName}});
+						vehicle.applyBehavior("autoRemoval");
+						vehicle.addEventListener("remove", function()
+						{
+							if( this.ownerID === jumpStart.localUser.userID )
+								createButton();
+						});
+						vehicle.position.copy(parentButton.position);
+						vehicle.position.y += 150.0;
+						vehicle.lookAt(new THREE.Vector3(0, vehicle.position.y, 0));
+						vehicle.sync();
+					}
+					
+					jumpStart.removeInstance(parentObject);
+				});
+				*/
+
+				return iconObject;
+			}
+
+			function takeSlot()
+			{
+				/*
+				var crap = jumpStart.spawnInstance("models/pumpkinbomb");
+				crap.scale.set(4.0, 4.0, 4.0);
+				crap.applyBehavior("autoRemoval");
+				crap.sync();
+				return;
+				*/
+				var slate = this.userData.parentObject;
+				var slots = slate.userData.slots;
+				var slot = this.userData.slot;
+				var slotIndex = slots.indexOf(slot);
+
+				var player = {
+					"id": jumpStart.localUser.userID,
+					"slotIndex": slotIndex,
+					"displayName": jumpStart.localUser.displayName,
+					"vehicleTypeName": "",
+					"status": "BUSY",
+					"old": ""
+				};
+
+				//if( !!!slate.syncData.players )
+					//slate.syncData.players = {};
+
+				slate.syncData.players[player.id] = player;
+				slate.syncData.updateCount += 1;
+				slate.sync({"syncData": true});
+
+				spawnAutoStartButton.call(this);
+			}
+
+			function spawnAutoStartButton()
+			{
+				//createButton();
+
+				var custom = {
+					"vehicleTypeName": "rcdmChopper",
+					"parts": {
+						"blades": {
+							"modelFile": "models/chopper2_blades"/*,
+							"offset": new THREE.Vector3(0, 8.81, 2.88),
+							"rotate": new THREE.Vector3(0, 0, 0),
+							"rotSpeed": -50.0*/
+						}
+					},
+					"claw": {
+						"wireModel": "models/wire",
+						"bodyModel": "models/claw",
+						"offset": new THREE.Vector3(0, -7.0, 0),
+						"maxLength": 100.0
+					}
+				};
+
+				//var i;
+				//for( i = 0; i < 4; i++ )
+				//{
+					//continue;
+					var randomVehicleTypeName = jumpStart.behaviors.rcdm.getRandomVehicleTypeName();
+
+					var button = jumpStart.spawnInstance(null);
+					button.userData.parentObject = this;
+					//button.userData.slot = this.userData.parentObject;
+					button.applyBehavior("rcdmStartButton", {"custom": {"vehicleTypeName": randomVehicleTypeName}});
+
+					button.rotateX(-Math.PI / 2.0);
+					//button.position.z += 150.0;
+					button.ignoreSync.transform.scale = true;
+					button.position.copy(this.userData.parentObject.syncData.origin);
+
+					var slots = this.userData.parentObject.userData.slots;
+					var i = 0;
+					for( i = 0; i < slots.length; i++ )
+					{
+						slots[i].scale.set(0.0001, 0.0001, 0.0001);
+					}
+
+					jumpStart.behaviors.rcdmStartButton.spawnMenu.call(button, selectCallback);
+					/*
+					var sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					button.position.x += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+					sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					button.position.z += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+					*/
+				//}
+			}
+
+			function selectCallback(vehicleTypeName, playerID, playerName)
+			{
+				var slot = this.userData.slot;
+				var slate = this.userData.parentObject;
+				var slots = slate.userData.slots;
+				var slotIndex = slots.indexOf(slot);
+
+				var player = {
+					"id": playerID,//jumpStart.localUser.userID,
+					"slotIndex": slotIndex,
+					"displayName": playerName,
+					"vehicleTypeName": vehicleTypeName,
+					"status": "WAITING",
+					"old": ""
+				};
+				slate.syncData.players[playerID] = player;
+				slate.syncData.updateCount += 1;
+				slate.sync({"syncData": true});
+
+				console.log(playerName + " has selected " + vehicleTypeName + " selected for slot " + slots.indexOf(slot));
+
+				var i = 0;
+				for( i = 0; i < slots.length; i++ )
+					slots[i].scale.set(1.0, 1.0, 1.0);
+
+				return false;
+			}
+
+			function spawnSlot(player)
+			{
+				var titleHeight = jumpStart.world.getObjectByName("title").userData.height;
+
+				var lobbySlate = this;
+				var slot = jumpStart.spawnInstance(null, {"parent": lobbySlate});
+				if( this.userData.slots.length > 0 )
+					slot.position.y = (this.userData.slots[this.userData.slots.length-1].position.y - this.userData.slots[this.userData.slots.length-1].userData.height) - 4.0;
+				else
+					slot.position.y = -titleHeight;
+
+				slot.userData.locked = false;
+
+				var text = (!!player) ? player.displayName : "OPEN";
+				var width = ((12.0 / 1.5) * text.length) * 1.5;
+				var height = 12.0 * 2.0;
+
+				slot.userData.height = height;
+
+				var color = (!!player) ? "rgba(255, 255, 255, 1.0)" : "rgba(150, 150, 150, 1.0)";
+
+				var slotName = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 0, 0, 1.0)", "color": color, "backgroundImageElem": document.querySelector("#slateSilver")});
+				slotName.position.x = (-width / 2.0) - 10.0;//(-mainWidth / 2.0) + (width / 2.0);
+				slotName.userData.text = text;
+				slotName.userData.id = (!!player) ? player.id : "";
+
+				slot.userData.label = slotName;
+
+				text = (!!player) ? player.status : "JOIN";
+				width = ((12.0 / 1.5) * text.length) * 1.5;
+				height = 12.0 * 2.0;
+
+				var slotJoin = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 100, 0, 1.0)", "backgroundImageElem": document.querySelector("#slateGreen")});
+				slotJoin.position.x = (width / 2.0) + 10.0;
+				slotJoin.userData.parentObject = this;
+				slotJoin.userData.slot = slot;
+				slotJoin.userData.text = text;
+
+				slotJoin.blocksLOS = true;
+				jumpStart.makeCollide(slotJoin);
+
+				var localPlayerLocked = (!!lobbySlate.syncData.players[jumpStart.localUser.userID] && lobbySlate.syncData.players[jumpStart.localUser.userID].status === "READY");
+
+				if( !!!player && !localPlayerLocked )
+				{
+					slotJoin.addEventListener("cursorup", takeSlot);
+
+					slotJoin.addEventListener("cursorenter", function()
+					{
+						if( !!!this.userData.throb )
+							makeThrob.call(this, {"maxScale": 1.2, "minScale": 1.0, "direction": 1.0, "rate": 0.5, "axes": "xy"});
+					});
+
+					slotJoin.addEventListener("cursorexit", function()
+					{
+						if( !!this.userData.throb )
+						{
+							unmakeThrob.call(this);
+							this.scale.set(1.0, 1.0, 1.0);
+						}
+					});
+				}
+
+				slot.userData.action = slotJoin;
+
+				this.userData.slots.push(slot);
+
+				if( !!player && player.vehicleTypeName !== "" )
+				{
+					var clickable = (jumpStart.localUser.userID === player.id);
+					var icon = spawnLobbyIcon(slot, player.vehicleTypeName, clickable);
+					icon.position.x += width + 25;
+					slot.userData.icon = icon;
+				}
+
+				return slot;
+			}
+
+			function lobbyTick()
+			{
+				//if( !jumpStart.elapsedTime )
+				if( !!!this.userData.slots )
+					return;
+
+				// check for disconnected players
+				// 1. check if we are the one responsible for doing this.
+				// 2. check each player ID with userID's in the room.
+				// 3. If the player ID isn't found in the list of room users, remove that player.
+				// 3b. A "disconnected" status will probably be needed for mid-game drops.
+
+				var playerIDs = [];
+				var x;
+				for( x in this.syncData.players )
+				{
+					if( this.syncData.players[x].slotIndex === -1 || this.syncData.players[x].id !== x || !!!this.syncData.players[x] || x !== this.syncData.players[x].id )//this.syncData.players[x].id === "none")
+					//if( this.syncData.players[x].slotIndex === -1 )//|| !!!this.syncData.players[x] )//this.
+						continue;
+
+					//var id2give = (this.syncData.players[x].old !== "") ? this.syncData.players[x].old : this.syncData.players[x].id;
+					var id2give = this.syncData.players[x].id;
+					playerIDs.push({"index": x, "id": id2give});
+				}
+
+				// FIXME: all you really need to do is have the owner of the lobby do it.  he is ALWAYS in the room... or there is no lobby at all.
+				var atLeastOne = false;
+				var i, id;
+				for( i = 0; i < playerIDs.length; i++ )
+				{
+					var exists = false;
+					id = playerIDs[i].id;
+					//console.log("Testing " + playerIDs.length + " ids vs " + Object.keys(jumpStart.users).length);
+					//console.log("test id " + id);
+
+					var y, testUser;
+					var userArray = Object.keys(jumpStart.users);	// IMPORTANT TO USE ARRAY INSTEAD OF STEPPING THRU THE USER OBJECT!!
+					//for( y in jumpStart.users )
+					var c;
+					for( c = 0; c < userArray.length; c++ )
+					{
+						y = userArray[c];
+						testUser = jumpStart.users[y];
+						if( testUser.id === id )
+						//if( id === y )
+						{
+							exists = true;
+							break;
+						}
+					}
+
+					if( !exists )
+					{
+						console.log("try to remove");
+						var needsRemove = false;
+						var index = -1;
+						var x, user;
+						var userArray = [];
+
+						for( x in jumpStart.users )
+							userArray.push(x);
+
+						//for( x in jumpStart.users )
+						var l;
+						for( l = 0; l < userArray.length; l++ )
+						{
+							x = userArray[l];
+							var user = jumpStart.users[x];
+							if( !!!user || user.id === id )
+								continue;
+
+							index++;
+
+							if( user.id === jumpStart.localUser.userID )
+							{
+								if( index === 0 )
+									needsRemove = true;
+
+								break;
+							}
+						}
+
+						if( needsRemove )
+						{
+							console.log("NEEEEEDS TO DO IT!!!");
+							//delete this.syncData.players[playerIDs[i].index];
+							//console.log("Before: " + JSON.stringify(this.syncData.players[playerIDs[i].index]));
+							//delete this.syncData.players[playerIDs[i].index];
+							this.syncData.players[playerIDs[i].index].old = this.syncData.players[playerIDs[i].index].id;
+							this.syncData.players[playerIDs[i].index].id = "none";
+							atLeastOne = true;
+							//console.log("After: " + this.syncData.players[playerIDs[i].index]);
+							//return;
+						}
+
+//						break;
+					}
+				}
+
+				//if( !exists )
+				//{
+				//	return;
+				//}
+
+
+				var localPlayerLocked = (!!this.syncData.players[jumpStart.localUser.userID] && this.syncData.players[jumpStart.localUser.userID].status === "READY");
+
+				function updateSlot(slate, slot, player)
+				{
+					if( !!player )
+						console.log("Update slate slot for player " + player.displayName);
+
+					//if( slot.userData.locked !== localPlayerLocked )
+					slot.userData.locked = localPlayerLocked;
+
+					// update the player name
+					var text = (!!player) ? player.displayName : "OPEN";
+					var width = ((12.0 / 1.5) * text.length) * 1.5;
+					var height = 12.0 * 2.0;
+
+					var color = (!!player) ? "rgba(255, 255, 255, 1.0)" : "rgba(150, 150, 150, 1.0)";
+					var oldThing = slot.userData.label;
+					var thing = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 0, 0, 1.0)", "color": color, "backgroundImageElem": document.querySelector("#slateSilver")});
+					thing.userData.text = text;
+					thing.userData.id = (!!player) ? player.id : "";
+
+					thing.position.x = (-width / 2.0) - 10.0;
+					thing.position.clone(oldThing.position);
+					jumpStart.removeInstance(oldThing);
+					slot.userData.label = thing;
+
+					// UPDATE ACTION BUTTON TEXT
+					oldThing = slot.userData.action;
+					text = (!!player) ? player.status : "JOIN";
+
+					//if( !!player && player.vehicleTypeName !== "" )
+						//text = "WAITING";
+
+					width = ((12.0 / 1.5) * text.length) * 1.5;
+					height = 12.0 * 2.0;
+
+					color = (slot.userData.locked && text === "JOIN") ? "rgba(100, 100, 100, 1.0)" : "rgba(255, 255, 255, 1.0)";
+
+					var thing = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 100, 0, 1.0)", "backgroundImageElem": document.querySelector("#slateGreen"), "color": color});
+					thing.position.x = (width / 2.0) + 10.0;
+					thing.userData.parentObject = oldThing.userData.parentObject;
+					thing.userData.slot = slot;
+					thing.userData.text = text;
+
+					thing.blocksLOS = true;
+					jumpStart.makeCollide(thing);
+
+					if( !!!player && !localPlayerLocked)
+					{
+						thing.addEventListener("cursorup", takeSlot);
+
+						thing.addEventListener("cursorenter", function()
+						{
+							if( !!!this.userData.throb )
+								makeThrob.call(this, {"maxScale": 1.2, "minScale": 1.0, "direction": 1.0, "rate": 0.5, "axes": "xy"});
+						});
+
+						thing.addEventListener("cursorexit", function()
+						{
+							if( !!this.userData.throb )
+							{
+								unmakeThrob.call(this);
+								this.scale.set(1.0, 1.0, 1.0);
+							}
+						});
+					}
+
+					jumpStart.removeInstance(oldThing);
+					slot.userData.action = thing;
+
+					if( !!slot.userData.icon )
+					{
+						jumpStart.removeInstance(slot.userData.icon);
+						delete slot.userData.icon;
+					}
+
+					if( !!player && player.vehicleTypeName !== "" )
+					{
+						var clickable = (jumpStart.localUser.userID === player.id && player.status !== "READY" );
+						var icon = spawnLobbyIcon(slot, player.vehicleTypeName, clickable);
+						icon.position.x += width + 25;
+						slot.userData.icon = icon;
+					}
+				}
+
+				// UPDATE POSITION & LOOK
+				this.position.copy(this.syncData.origin);
+
+				var eyePosition;
+				if( !jumpStart.isAltspace )
+					eyePosition = jumpStart.camera.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
+				else
+				{
+					var joint = jumpStart.localUser.skeleton.getJoint("Eye");
+					eyePosition = joint.position.clone();
+				}
+
+				eyePosition.y = this.position.y;
+				this.lookAt(eyePosition);
+				this.rotateX(-0.1);
+				this.position.y = 250.0;
+
+				// check for updates
+				if( !this.userData.hasOwnProperty("oldUpdateCount") || this.userData.oldUpdateCount !== this.syncData.updateCount )
+				{
+					this.userData.oldUpdateCount = this.syncData.updateCount;
+					console.log("Update made.");
+
+					var players = this.syncData.players;
+					var slots = this.userData.slots;
+
+					// put in empty slots if needed
+					var numSlots = slots.length;
+					//console.log("num slots: " + numSlots);
+
+					// update all existing slots that need it
+					var i, slot, x;
+					for( i = 0; i < g_maxPlayers; i++ )
+					{
+						slot = slots[i];
+
+						var freshSpawn = false;
+						if( !!!slot )
+						{
+							var takenPlayer = null;
+							var y;
+							for( y in players )
+							{
+								if( players[y].id !== y || players[y].slotIndex === -1 )
+									continue;
+
+								if( players[y].slotIndex === i )
+									takenPlayer = players[y];
+							}
+
+							if( !takenPlayer )
+								slot = spawnSlot.call(this);
+							else
+							{
+								console.log("ISSUE: Time to initial spawn a slot WITH a player in it!");
+								//slot = spawnSlot.call(this);
+								slot = spawnSlot.call(this, takenPlayer);
+							}
+
+							freshSpawn = true;
+						}
+
+						if( !freshSpawn )
+						{
+							//if( i === 2 && !!this.syncData.players )
+							//{
+							//	console.log("huh? " + slot.userData.label.userData.id);
+							//	console.log("oh. " + (slot.userData.label.userData.id === ""));
+							//}
+								//console.log(this.syncData.players[slot.userData.label.userData.id]);
+							if( slot.userData.label.userData.id === "" )
+							{
+								// OPEN SLOT
+								// check if we should be taken
+								for( x in players )
+								{
+									player = players[x];
+									if( player.slotIndex === -1 || x !== player.id )//player.old !== "" )
+										continue;
+									//if( player === "none" )
+									//	continue;
+
+									if( i === player.slotIndex )		
+									{
+										console.log("Player should taken this empty slot!");
+										updateSlot(this, slot, player);
+									}
+									else if( !slot.userData.locked && localPlayerLocked )
+									{
+										updateSlot(this, slot, null);
+									}
+								}
+							}
+							else
+							{
+								console.log(players[slot.userData.label.userData.id]);
+
+								// OCCUPIED SLOT
+								for( x in players )
+								{
+									player = players[x];
+									if( player.slotIndex === -1 )
+										continue;
+
+									if( player.old !== "" && slot.userData.label.userData.id !== player.old )
+										continue;
+
+									var isDeathNote = (player.old !== "" && slot.userData.label.userData.id !== "" && player.old === slot.userData.label.userData.id && player.id === "none");
+									//console.log("Death note is: " + isDeathNote);
+									//if( isDeathNote )
+									//	continue;
+
+									if( isDeathNote || slot.userData.label.userData.id === player.id )
+									{
+										// make sure shit has changed...
+										if( isDeathNote || slot.userData.label.userData.text !== player.displayName || slot.userData.action.userData.text !== player.status )
+										{
+											console.log("Player slot match!");
+
+											//if( (player === "none" && !!players[slot.userData.label.userData.id]) || (player !== "none" && i !== player.slotIndex) )
+											if( isDeathNote || i !== player.slotIndex )
+											{
+												//console.log("Hmmm " + JSON.stringify(player) + " " + i + " " + player.slotIndex);
+												//console.log("Remove player from wrong slot!");
+												if( isDeathNote )
+													slot.userData.label.userData.id = "";
+
+												updateSlot(this, slot, null);
+											}
+											else
+												updateSlot(this, slot, player);
+										}
+									}
+								}
+							}
+						}
+					}
+
+					// update any EMPTY slots that need it
+
+					
+					
+					/*
+					// update the player name
+					var text = playerName;
+					var width = ((12.0 / 1.5) * text.length) * 1.5;
+					var height = 12.0 * 2.0;
+
+					var oldThing = slot.userData.label;
+					var thing = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 0, 0, 1.0)", "color": "rgba(255, 255, 255, 1.0)", "backgroundImageElem": document.querySelector("#slateSilver")});
+					thing.userData.text = text;
+					thing.userData.id = player.id;
+
+					thing.position.x = (-width / 2.0) - 10.0;
+					thing.position.clone(oldThing.position);
+					jumpStart.removeInstance(oldThing);
+					slot.userData.label = thing;
+
+					// UPDATE ACTION BUTTON TEXT
+					oldThing = slot.userData.action;
+					text = "READY";
+					width = ((12.0 / 1.5) * text.length) * 1.5;
+					height = 12.0 * 2.0;
+
+					var thing = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 100, 0, 1.0)", "backgroundImageElem": document.querySelector("#slateGreen")});
+					thing.position.x = (width / 2.0) + 10.0;
+					thing.userData.parentObject = oldThing.userData.parentObject;
+					thing.userData.slot = slot;
+					thing.userData.text = text;
+
+					thing.blocksLOS = true;
+					jumpStart.makeCollide(thing);
+					//thing.addEventListener("cursorup", spawnAutoStartButton);
+
+					jumpStart.removeInstance(oldThing);
+					slot.userData.action = thing;
+
+					if( !!slot.userData.icon )
+						jumpStart.removeInstance(slot.userData.icon);
+
+					var icon = spawnLobbyIcon(slot, vehicleTypeName);
+					icon.position.x += width + 25;
+					slot.userData.icon = icon;
+					*/
+				}
+
+				// check if ALL slots are filled
+				if( this.ownerID === jumpStart.localUser.userID && this.syncData.countdown === -1 )
+				{
+					var readyCount = 0;
+					var players = this.syncData.players;
+					var x, player;
+					for( x in players )
+					{
+						player = players[x];
+
+						if( player.slotIndex === -1 || player.old !== "" || player.status !== "READY" )
+							continue;
+
+						readyCount++;
+					}
+
+					if( readyCount === g_maxPlayers )
+					{
+						this.syncData.countdown = 5.0;
+						atLeastOne = true;
+						console.log(readyCount + " out of " + g_maxPlayers + " ready.");
+					}
+					// initiate the countdown in the next tick msg.
+				}
+
+				if( atLeastOne )
+				{
+					this.syncData.updateCount++;
+					this.sync({"syncData": true});
+				}
+
+				// countdown (if needed)
+			//	console.log(this.syncData.countdown);
+				if( this.syncData.countdown !== -1 && (!!!this.userData.countdown || this.userData.countdown !== -1) )
+				{
+					//console.log("hmmm");
+					if( !!!this.userData.countdown )
+						this.userData.countdown = this.syncData.countdown;
+
+					// decrement
+					this.userData.countdown -= jumpStart.deltaTime;
+
+					function createNumberObject(slate, desiredNumber)
+					{
+						var text = desiredNumber;
+						var width = ((20.0 / 1.5) * text.length) * 1.7;
+						var height = 20.0 * 1.4;
+
+						slate.userData.height = height;
+
+						var color = "rgba(255, 255, 255, 1.0)";
+
+						var object = jumpStart.spawnTextPlane({"parent": slate, "text": text, "width": width, "height": height, "background": "rgba(0, 0, 0, 1.0)", "color": color, "backgroundImageElem": document.querySelector("#slateGold"), "fontSize": 20});
+						object.position.y = -160.0;
+						//object.scale.set(10, 10, 10);
+						object.userData.number = desiredNumber;
+						object.userData.slate = slate;
+
+						//object.applyBehavior("shrinkRemove");
+						//object.addEventListener("remove", function()
+						//{
+						//	delete this.userData.slate.userData["numberObject"];
+						//});
+
+						slate.userData.numberObject = object;
+						return object;
+					}
+
+					var numberObject = this.userData.numberObject;
+					var desiredNumber = "";
+
+					// start counting at 3
+					if( this.userData.countdown < 0.0 )
+						desiredNumber = "";
+					else if( this.userData.countdown < 1.0 )
+						desiredNumber = "" + 1;
+					else if( this.userData.countdown < 2.0 )
+						desiredNumber = "" + 2;
+					else if( this.userData.countdown < 3.0 )
+						desiredNumber = "" + 3;
+
+					if( !!!numberObject )
+					{
+						// create one with desiredNumber
+						if( desiredNumber !== "" )
+							createNumberObject(this, desiredNumber);
+					}
+					else if( numberObject.userData.number !== desiredNumber )
+					{
+						// remove the existing number
+						jumpStart.removeInstance(numberObject);
+
+						// create one with desiredNumber
+						if( desiredNumber !== "" )
+							createNumberObject(this, desiredNumber);
+					}
+
+					if( this.userData.countdown <= 0 && this.ownerID === jumpStart.localUser.userID )
+					{
+						this.userData.countdown = -1;
+
+						// create the player start points...
+						function spawnStartPoint(player)
+						{
+							console.log("adding one spawn point...");
+							var startPoint = jumpStart.spawnInstance(null);
+							startPoint.syncData.player = player;
+							startPoint.syncData.usedCount = 0;
+							startPoint.syncData.maxUsedCount = 1;
+
+							var x = 0;
+							var z = 0;
+							startPoint.position.set(x, 0, z);
+
+							startPoint.addEventListener("spawn", onStartPointSpawn);
+							this.addEventListener("remove", jumpStart.generateRemoveWatcher(startPoint));
+							//startPoint.applyBehavior("autoRemoval");
+							startPoint.sync();
+						}
+
+						var usedIDs = [];
+						var slots = this.userData.slots;
+						var w, slot, player;
+						for( w in slots )
+						{
+							slot = slots[w];
+
+							player = this.syncData.players[slot.userData.label.userData.id];
+							if( !!player && player.slotIndex !== -1 && player.old === "" && player.status === "READY" && usedIDs.indexOf(player.id) === -1 )
+							{
+								console.log("adding " + player.id);
+								spawnStartPoint(player);
+								usedIDs.push(player.id);
+							}
+						}
+
+						// aaaand the lobby is spent.
+						this.scale.set(0.0001, 0.0001, 0.0001);
+						this.syncData.updateCount++;
+						this.sync();
+					}
+				}
+
+				// check for end-of-game
+				if( this.ownerID === jumpStart.localUser.userID )
+				{
+					var playerCount = 0;
+					var deadPlayerCount = 0;
+
+					var i, x, player;
+					var playerKeys = Object.keys(this.syncData.players);
+					var deadPlayerKeys = Object.keys(this.syncData.deadPlayers);
+
+					for( i = 0; i < playerKeys.length; i++)
+					{
+						x = playerKeys[i];
+						player = this.syncData.players[x];
+						if( player.slotIndex === -1 || player.old !== "" )
+							continue;
+
+						playerCount++;
+					}
+
+					for( i = 0; i < deadPlayerKeys.length; i++)
+					{
+						x = deadPlayerKeys[i];
+						if( x === "none" )
+							continue;
+
+						deadPlayerCount++;
+					}
+//console.log("testing...");
+					if( deadPlayerCount !== 0 )
+					{
+						if( deadPlayerCount >= playerCount - 1)
+						{
+							//console.log("do it!");
+							// just remove us for now.
+							// TODO: show a score board instead of just resetting right away.
+							this.userData.autoRemoval.removerID = jumpStart.localUser.userID;	// to get around the stupid check in the remove listener.
+							jumpStart.removeInstance(this);
+						}
+					}
+				}
+			}
+
+			function onStartPointSpawn(isInitialSync)
+			{
+				if( isInitialSync )
+					return;
+
+				//console.log("SPAWNED OBJECT W/ ID " + this.uuid);
+				if( this.syncData.player.id === jumpStart.localUser.userID )
+				{
+					if( this.syncData.usedCount < this.syncData.maxUsedCount )
+					{
+						//console.log("MY SPAWN POINT HAS BEEN SPAWNED! " + this.syncData.player.id);
+
+						this.userData.delay = 0.4;
+						this.addEventListener("tick", function()
+						{
+							if( this.userData.delay > 0 )
+							{
+								this.userData.delay -= jumpStart.deltaTime;
+
+								if( this.userData.delay <= 0 )
+								{
+									this.userData.delay = 0;
+
+									// insta-spawn the ship then
+									// spawn the vehicle
+									var slate = jumpStart.scene.getObjectByName("lobbySlate");
+
+									// FIXME: the vehicle needs to remember the spawnpoint object
+									var vehicle = jumpStart.spawnInstance(null);
+									vehicle.applyBehavior("rcdm", {"custom": {"vehicleTypeName": this.syncData.player.vehicleTypeName}});
+									slate.addEventListener("remove", jumpStart.generateRemoveWatcher(vehicle));
+									vehicle.applyBehavior("autoRemoval");
+									vehicle.userData.slate = 
+									vehicle.addEventListener("remove", function()
+									{
+										if( this.ownerID === jumpStart.localUser.userID )
+										{
+											var slate = jumpStart.scene.getObjectByName("lobbySlate");
+											slate.syncData.deadPlayers[jumpStart.localUser.userID] = true;
+											slate.sync({"syncData": true});
+										}
+										//if( this.ownerID === jumpStart.localUser.userID )
+										//	createButton();
+									});
+									//vehicle.position.copy(this.position);
+									vehicle.position.y += 150.0;
+									vehicle.lookAt(new THREE.Vector3(0, vehicle.position.y, 0));
+									vehicle.sync();
+
+									this.removeEventListener("tick", arguments.callee);								
+								}
+							}
+						});
+
+						this.syncData.usedCount++;
+						this.sync();
+					}
+
+					//this.addEventListener("tick", function()
+					//{
+					//	conso
+					//});
+				}
+			}
+
+			function onLobbySpawn()
+			{
+				var lobbySlate = this;
+				//lobbySlate.userData.oldUpdateCount = lobbySlate.syncData.updateCount;
+				//lobbySlate.userData.parentObject = this;
+
+				//this.userData.lobbySlate = lobbySlate;
+
+				// {"id", "name", "score"}
+				//lobbySlate.syncData.players = {};
+				//lobbySlate.syncData.
+
+				//lobbySlate.position.y = 200.0;//-jumpStart.worldOffset.y;
+
+				lobbySlate.userData.slots = [];
+				/*
+				lobbySlate.addEventListener("tick", function()
+				{
+					this.position.copy(this.syncData.origin);
+
+					var eyePosition;
+					if( !jumpStart.isAltspace )
+						eyePosition = jumpStart.camera.position.clone().multiplyScalar(1/jumpStart.options.sceneScale);
+					else
+					{
+						var joint = jumpStart.localUser.skeleton.getJoint("Eye");
+						eyePosition = joint.position.clone();
+					}
+
+					eyePosition.y = this.position.y;
+					this.lookAt(eyePosition);
+					this.rotateX(-0.1);
+					this.position.y = 250.0;
+				});
+				*/
+
+				var titleText = "DEATHMATCH";
+				var titleWidth = ((12.0 / 1.5) * titleText.length) * 1.5;
+				var titleHeight = 12.0 * 3.0;
+
+				var modeTitle = jumpStart.spawnTextPlane({"parent": lobbySlate, "text": titleText, "width": titleWidth, "height": titleHeight, "backgroundImageElem": document.querySelector("#slateSilver")});
+				modeTitle.name = "title";
+				modeTitle.userData.height = titleHeight;
+
+				var playText = "START GAME";
+				var playWidth = ((12.0 / 1.5) * playText.length) * 1.5;
+				var playHeight = 12.0 * 3.0;
+				var playButton = jumpStart.spawnTextPlane({"parent": lobbySlate, "text": playText, "width": playWidth, "height": playHeight, "backgroundImageElem": document.querySelector("#slateGreen")});
+				playButton.name = "playButton";
+				playButton.userData.height = playHeight;
+				playButton.position.y = -160.0;
+				playButton.scale.set(0.0001, 0.0001, 0.0001);
+
+				playButton.blocksLOS = true;
+				jumpStart.makeCollide(playButton);
+
+				playButton.userData.hideMe = true;
+				playButton.userData.lobbySlate = lobbySlate;
+				playButton.addEventListener("cursorup", function()
+				{
+					var lobbySlate = this.userData.lobbySlate;
+					var player = lobbySlate.syncData.players[jumpStart.localUser.userID];
+					//console.log(player.status);
+					if( !!player && player.status === "WAITING" )
+					{
+						lobbySlate.syncData.players[player.id].status = "READY";
+						lobbySlate.syncData.updateCount++;
+						lobbySlate.sync({"syncData": true});
+					}
+				});
+
+				playButton.addEventListener("cursorenter", function()
+				{
+					if( !!!this.userData.throb )
+						makeThrob.call(this, {"maxScale": 1.2, "minScale": 1.0, "direction": 1.0, "rate": 0.5, "axes": "xy"});
+				});
+
+				playButton.addEventListener("cursorexit", function()
+				{
+					if( !!this.userData.throb )
+					{
+						unmakeThrob.call(this);
+						this.scale.set(1.0, 1.0, 1.0);
+					}
+				});
+
+				playButton.addEventListener("tick", function()
+				{
+					var slate = this.userData.lobbySlate;
+					var player = slate.syncData.players[jumpStart.localUser.userID];
+
+					if( !!!player || (player.status !== "WAITING" && !this.userData.hideMe) )
+					{
+						this.userData.hideMe = true;
+						unmakeThrob.call(this);
+						this.scale.set(0.0001, 0.0001, 0.0001);
+					}
+					else if( player.status === "WAITING" && this.userData.hideMe )
+					{
+						this.userData.hideMe = false;
+						this.scale.set(1.0, 1.0, 1.0);
+					}
+				});
+
+				lobbySlate.userData.playButton = playButton;
+
+				//var slots = [];
+				/*
+				function spawnSlot()
+				{
+					var slot = jumpStart.spawnInstance(null, {"parent": lobbySlate});
+					if( this.userData.slots.length > 0 )
+						slot.position.y = (this.userData.slots[this.userData.slots.length-1].position.y - this.userData.slots[this.userData.slots.length-1].userData.height) - 4.0;
+					else
+						slot.position.y = -titleHeight;
+
+					var text = "OPEN";
+					var width = ((12.0 / 1.5) * text.length) * 1.5;
+					var height = 12.0 * 2.0;
+
+					slot.userData.height = height;
+
+					var slotName = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 0, 0, 1.0)", "color": "rgba(150, 150, 150, 1.0)", "backgroundImageElem": document.querySelector("#slateSilver")});
+					slotName.position.x = (-width / 2.0) - 10.0;//(-mainWidth / 2.0) + (width / 2.0);
+					slotName.userData.text = text;
+					slotName.userData.id = "";
+
+					slot.userData.label = slotName;
+
+					text = "JOIN";
+					width = ((12.0 / 1.5) * text.length) * 1.5;
+					height = 12.0 * 2.0;
+
+					var slotJoin = jumpStart.spawnTextPlane({"parent": slot, "text": text, "width": width, "height": height, "background": "rgba(0, 100, 0, 1.0)", "backgroundImageElem": document.querySelector("#slateGreen")});
+					slotJoin.position.x = (width / 2.0) + 10.0;
+					slotJoin.userData.parentObject = this;
+					slotJoin.userData.slot = slot;
+					slotJoin.userData.text = text;
+
+					slotJoin.blocksLOS = true;
+					jumpStart.makeCollide(slotJoin);
+					slotJoin.addEventListener("cursorup", takeSlot);
+
+					slotJoin.addEventListener("cursorenter", function()
+					{
+						if( !!!this.userData.throb )
+							makeThrob.call(this, {"maxScale": 1.2, "minScale": 1.0, "direction": 1.0, "rate": 0.5, "axes": "xy"});
+					});
+
+					slotJoin.addEventListener("cursorexit", function()
+					{
+						if( !!this.userData.throb )
+						{
+							unmakeThrob.call(this);
+							this.scale.set(1.0, 1.0, 1.0);
+						}
+					});
+
+					slot.userData.action = slotJoin;
+
+					this.userData.slots.push(slot);
+				}
+
+				spawnSlot.call(this);
+				spawnSlot.call(this);
+				spawnSlot.call(this);
+				spawnSlot.call(this);
+				*/
+			}
+
+			function lobbyButtonRespawn()
+			{
+				//if( this.ownerID !== jumpStart.localUser.userID || this.syncData.autoRemoval.sessionKey === jumpStart.sessionKey )
+				//	return;
+
+				if( this.userData.autoRemoval.removerID !== jumpStart.localUser.userID )
+					return;
+
+				createLobbyButton();
+				this.removeEventListener("tick", arguments.callee);
+			}
+
+			function onLobbyButtonSpawned()
+			{				
+				var lobbyButton = this;
+				var buttonFrame = jumpStart.spawnInstance("models/buttonFrame", {"parent": lobbyButton});
+				buttonFrame.rotateX(Math.PI / -2.0);
+				//buttonFrame.applyBehavior("bubbleIn", {"maxScale": 0.6});
+
+				// the actual button
+				var button = jumpStart.spawnInstance("models/button", {"parent": buttonFrame});
+				button.userData.doubleClickTimer = 0.0;
+				button.blocksLOS = true;
+				jumpStart.makeCollide(button);
+				button.addEventListener("cursorenter", function()
+				{
+					//var parentObject = this.parent.parent;
+					this.setColor(new THREE.Color("#5599ff"));
+					//console.log("it is: " + parentObject.syncData.rcdmStartButton.playerId);
+					
+					/*
+					if( parentObject.syncData.rcdmStartButton.playerId !== "" && parentObject.syncData.rcdmStartButton.playerId !== jumpStart.localUser.userID )
+						this.setColor(new THREE.Color("rgb(50%, 50%, 50%)"));
+					else
+						this.setColor(new THREE.Color("#5599ff"));
+					*/
+				});
+
+				button.addEventListener("cursorexit", function()
+				{
+					this.setColor(new THREE.Color("rgb(100%, 100%, 100%)"));
+					//jumpStart.behaviors.rcdm.showVehicleSelection(this.parent.parent.syncData.rcdmStartButton.vehicleTypes);
+				});
+
+				button.addEventListener("cursorup", function()
+				{
+					function removeLobby()
+					{
+						jumpStart.removeInstance(this.userData.lobbySlate);
+
+						delete this.userData.lobbySlate;
+					}
+
+					function spawnLobby()
+					{
+						var mainWidth = 280.0;
+
+						// IMPORTANT: lobbySlate WILL be synced and keep the game state for the room.
+						var lobbySlate = jumpStart.spawnInstance(null);
+						lobbySlate.name = "lobbySlate";
+						//lobbySlate.syncData.sessionKey = g_sessionKey;
+						lobbySlate.syncData.countdown = -1;
+						lobbySlate.syncData.deadPlayers = {"none": {"id": "none"}};;
+						lobbySlate.syncData.origin = lobbySlate.position.clone();
+						lobbySlate.syncData.players = {"none": {"id": "none", "slotIndex": -1, "old": ""}};
+						lobbySlate.syncData.updateCount = 0;
+
+						//lobbySlate.ignoreSync.transform.scale = true;
+						//console.log(lobbySlate.ignoreSync.transform.scale);
+
+						lobbySlate.addEventListener("tick", lobbyTick);
+						lobbySlate.addEventListener("spawn", onLobbySpawn);
+						lobbySlate.addEventListener("remove", lobbyButtonRespawn);
+						lobbySlate.applyBehavior("bubbleIn", {"speed": 5.0});
+						lobbySlate.applyBehavior("autoRemoval");
+						lobbySlate.sync();
+					}
+
+					if( !!!this.userData.lobbySlate )
+						spawnLobby.call(this);
+					else
+						removeLobby.call(this);
+
+					// then remove the button
+					jumpStart.removeInstance(this.parent.parent);
+				});
+			}
+
 			jumpStart.addEventListener("initialize", function()
 			{
 				console.log("initing");
 
-				var pumpkin = spawnPumpkin("models/pumpkin1", 164.0, 164.0);
+				var pumpkin = spawnPumpkin(null, 164.0, 164.0);
+				pumpkin.addEventListener("spawn", powerupGunSpawnBehavior);
 				pumpkin.sync();
 
 				pumpkin = spawnPumpkin("models/pumpkin2", -164.0, 164.0);
@@ -486,6 +1666,31 @@
 				pumpkin = spawnPumpkin("models/pumpkinbomb", 164.0, 0);
 				pumpkin.name = "da bomb";
 				pumpkin.sync();
+
+				createLobbyButton();
+				
+				/*
+				var i;
+				for( i = 0; i < 4; i++ )
+				{
+					var randomVehicleTypeName = jumpStart.behaviors.rcdm.getRandomVehicleTypeName();
+
+					var button = jumpStart.spawnInstance(null);
+					button.applyBehavior("rcdmStartButton", {"custom": {"vehicleTypeName": randomVehicleTypeName}});
+
+					button.rotateX(-Math.PI / 2.0);
+					//button.position.z += 150.0;
+					button.ignoreSync.transform.scale = true;
+
+					var sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					button.position.x += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+					sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					button.position.z += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+
+					//button.applyBehavior("autoRemoval");
+					button.sync();
+				}
+				*/
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
@@ -512,22 +1717,29 @@
 					}
 				};
 
-				var randomVehicleTypeName = jumpStart.behaviors.rcdm.getRandomVehicleTypeName();
+				var i;
+				for( i = 0; i < g_maxPlayers; i++ )
+				{
+					//continue;
+					var randomVehicleTypeName = jumpStart.behaviors.rcdm.getRandomVehicleTypeName();
 
-				var button = jumpStart.spawnInstance(null);
-				button.applyBehavior("rcdmStartButton", {"custom": {"vehicleTypeName": randomVehicleTypeName}});
+					var button = jumpStart.spawnInstance(null);
+					button.applyBehavior("rcdmStartButton", {"custom": {"vehicleTypeName": randomVehicleTypeName}});
 
-				button.rotateX(-Math.PI / 2.0);
-				//button.position.z += 150.0;
-				button.ignoreSync.transform.scale = true;
+					button.rotateX(-Math.PI / 2.0);
+					//button.position.z += 150.0;
+					button.ignoreSync.transform.scale = true;
 
-				var sign = (Math.random() > 0.5) ? -1.0 : 1.0;
-				button.position.x += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
-				sign = (Math.random() > 0.5) ? -1.0 : 1.0;
-				button.position.z += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+					var sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					button.position.x += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
+					sign = (Math.random() > 0.5) ? -1.0 : 1.0;
+					button.position.z += ((jumpStart.enclosure.scaledWidth / 2.0) - 50.0) * Math.random() * sign;
 
-				//button.applyBehavior("autoRemoval");
-				//button.sync();
+					//button.applyBehavior("autoRemoval");
+					//button.sync();
+				}
+
+
 			}
 
 			function spawnPumpkin(model, x, z)
@@ -566,10 +1778,32 @@
 				}
 			}
 
+			function createLobbyButton()
+			{
+				var lobbyButton = jumpStart.spawnInstance(null);
+				lobbyButton.name = "lobbyButton";
+				//lobbyButton.syncData.sessionKey = g_sessionKey;
+				//lobbyButton.addEventListener("remove", lobbyButtonRespawn);
+				lobbyButton.addEventListener("spawn", onLobbyButtonSpawned);
+				lobbyButton.applyBehavior("bubbleIn", {"speed": 5.0});
+				//lobbyButton.applyBehavior("autoRemoval");
+				lobbyButton.sync();
+			}
+
 			jumpStart.addEventListener("ready", function()
 			{
 				//jumpStart.addEventListener("gamepadbutton", rcButtonListener);
-				createButton();
+				//createButton();
+
+				/*
+						"width": "auto",
+		"height": 12,
+		"text": "88888888",
+		"fontSize": 12,
+		"color": "rgba(255,255,255,1.0)",
+		"background": "rgba(0,0,0,1.0)",
+		"backgroundImageElem": null
+		*/
 
 				function makeWater()
 				{
@@ -599,6 +1833,7 @@
 						makeThrob.call(this, {"maxScale": 0.5, "minScale": 0.05, "direction": -1.0, "rate": 0.5, "axes": "y"});	
 				}
 
+				/*
 				var cauldron = jumpStart.spawnInstance("models/cauldron");
 
 
@@ -624,11 +1859,38 @@
 				water.rotation.y = Math.PI * 1.2;
 				water.userData.reverseWaterSpin = true;
 				makeWater.call(water);
+*/
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.run)
 				return true;
 			});
+
+			function throbHelper()
+			{
+				var i;
+				var axes = this.userData.throb.axes;
+				var amount = this.userData.throb.rate * jumpStart.deltaTime * this.userData.throb.direction;
+				if( this.scale[axes[0]] + amount > this.userData.throb.maxScale )
+				{
+					this.userData.throb.direction = -1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.maxScale;
+				}
+				else if( this.scale[axes[0]] + amount < this.userData.throb.minScale )
+				{
+					this.userData.throb.direction = 1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.minScale;
+				}
+				else
+				{
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] += amount;
+				}
+			}
 
 			function makeThrob(options)
 			{
@@ -644,36 +1906,25 @@
 				};
 				this.userData.throb = options;
 
-				this.addEventListener("tick", function()
+				this.addEventListener("tick", throbHelper);
+			}
+
+			function unmakeThrob()
+			{
+				if( !!this.userData.throb )
 				{
-					var i;
-					var axes = this.userData.throb.axes;
-					var amount = this.userData.throb.rate * jumpStart.deltaTime * this.userData.throb.direction;
-					if( this.scale[axes[0]] + amount > this.userData.throb.maxScale )
-					{
-						this.userData.throb.direction = -1.0;
-
-						for( i = 0; i < axes.length; i++ )
-							this.scale[axes[i]] = this.userData.throb.maxScale;
-					}
-					else if( this.scale[axes[0]] + amount < this.userData.throb.minScale )
-					{
-						this.userData.throb.direction = 1.0;
-
-						for( i = 0; i < axes.length; i++ )
-							this.scale[axes[i]] = this.userData.throb.minScale;
-					}
-					else
-					{
-						for( i = 0; i < axes.length; i++ )
-							this.scale[axes[i]] += amount;
-					}
-				});
+					delete this.userData.throb;
+					this.removeEventListener("tick", throbHelper);
+				}
 			}
 		</script>
 	</head>
 
 	<body style="background-color: transparent;">
+		<img src="assets/RCDM/misc/slateSilver.jpg" id="slateSilver" style="visibility: hidden; position: absolute;" />
+		<img src="assets/RCDM/misc/slateGreen.jpg" id="slateGreen" style="visibility: hidden; position: absolute;" />
+		<img src="assets/RCDM/misc/slateGold.jpg" id="slateGold" style="visibility: hidden; position: absolute;" />
+
 		<script>
 			if( !jumpStart.isAltspace )
 				document.body.style.background = "url('assets/RCDM/misc/backdrop.jpg')";
