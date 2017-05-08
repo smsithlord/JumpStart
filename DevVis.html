@@ -29,6 +29,44 @@
 
 			function spawnEnclosure()
 			{
+
+				// CURSOR RAY VISUALIZATION
+				function spawnVisualCursor()
+				{
+					var floor = jumpStart.enclosureBoundary("floor");
+					floor.blocksLOS = true;
+					jumpStart.makeCollide(floor);
+
+					var pixelSize = 2.0;
+
+					var pixel = spawnPixelObject(pixelSize);
+					pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+
+					pixel.addEventListener("tick", function()
+					{
+						//if( !jumpStart.localUser.cursorHit )
+						//	return;
+//console.log(jumpStart.cursorRay.origin);
+//console.log(jumpStart.futureCursorRay);
+//console.log(jumpStart.localUser.cursorHit);
+
+						var rayPos = jumpStart.world.worldToLocal(jumpStart.cursorRay.origin.clone());
+						var rayLook = rayPos.clone().add(jumpStart.cursorRay.direction);
+
+						this.position.copy(rayPos);
+						this.lookAt(rayLook);
+
+						var dist = (!!jumpStart.localUser.cursorHit) ? this.position.distanceTo(jumpStart.localUser.cursorHit.scaledPoint) : jumpStart.enclosure.innerDepth / 2.0;
+
+						this.translateZ(dist / 2.0);
+
+						dist = (!!jumpStart.localUser.cursorHit) ? this.position.distanceTo(jumpStart.localUser.cursorHit.scaledPoint) : jumpStart.enclosure.innerDepth / 2.0;
+
+						this.scale.z = dist;
+					});
+				}
+				spawnVisualCursor();
+
 				var enclosureBoxSize = new THREE.Vector3(
 						jumpStart.enclosure.scaledWidth,
 						jumpStart.enclosure.scaledHeight,
@@ -42,7 +80,114 @@
 
 				var enclosureBox = jumpStart.spawnInstance(null, {"object": enclosureBoxMesh});
 				enclosureBox.position.y = jumpStart.enclosure.scaledHeight / 2.0;
-				enclosureBox.scale.set(0.0001, 0.0001, 0.0001);
+				enclosureBox.scale.set(0.01, 0.01, 0.01);
+
+				var pixelSize = 2.0;
+
+				// max edges
+				var pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.x = Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.y = -Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.y = Math.PI;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.y = -Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.y = Math.PI;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				// min edges
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.x = -Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.y = Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.y = Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				// misc
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.x = -Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.rotation.x = -Math.PI / 2.0;
+				pixel.scale.z *= jumpStart.enclosure.scaledWidth;
+/*
+				// diags bottom
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *=pixel.position.length();
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *=pixel.position.length();
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *= pixel.position.length();
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *= pixel.position.length();
+
+				// diags top
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *=pixel.position.length();
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *=pixel.position.length();
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, -jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *= pixel.position.length();
+
+				pixel = spawnPixelObject(pixelSize, enclosureBox, true);
+				pixel.position.set(-jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0, jumpStart.enclosure.scaledWidth / 2.0);
+				pixel.lookAt(new THREE.Vector3());
+				pixel.scale.z *= pixel.position.length();
+*/
+
 				enclosureBox.addEventListener("tick", function()
 				{
 					var speed = 0.2 * jumpStart.deltaTime;
@@ -207,20 +352,135 @@
 				return textContainer;
 			}
 
+			var pixel;
+			var pixelGeometry;
+			var pixelMaterial;
+			function spawnPixelObject(size, parent, inverseGrow)
+			{
+				if( !!!pixelGeometry )
+				{
+					pixelGeometry = new THREE.BoxGeometry(1, 1, 1);
+					pixelMaterial = new THREE.MeshBasicMaterial({"color": "#bbbbbb"});
+				}
+
+				var pixel;
+				if( !!!parent )
+					pixel = jumpStart.spawnInstance(null);
+				else
+					pixel = jumpStart.spawnInstance(null, {"parent": parent});
+
+				var pixelMesh = new THREE.Mesh(pixelGeometry, pixelMaterial);
+				var pixelVisual = jumpStart.spawnInstance(null, {"object": pixelMesh, "parent": pixel});
+				pixelVisual.position.z = 0.5;
+				pixelVisual.scale.set(size, size, 1.0);
+
+				if( typeof inverseGrow !== 'undefined' || inverseGrow )
+				{
+					var visualVertexMesh = new THREE.Mesh(
+						g_visualVertexGeo,
+						g_visualVertexMat
+					);
+
+					var visualVertex = jumpStart.spawnInstance(null, {"object": visualVertexMesh, "parent": parent});
+
+					pixel.userData.visualVertex = visualVertex;
+
+				}
+
+				if( !!parent )
+				{
+					pixel.userData.direction = 1.0;//(inverseGrow) ? 1.0 : -1.0;
+					pixel.addEventListener("tick", function()
+					{
+						var speed = 0.2;
+						if( !!!this.userData.curScaleIn )
+						{
+							this.userData.curScaleIn = 0.1;
+							this.userData.fullScale = this.scale.z;
+						}
+						else
+							this.userData.curScaleIn += speed * jumpStart.deltaTime * this.userData.direction;
+
+						if( this.userData.curScaleIn >= 1.0 )
+							this.userData.curScaleIn = 1.0;
+						else if( this.userData.curScaleIn <= 0 )
+							this.userData.curScaleIn = 0.0;
+
+						if( !!!this.userData.visualVertex || this.userData.direction === -1.0 )
+							this.scale.z = this.userData.fullScale * this.userData.curScaleIn;
+
+						// position the vertex
+						if( !!this.userData.visualVertex && this.userData.direction === -1.0 )
+						{
+							this.userData.visualVertex.position.copy(this.position);
+							this.userData.visualVertex.quaternion.copy(this.quaternion);
+							this.userData.visualVertex.translateZ(this.scale.z);
+						}
+
+						if( this.userData.curScaleIn === 1.0 )
+						{
+							if( !!this.userData.visualVertex )
+								this.userData.direction = -1.0;
+							else
+								this.removeEventListener("tick", arguments.callee);
+
+							return;
+						}
+						else if( this.userData.curScaleIn === 0.0 )
+						{
+							this.removeEventListener("tick", arguments.callee);
+							return;
+						}
+					});
+				}
+
+				return pixel;
+			}
+
+			var g_visualVertexGeo;
+			var g_visualVertexMat;
+
 			jumpStart.addEventListener("ready", function()
 			{
+				g_visualVertexGeo = new THREE.SphereGeometry(8.0, 8, 8, 0);
+				g_visualVertexMat = new THREE.MeshBasicMaterial({"color": "#ffffff"});
+
+				var geo = new THREE.BoxGeometry(30, 30, 30);
+				var mat = new THREE.MeshBasicMaterial({"color": "#00ff00"});
 				var enclosureLinkMesh = new THREE.Mesh(
-					new THREE.BoxGeometry(30, 30, 30),
-					new THREE.MeshBasicMaterial({"color": "#00ff00"})
+					geo,
+					mat
 				);
 
 				var enclosureLink = jumpStart.spawnInstance(null, {"object": enclosureLinkMesh});
-				enclosureLink.position.y = jumpStart.enclosure.scaledHeight / 2.0;
+				enclosureLink.position.y = 0;
 				enclosureLink.blocksLOS = true;
 				jumpStart.makeCollide(enclosureLink);
 				enclosureLink.addEventListener("cursordown", function()
 				{
-					spawnEnclosure();
+					var spiritMesh = new THREE.Mesh(
+						geo,
+						mat
+					);
+
+					var spirit = jumpStart.spawnInstance(null, {"object": spiritMesh});
+					spirit.position.copy(this.position);
+					spirit.quaternion.copy(this.quaternion);
+
+					spirit.userData.destination = new THREE.Vector3(0, jumpStart.enclosure.scaledHeight / 2.0, 0);
+					spirit.addEventListener("tick", function()
+					{
+						this.position.lerp(this.userData.destination, 0.1);
+						if( this.position.distanceTo(this.userData.destination) < 1.0 )
+						{
+							this.position.copy(this.userData.destination);
+							spawnEnclosure();
+							this.applyBehavior("shrinkRemove");
+							this.removeEventListener("tick", arguments.callee);
+							return;
+						}
+					});
+
 					jumpStart.removeInstance(this);
 				});
 
@@ -228,15 +488,13 @@
 					new THREE.BoxGeometry(2.0, 2.0, 2.0),
 					new THREE.MeshBasicMaterial({"color": "#ccff99"})
 				);
-///*
+
 				var jointTracker = jumpStart.spawnInstance(null, {"object": joinTrackerMesh});
 				jointTracker.addEventListener("tick", function()
 				{
 					var skeleton = jumpStart.localUser.skeleton;
 					if( !!skeleton )
 					{
-					//altspace.getThreeJSTrackingSkeleton().then(function(skeleton)
-					//{
 						var trackingJoints = (!!skeleton) ? skeleton.trackingJoints : undefined;
 
 						if( !!trackingJoints )
@@ -247,7 +505,6 @@
 								this.position.copy(jumpStart.world.worldToLocal(joint.position.clone()));
 							}
 						}
-					//});
 					}
 				});
 /*

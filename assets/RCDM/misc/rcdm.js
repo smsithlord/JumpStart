@@ -126,6 +126,7 @@ jumpStartBehavior({
 
 					if( !!otherGamepad )
 					{
+						console.log("For real.");
 						PreventGamepad(jumpStart.gamepad);
 						PreventGamepad(otherGamepad);
 					}

@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>Puzzle Cube</title>
+		<script src="engine/misc/JumpStart.js"></script>
+		<script>
+			loadJumpStart({
+				"appID": "PuzzleCube",
+				"multiuserOnly": true,
+				"sceneScale": 1.0,
+				"enclosureOnly": true,
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": true}
+			});
+
+			jumpStart.addEventListener("precache", function()
+			{
+				basicQuaternions.push(new THREE.Quaternion(0, 0, 0, 1));
+				basicQuaternions.push(new THREE.Quaternion(0, 0.7071, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0, 1, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(0, -0.7071, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0, 0, 0.7071, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0.5, 0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0.7071, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, -0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0, 0, -0.7071, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, 0.5, -0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(-0.7071, 0.7071, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.5, -0.5, -0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0.5, 0.5, -0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0, 0.7071, -0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.5, -0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(1, 0, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0, -0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(0, 0, 1, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0, 0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(-0.7071, 0, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, 0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0, 0.7071, 0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, -0.5, -0.5, 0.5));
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return true;
+			});
+
+			function startLinkSpawn()
+			{
+				var geo = new THREE.BoxGeometry(30, 30, 30);
+				var mat = new THREE.MeshBasicMaterial({"color": "#00ff00"});
+				var startLinkMesh = new THREE.Mesh(geo, mat);
+				var startLinkVisual = jumpStart.spawnInstance(null, {"object": startLinkMesh, "parent": this});
+				startLinkVisual.blocksLOS = true;
+				jumpStart.makeCollide(startLinkVisual);
+				startLinkVisual.addEventListener("cursorup", function()
+				{
+					jumpStart.removeInstance(this.parent);
+
+					spawnPuzzleBoard();
+				});
+
+			}
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				var startLink = jumpStart.spawnInstance(null);
+				startLink.position.y = 0;
+				startLink.addEventListener("spawn", startLinkSpawn);
+				startLink.sync();
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			function puzzleBoardSpawn()
+			{
+				var aLittleBit = 0.1;
+				var puzzleBoardGeo = new THREE.BoxGeometry((g_blockSize * 5.0) - aLittleBit, (g_blockSize * 1.0) - aLittleBit, (g_blockSize * 5.0) - aLittleBit);
+				var puzzleBoardMat = new THREE.MeshBasicMaterial({"color": "#ffff00", "opacity": 0.3, "transparent": true});
+				var puzzleBoardMesh = new THREE.Mesh(puzzleBoardGeo, puzzleBoardMat);
+
+				var puzzleBoardVisual = jumpStart.spawnInstance(null, {"object": puzzleBoardMesh, "parent": this});
+
+				puzzleBoardVisual.blocksLOS = true;
+				jumpStart.makeCollide(puzzleBoardVisual);
+			}
+
+			function puzzleBoardRemove()
+			{
+				// cycle through all pieces and remove any pieces belonging to this board
+				var pieceKeys = Object.keys(g_puzzlePieces);
+				var piece;
+				for( var i = 0; i < pieceKeys.length; i++ )
+				{
+					piece = g_puzzlePieces[pieceKeys[i]];
+					if( piece.syncData.tableName === this.name )
+						jumpStart.removeInstance(piece);
+				}
+
+				// create the next board, if we are the owner. (the same board for now)
+				if( this.ownerID === jumpStart.localUser.userID )
+					spawnPuzzleBoard();
+			}
+
+			function spawnPuzzleBoard()
+			{
+				// spawn the "puzzle board"
+				// it can only be removed when it's solved.
+				// players locally check for solves after piece snapping.
+				var board = jumpStart.spawnInstance(null);
+				board.name = "level1";	// NOTE: Every board needs a name!
+				board.syncData.solved = false;
+				board.addEventListener("spawn", puzzleBoardSpawn);
+				board.addEventListener("remove", puzzleBoardRemove);
+				//board.applyBehavior("autoRemove");
+				board.position.y = 120.0;
+				board.scale.multiplyScalar(-1.0);
+				board.sync();
+
+				var piece;
+
+				piece = spawnPuzzlePiece({"type": "L"});
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+
+				piece = spawnPuzzlePiece({"type": "T"});
+				piece.position.x += g_blockSize * 5.0;
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+
+				piece = spawnPuzzlePiece({"type": "l"});
+				piece.position.x += g_blockSize * 9.0;
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+
+				piece = spawnPuzzlePiece({"type": "o"});
+				piece.position.x += g_blockSize * 12.0;
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+
+				piece = spawnPuzzlePiece({"type": "s"});
+				piece.position.x += g_blockSize * 17.0;
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+
+				piece = spawnPuzzlePiece({"type": "y"});
+				piece.position.x += g_blockSize * 5.0;
+				piece.position.z += g_blockSize * 3.0;
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+
+				piece = spawnPuzzlePiece({"type": "z"});
+				piece.position.x += g_blockSize * 17.0;
+				piece.position.z += g_blockSize * 3.0;
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+
+				piece = spawnPuzzlePiece({"type": "N"});
+				piece.position.z += g_blockSize * 3.0;
+				piece.position.y = 150.0;
+				piece.syncData.boardName = board.name;
+				piece.sync();
+			}
+
+			var basicQuaternions = [];
+			var g_blockSize = 10.0;
+			var g_blockMesh, g_blockGeo, g_blockMat;
+			function spawnBlock(options)
+			{
+				if( !!!options )
+					options = {};
+
+				if( !!!g_blockMesh )
+				{
+					g_blockGeo = new THREE.BoxGeometry(g_blockSize, g_blockSize, g_blockSize);
+					g_blockMat = new THREE.MeshBasicMaterial({"color": "rgb(100, 255, 100)", "vertexColors": THREE.VertexColors});
+					g_blockMesh = new THREE.Mesh(g_blockGeo, g_blockMat);
+					bakeVertexLight(g_blockMesh, {"offset": new THREE.Vector3(3 * g_blockSize, 3 * g_blockSize, 3 * g_blockSize), "falloff": 6 * g_blockSize});
+				}
+
+				mesh = g_blockMesh.clone();
+
+				var block;
+				if( !!options.parent )
+				{
+					block = jumpStart.spawnInstance(null, {"object": mesh, "parent": options.parent});
+					if( !!!options.parent.userData.blocks )
+						options.parent.userData.blocks = {};
+
+					if( !!!options.parent.userData.blocks )
+						options.parent.userData.blocks = {};
+
+					options.parent.userData.blocks[block.uuid] = block;
+				}
+				else
+					block = jumpStart.spawnInstance(null, {"object": mesh});
+
+				block.position.set((!!options.x) ? g_blockSize * options.x : 0, (!!options.y) ? g_blockSize * options.y : 0, (!!options.z) ? g_blockSize * options.z : 0);
+
+				block.userData.offset = {"x": (!!options.x) ? options.x : 0, "y": (!!options.y) ? options.y : 0, "z": (!!options.z) ? options.z : 0};
+
+				return block;
+			}
+
+			var pieceTypes = {
+				"L": [{}, {"y": 1}, {"y": 2}, {"x":1}],
+				"T": [{"x": -1}, {}, {"y": 1}, {"x": 1}],
+				"l": [{}, {"y": 1}, {"y": 2}, {"y": 3}],
+				"o": [{}, {"y": 1}, {"x": 1}, {"x": 1, "y": 1}],
+				"s": [{"x": -1}, {}, {"y": 1}, {"x": 1, "y": 1}],
+				"y": [{"z": 1}, {}, {"y": 1}, {"x": 1}],
+				"z": [{"x": -1}, {}, {"y": 1}, {"y": 1, "z": -1}],
+				"N": [{}, {"y": 1}, {"y": 1, "z": -1}, {"x":1}]
+			};
+
+			var g_puzzlePieces = {};
+			function dropPiece(piece)
+			{
+				piece.parent.updateMatrixWorld();
+
+				// snap position
+				var offsetX = piece.position.x % g_blockSize;
+				var offsetY = piece.position.y % g_blockSize;
+				var offsetZ = piece.position.z % g_blockSize;
+
+				// IMPROVE THE ROUNDING OF THIS SNAP!!
+				function snapPosition(piece, offsetX, offsetY, offsetZ)
+				{
+					var sign = (piece.position.x > 0) ? 1.0 : -1.0;
+					var posX = (Math.abs(offsetX) > g_blockSize / 2.0) ? piece.position.x + (g_blockSize - Math.abs(offsetX)) * sign : piece.position.x - Math.abs(offsetX) * sign;
+
+					sign = (piece.position.y > 0) ? 1.0 : -1.0;
+					var posY = (Math.abs(offsetY) > g_blockSize / 2.0) ? piece.position.y + (g_blockSize - Math.abs(offsetY)) * sign : piece.position.y - Math.abs(offsetY) * sign;
+
+					sign = (piece.position.z > 0) ? 1.0 : -1.0;
+					var posZ = (Math.abs(offsetZ) > g_blockSize / 2.0) ? piece.position.z + (g_blockSize - Math.abs(offsetZ)) * sign : piece.position.z - Math.abs(offsetZ) * sign;
+
+					piece.position.set(posX, posY, posZ);
+				}
+
+				snapPosition(piece, offsetX, offsetY, offsetZ);
+
+				// snap rotation
+				// brute force by comparing to basic quaternions
+				piece.quaternion.copy(snapQuaternion(piece.quaternion));
+
+				piece.updateMatrixWorld();
+				while(checkPieceCollide(piece))
+				{
+					piece.position.y += g_blockSize;
+					piece.updateMatrixWorld();
+				}
+
+				piece.unapplyBehavior("lerpSync");
+				piece.unapplyBehavior("autoSync");
+				piece.syncData.heldByUser = "";
+				piece.sync();
+
+				// get our board
+				var board = jumpStart.scene.getObjectByName(piece.syncData.boardName);
+
+				// if we solved the puzzle, freeze the board.
+				if( checkSolved(board) )
+				{
+					board.ownerID = jumpStart.localUser.userID;
+					board.applyBehavior("shrinkRemove", {"localMode": true, "ownerRemoveOnly": true});
+					board.syncData.solved = true;
+					board.sync();
+
+					// we, as the owner, will create the next board after the current board shrink removes.
+				}
+			}
+
+			function checkSolved(board)
+			{
+				// FIXME: DO WORK
+				// ...
+			}
+
+			function checkPieceCollide(piece)
+			{
+				// cycle through every peice
+				var pieceKeys = Object.keys(g_puzzlePieces);
+				var i, testPiece, testBlockKeys, j, testBlock, blockKeys, k, block;//, displacement;
+				for( i = 0; i < pieceKeys.length; i++ )
+				{
+					testPiece = g_puzzlePieces[pieceKeys[i]];
+					if( testPiece === piece )
+						continue;
+
+					// cycle through every one of the blocks of the testPiece
+					testBlockKeys = Object.keys(testPiece.userData.blocks);
+					for( j = 0; j < testBlockKeys.length; j++ )
+					{
+						testBlock = testPiece.userData.blocks[testBlockKeys[j]];
+
+						// cycle through every one of the block on the piece
+						blockKeys = Object.keys(piece.userData.blocks);
+						for( k = 0; k < blockKeys.length; k++ )
+						{
+							block = piece.userData.blocks[blockKeys[k]];
+							if( block.getWorldPosition().distanceTo(testBlock.getWorldPosition()) < g_blockSize )
+								return true;
+
+							//displacement = block.getWorldPosition().sub(testBlock.getWorldPosition());
+							//if( displacement.length() < g_blockSize )
+							//	return displacement;
+						}
+					}
+				}
+
+				return false;
+			}
+
+			function grabPiece(hand)
+			{
+				console.log("Grab piece start");
+				var piece = hand.grippedPiece;
+				var handPosition = jumpStart.world.worldToLocal(hand.handJoint.position.clone());
+
+				// Position & orient the helper objects at
+				// the player's wrist & at the object's origin.
+				hand.grip.position.copy(handPosition);
+				hand.grip.quaternion.copy(hand.handJoint.quaternion);
+				hand.grip.updateMatrixWorld();
+
+				THREE.SceneUtils.detach(hand.gripTarget, hand.grip, jumpStart.scene);
+
+				piece.updateMatrixWorld();
+				hand.gripTarget.position.copy(piece.getWorldPosition());
+				hand.gripTarget.quaternion.copy(piece.getWorldQuaternion());
+
+				hand.gripTarget.updateMatrixWorld();
+				THREE.SceneUtils.attach(hand.gripTarget, jumpStart.scene, hand.grip);
+
+				piece.applyBehavior("lerpSync");
+				piece.applyBehavior("autoSync");
+				piece.syncData.heldByUser = jumpStart.localUser.userID;
+				piece.sync();
+				//console.log("Grab piece end");
+				// now the hand's gripTarget is properly positioned & oriented for the piece to follow.
+			}
+
+			function updateGrips()
+			{
+				// make sure hands ( and are available
+				if( !handsReady() )
+					return;
+
+				function determineHandState(handSide)
+				{
+					var hand = g_hands[handSide];
+					var action = "Nothing";
+					var gripPiece;
+					var gripPieceRunnerUp;
+
+					// is the hand in the grip pose?
+					// (just check for Vive & Touch gamepads for now.)
+
+					// *****************************************************************
+					// TODO: Make the input & playspace schemes part of JumpStart itself.
+					// (info on trello)
+					// *****************************************************************
+
+					var inputScheme = "Hands";
+					var playspaceScheme = "Standing";	// (but also "natrually" compatible w/ roomscale)
+
+					var gripActionState = false;
+					if( inputScheme === "Hands" )
+					{
+						// "Hands" have buttons on their "gamepad" devices
+						if( hand.gamepad.mapping === "touch" || hand.gamepad.mapping === "steamvr" )
+							gripActionState = (hand.gamepad.buttons[1].value > 0.5);
+						else
+							console.log("WARNING: Unsupported VR input gamepad on " + handSide + " hand!");
+					}
+
+					// player wants to grab/hold a piece w/ this hand
+					if( gripActionState )
+					{
+						// is this hand already holding a piece?
+						if( !!hand.grippedPiece )
+						{
+							// player is "gripping"
+							action = "Gripping";
+							gripPiece = hand.grippedPiece;
+						}
+						else
+						{
+							// player is trying to "grip"
+
+							// determine the nearest 2 pieces to grip
+							var bestPiece;
+							var bestDist = 9999999.0;
+
+							var secondBestPiece;
+							var secondBestDist = 9999999.1;
+
+							var pieces = g_puzzlePieces;
+							var piecesKeys = Object.keys(pieces);
+							var piece, blocksKeys, j, block, blockDist;
+							for( var i = 0; i < piecesKeys.length; i++ )
+							{
+								piece = g_puzzlePieces[piecesKeys[i]];
+
+								if( piece.syncData.heldByUser !== "" && piece.syncData.heldByUser !== jumpStart.localUser.userID )
+									continue;
+
+								blocksKeys = Object.keys(piece.userData.blocks);
+								for( j = 0; j < blocksKeys.length; j++ )
+								{
+									block = piece.userData.blocks[blocksKeys[j]];
+									blockDist = hand.palmJoint.position.distanceTo(block.getWorldPosition());	// TODO: Find a more reliable way to adjust for parent "world" object scale w/o translating BOTH positions before distance calculation.
+
+									// (OBSOLETE?) need to adjust blockSize to be in absolute world-space scale
+									//if( blockDist < 1.0 * (g_blockSize * jumpStart.options.sceneScale) )
+									if( blockDist < 1.0 * (g_blockSize * jumpStart.options.sceneScale) )
+									{
+										// This block puts this piece within distance to the hand.
+										// However, that doesn't mean it's the best or even the
+										// second best piece to grip.
+
+										if( blockDist < bestDist )
+										{
+											if( !!bestPiece && bestPiece !== piece )
+											{
+												secondBestPiece = bestPiece;
+												secondBestDist = bestDist;
+											}
+
+											bestPiece = piece;
+											bestDist = blockDist;
+										}
+										else if( blockDist < secondBestDist )
+										{
+											secondBestPiece = piece;
+											secondBestDist = blockDist;
+										}
+									}
+								}
+							}
+
+							gripPiece = bestPiece;
+							gripPieceRunnerUp = secondBestPiece;
+
+							if( !!gripPiece )
+								action = "Grip";
+						}
+					}
+					else
+					{
+						// is this hand currently holding a piece?
+						if( !!hand.grippedPiece )
+						{
+							// player is "dropping"
+							action = "Drop";
+							gripPiece = hand.grippedPiece;
+						}
+						else
+						{
+							// otherwise the player is not talking to us.
+							// action is "Nothing" by default
+							// gripPieces are undefined by default
+						}
+					}
+
+					return {"handSide": handSide, "action": action, "gripPiece": gripPiece, "gripPieceRunnerUp": gripPieceRunnerUp};
+				}
+
+				// determine potential hand states for each hand
+				stateLeft = determineHandState("Left");
+				stateRight = determineHandState("Right");
+
+				// PRIORITY: Handoff (BOTH), Drop (BOTH), Grip (FIFO), Nothing
+				// NOTE: "Handoff" action can *only* be detected after BOTH hands have
+				// independently determined their best potential states.
+
+				// determine if a piece is being handed from one hand to the other
+				if( stateLeft.gripPiece === stateRight.gripPiece && stateLeft.action === "Grip" && stateRight.action === "Drop" )
+				{
+					// Handoff FROM right TO left
+					g_hands["Left"].action = "Grip";
+					g_hands["Left"].grippedPiece = stateLeft.gripPiece;
+
+					g_hands["Right"].action = "Nothing";
+					g_hands["Right"].grippedPiece = null;
+
+					grabPiece(g_hands["Left"]);
+				}
+				else if( stateLeft.gripPiece === stateRight.gripPiece && stateRight.action === "Grip" && stateLeft.action === "Drop" )
+				{
+					// Handoff FROM left TO right
+					g_hands["Right"].action = "Grip";
+					g_hands["Right"].grippedPiece = stateLeft.gripPiece;
+
+					g_hands["Left"].action = "Nothing";
+					g_hands["Left"].grippedPiece = null;
+
+					grabPiece(g_hands["Right"]);
+				}
+				else
+				{
+					function easyGripDropGripping(state, otherState)	// :)
+					{
+						var handSide = state.handSide;
+						var hand = g_hands[handSide];
+
+						if( state.action === "Drop" )
+						{
+							// let stuff go
+							hand.action = "Nothing";
+							hand.grippedPiece = null;
+							dropPiece(state.gripPiece);
+						}
+						else if( state.action === "Grip" )
+						{
+							// (try to) grab stuff
+							var otherHandSide = (handSide === "Left") ? "Right" : "Left";
+							var otherHand = g_hands[otherHandSide];
+
+							if( otherHand.grippedPiece !== state.gripPiece && (otherState.action !== "Grab" || otherState.gripPiece !== state.gripPiece) )
+							{
+								hand.action = "Grip";
+								hand.grippedPiece = state.gripPiece;
+								grabPiece(hand);
+							}
+							else if( !!state.gripPieceRunnerUp && (otherState.action !== "Grab" || otherState.gripPiece !== state.gripPieceRunnerUp) )
+							{
+								hand.action = "Grip";
+								hand.grippedPiece = state.gripPieceRunnerUp;
+
+								grabPiece(hand);
+							}
+							// else everything within range is already held by other hand!! :(
+						}
+						else if( state.action === "Gripping" )
+						{
+						//	console.log("Gripping");
+							// update the position of the piece
+							var piece = state.gripPiece;
+							var handPosition = jumpStart.world.worldToLocal(hand.handJoint.position.clone());
+
+							hand.grip.position.copy(handPosition);
+							hand.grip.quaternion.copy(hand.handJoint.quaternion);
+
+							var dest = jumpStart.world.worldToLocal(hand.gripTarget.getWorldPosition());
+							
+							var speedFactor = 0.13;	// 0 < speedFactor <= 1
+							piece.position.lerp(dest, speedFactor);
+							piece.quaternion.slerp(hand.gripTarget.getWorldQuaternion(), speedFactor);
+						}
+					}
+
+					easyGripDropGripping(stateLeft, stateRight);
+					easyGripDropGripping(stateRight, stateLeft);
+				}
+
+			//	updateHand("Left");
+			//	updateHand("Right");
+			}
+
+			function puzzlePieceSpawn()
+			{
+				//this.userData.oldHeldByUser = this.syncData.heldByUser;
+
+				var pieceType = pieceTypes[this.syncData.type];
+
+				var numBlocks = pieceType.length;
+				var i, blockOffset, block;
+				for( i = 0; i < numBlocks; i++ )
+				{
+					blockOffset = pieceType[i];
+					block = spawnBlock({"parent": this, "x": blockOffset.x, "y": blockOffset.y, "z": blockOffset.z});
+				}
+
+				//if( this.syncData.heldByUser === "" )
+				//	updateBlockOrientations(this);
+
+				g_puzzlePieces[this.uuid] = this;
+			}
+
+			function puzzlePieceRemove()
+			{
+				// drop us if we are being held
+				if( handsReady() )
+				{
+					if( g_hands["Left"].grippedPiece === this )
+						g_hands["Left"].grippedPiece = null;
+
+					if( g_hands["Right"].grippedPiece === this )
+						g_hands["Right"].grippedPiece = null;
+				}
+
+				// remove us from local master list
+				delete g_puzzlePieces[this.uuid];
+			}
+
+			function puzzlePieceTick()
+			{
+				if( this.userData.oldHeldByUser !== this.syncData.heldByUser )
+				{
+					this.userData.oldHeldByUser = this.syncData.heldByUser;
+					if( this.syncData.heldByUser === "" )
+					{
+						// re-orient blocks
+						updateBlockOrientations(this);
+					}
+				}
+			}
+
+			function spawnPuzzlePiece(options)
+			{
+				//var pieceType = pieceTypes[options.type];
+
+				// spawn a puzzle piece
+				var piece = jumpStart.spawnInstance();
+				piece.addEventListener("spawn", puzzlePieceSpawn);
+				piece.addEventListener("remove", puzzlePieceRemove);
+				piece.addEventListener("tick", puzzlePieceTick);
+				piece.syncData.type = options.type;
+				piece.syncData.heldByUser = "";
+
+				return piece;
+			}
+
+			// make both hands are accessible (create them otherwise)
+			function handsReady()
+			{	
+				// check if both hands are already setup
+				if( g_hands["Left"].ready && g_hands["Right"].ready )
+					return true;
+
+				// make sure a skeleton exists
+				if( !!!jumpStart.localUser.skeleton )
+					return false;
+
+				// fail if there's not enough gamepads
+				var gamepads = jumpStart.gamepads;
+				if( gamepads.length < 2 )
+					return false;
+
+				// fail if the player hasn't pressed a button on their gamepad yet
+				var gamepad = jumpStart.gamepad;
+				if( !!!gamepad )
+					return false;
+
+				// fail if the other gamepad can't be detected
+
+				// *****************************************************************
+				// TODO: Make the "otherGamepad" part of JumpStart itself.
+				// *****************************************************************
+
+				var otherGamepad;
+				for( var i = 0; i < gamepads.length; i++ )
+				{
+					if( gamepads[i] !== gamepad &&
+						gamepads[i].mapping === gamepad.mapping )
+					{
+						otherGamepad = gamepads[i];
+						break;
+					}
+				}
+
+				if( !!!otherGamepad )
+					return false;
+
+				// helper function to resolve the hands (if needed)
+				function resolveHand(handSide)
+				{
+					// get the joints
+					var handJoint = jumpStart.localUser.skeleton.getJoint("Hand", handSide);
+					if( !!!handJoint )
+						return false;
+
+					var palmJoint = jumpStart.localUser.skeleton.getJoint("Middle", handSide, 1);
+					if( !!!palmJoint )
+						return false;
+
+					// create the helper objects
+					var grip = jumpStart.spawnInstance();
+					var gripTarget = jumpStart.spawnInstance(null, {"parent": grip});
+
+					// update the hand with all of our awesome new stuff
+					var hand = g_hands[handSide];
+					hand.handJoint = handJoint;
+					hand.palmJoint = palmJoint;
+					hand.grip = grip;
+					hand.gripTarget = gripTarget;
+					hand.gamepad = (handSide === "Left") ? otherGamepad : gamepad;
+					hand.otherGamepad = (handSide === "Left") ? gamepad : otherGamepad;
+					hand.ready = true;
+
+					// however, do not update it's action yet.
+					// just return success.
+					return true;
+				}
+
+				// resolve the hands (or fail)
+				if( !g_hands["Left"].ready && !resolveHand("Left") )
+					return false;
+
+				if( !g_hands["Right"].ready && !resolveHand("Right") )
+					return false;
+
+				// otherwise, the hands are ready to go!
+				return true;
+			}
+
+			// TODO: *EVERYTHING* should be based off of g_handStates,
+			// instead of ever using any other global scope variables.
+			var g_hands = {
+				"Left":
+				{
+					"ready": false,	// true when the skeleton & bones are resolved
+					"action": "Nothing",	// "Grip", "Nothing"
+					"grip": null,	// helper object
+					"gripTarget": null,	// helper object
+					"handJoint": null,
+					"palmJoint": null,
+					"grippedPiece": null
+					//"firstChoice": null,	// piece
+					//"secondChoice": null	// piece
+				},
+				"Right":
+				{
+					"ready": false,	// true when the skeleton & bones are resolved
+					"action": "Nothing",	// "Grip", "Nothing"
+					"grip": null,	// helper object
+					"gripTarget": null,	// helper object
+					"handJoint": null,
+					"palmJoint": null,
+					"grippedPiece": null
+					//"firstChoice": null,	// piece
+					//"secondChoice": null	// piece
+				}
+			};
+
+			function snapQuaternion(quaternion)
+			{
+				var bestIndex = 0;
+				var bestValue = 0;
+				var max = basicQuaternions.length;
+				var i, val;
+				for( i = 0; i < max; i++ )
+				{
+					val = Math.abs(quaternion.dot(basicQuaternions[i]));
+					if( val > bestValue )
+					{
+						bestValue = val;
+						bestIndex = i;
+					}
+				}
+
+				return basicQuaternions[bestIndex];
+			}
+
+			function updateBlockOrientations(piece)
+			{
+				// update the blocks of this piece
+				var blocks = piece.userData.blocks;
+				var blockKeys = Object.keys(blocks);
+
+				var numBlocks = blockKeys.length;
+				var i, block;
+				var quaternion;
+				for( i = 0; i < numBlocks; i++ )
+				{
+					block = blocks[blockKeys[i]];
+					piece.updateMatrixWorld();
+					THREE.SceneUtils.detach(block, piece, jumpStart.scene);
+					block.rotation.set(0, 0, 0);
+					block.updateMatrixWorld();
+					THREE.SceneUtils.attach(block, jumpStart.scene, piece);
+				}
+			}
+
+			jumpStart.addEventListener("ready", function()
+			{
+				jumpStart.addEventListener("tick", updateGrips);
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function bakeVertexLight(object, options)
+			{
+				var options = {
+					"offset": (!!options.offset) ? options.offset : new THREE.Vector3(),
+					"falloff": (!!options.falloff) ? options.falloff : 400.0
+				};
+
+				function getLightValue(dot, dist)
+				{
+					var falloff = options.falloff;
+					var dist = dist / falloff;
+					var intensity = 1 / (dist * dist);
+
+					var midLight = 255 / 2.0;
+					var maxLight = 255 - midLight;
+					var colorNumber = parseInt((midLight + (maxLight * dot)) * intensity);
+
+					if( colorNumber > 255 )
+						colorNumber = 255;
+					else if( colorNumber < 0 )
+						colorNumber = 0;
+
+					return colorNumber / 255.0;
+				}
+
+				if( !!!object.geometry )
+				{
+					object.traverse(function(child)
+					{
+						if( !!child.geometry )
+							object = child;
+					});
+
+					if( !!!object.geometry )
+						return;
+				}
+
+				if( !!object.parent )
+					object.parent.updateMatrixWorld();
+
+				var count = (!!!object.geometry.attributes) ? object.geometry.faces.length : object.geometry.attributes.position.count;
+
+				var keyLetters = ["a", "b", "c"];	// for structured geometry
+				var displacement = new THREE.Vector3();	// for array geometry
+				var vertexPosition = new THREE.Vector3();
+				var vertexNormal = new THREE.Vector3();
+				var normalLook = new THREE.Vector3();
+				var lightLook = new THREE.Vector3();
+
+				var normals = (!!object.geometry.attributes) ? object.geometry.attributes.normal.array : undefined;
+				
+				var positions = (!!object.geometry.attributes) ? object.geometry.attributes.position.array : undefined;
+
+				var i, face, j, dot, value;
+				for( i = 0; i < count; i++ )
+				{
+					if( !!!object.geometry.attributes )
+						face = object.geometry.faces[i];
+
+					for( j = 0; j < 3 || !!object.geometry.attributes; j++ )
+					{
+						// get vertexPosition
+						if(!!!object.geometry.attributes)
+							vertexPosition.copy(object.geometry.vertices[face[keyLetters[j]]]);
+						else
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+						vertexPosition.applyMatrix4(object.matrixWorld);
+
+						if( !!object.parent && object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexPosition);
+
+						var dist = vertexPosition.distanceTo(options.offset);
+
+						// get vertexNormal
+						if( !!!object.geometry.attributes )
+						{
+							vertexNormal.copy(object.geometry.vertices[face[keyLetters[j]]]);
+							vertexNormal.add(face.vertexNormals[j]);
+						}
+						else
+						{
+							displacement.set(normals[(3*i) + 0], normals[(3*i) + 1], normals[(3*i) + 2]);
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+							vertexNormal.add(displacement);
+						}
+
+						vertexNormal.applyMatrix4(object.matrixWorld);
+
+						if( !!object.parent && object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexNormal);
+
+						// get vertexNormalLook
+						normalLook.copy(vertexPosition);
+						normalLook.sub(vertexNormal);
+						normalLook.normalize();
+
+						// get vertexLightLook
+						lightLook.copy(vertexPosition);
+						lightLook.sub(options.offset);
+						lightLook.normalize();
+
+						// get dot
+						dot = normalLook.dot(lightLook);
+						value = getLightValue(dot, dist);	// a light value between 0.0 and 1.0
+
+						if( !!!object.geometry.attributes )
+						{
+							value = parseInt(255 * value);
+							value = "rgb(" + value + ", " + value + ", " + value + ")";
+
+							if( !!face.vertexColors[j] )
+							{
+								face.vertexColors[j].set(value);
+							}
+							else
+								face.vertexColors[j] = new THREE.Color(value);
+
+							object.geometry.colorsNeedUpdate = true;
+						}
+						else
+						{
+							object.geometry.attributes.color.array[(3*i) + 0] = value;
+							object.geometry.attributes.color.array[(3*i) + 1] = value;
+							object.geometry.attributes.color.array[(3*i) + 2] = value;
+							object.geometry.attributes.color.needsUpdate = true;
+							break;
+						}
+					}
+				}
+			}
+		</script>
+	</head>
+
+	<body style="background-color: transparent;">
+		<script>
+			if( !jumpStart.isAltspace )
+				document.body.style.backgroundColor = "#000";
+		</script>
+	</body>
+</html>

@@ -29,14 +29,41 @@
 				"debug": {"showCursorPlanes": false}
 			});
 
+// getQueryParams taken from http://stackoverflow.com/questions/979975/how-to-get-the-value-from-the-get-parameters
+function getQueryParams(qs) {
+    qs = qs.split('+').join(' ');
+
+    var params = {},
+        tokens,
+        re = /[?&]?([^=]+)=([^&]*)/g;
+
+    while (tokens = re.exec(qs)) {
+        params[decodeURIComponent(tokens[1])] = decodeURIComponent(tokens[2]);
+    }
+
+    return params;
+}
+var query = getQueryParams(document.location.search);
+
 			jumpStart.addEventListener("precache", function()
 			{
-				// Async
-				jumpStart.loadModelsEx(["models/enclosureBounds", "models/terrain", "models/water", "models/clouds", "models/rocks", "models/trunks", "models/canopy", "models/thai", "models/enemy_laser", "models/body", "models/beak", "models/eyes", "models/wing0Base", "models/wing0Tip", "models/wing1Base", "models/wing1Tip", "models/beeWing0", "models/beeWing1", "models/beeBlack", "models/beeYellow", "models/beeEyes", "models/blanketWhite", "models/blanketRed", "models/basketBlack", "models/basketDark", "models/basketLight", "models/stone"], function()
+				if( !!query.gltf && query.gltf === "1" )
 				{
-					//debugSlate.innerHTML += "<br />All models loaded.";
-					jumpStart.doneCaching();
-				});
+					// Async
+					jumpStart.loadModelsGLTF(["models/enclosureBounds.glb", "models/terrain.glb", "models/water.glb", "models/clouds.glb", "models/rocks.glb", "models/trunks.glb", "models/canopy.glb", "models/thai.glb", "models/enemy_laser.glb", "models/body.glb", "models/beak.glb", "models/eyes.glb", "models/wing0Base.glb", "models/wing0Tip.glb", "models/wing1Base.glb", "models/wing1Tip.glb", "models/beeWing0.glb", "models/beeWing1.glb", "models/beeBlack.glb", "models/beeYellow.glb", "models/beeEyes.glb", "models/blanketWhite.glb", "models/blanketRed.glb", "models/basketBlack.glb", "models/basketDark.glb", "models/basketLight.glb", "models/stone.glb"], function()
+					{
+						jumpStart.doneCaching();
+					});
+				}
+				else
+				{
+					// Async
+					jumpStart.loadModelsEx(["models/enclosureBounds", "models/terrain", "models/water", "models/clouds", "models/rocks", "models/trunks", "models/canopy", "models/thai", "models/enemy_laser", "models/body", "models/beak", "models/eyes", "models/wing0Base", "models/wing0Tip", "models/wing1Base", "models/wing1Tip", "models/beeWing0", "models/beeWing1", "models/beeBlack", "models/beeYellow", "models/beeEyes", "models/blanketWhite", "models/blanketRed", "models/basketBlack", "models/basketDark", "models/basketLight", "models/stone"], function()
+					{
+						//debugSlate.innerHTML += "<br />All models loaded.";
+						jumpStart.doneCaching();
+					});
+				}
 
 /*
 				// Async
@@ -53,6 +80,8 @@
 
 			jumpStart.addEventListener("initialize", function()
 			{
+				//jumpStart.scene.position.x += 1024;//(Math.PI / 2.0);
+				//jumpStart.world.rotateY(Math.PI / 2.0);
 				//debugSlate.innerHTML += "<br />Initialize called.";
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
@@ -453,26 +482,36 @@
 						bulb.position.copy(this.position);
 						//this.quaternion.copy(this.)
 						var body = jumpStart.spawnInstance("models/beeBlack", {"parent": this});
-						//body.children[0].geometry = body.children[0].geometry.clone();	// clone for unique lighting conditions
-						if( !this.userData.alreadyBaked )
-							bakeVertexLight(body.children[0], bulb);
-
 						body.userData.dead = false;
 						this.userData.body = body;
+						
+						//body.children[0].geometry = body.children[0].geometry.clone();	// clone for unique lighting conditions
+						if( !this.userData.alreadyBaked )
+						{
+							body.material.color.set("#000000");
+							bakeVertexLight(body, bulb);
+						}
 
 						var yellow = jumpStart.spawnInstance("models/beeYellow", {"parent": body});
-						//yellow.children[0].geometry = yellow.children[0].geometry.clone();	// clone for unique lighting conditions
 						if( !this.userData.alreadyBaked )
-							bakeVertexLight(yellow.children[0], bulb);
+						{
+							yellow.material.color.set("#FFF01D");
+							bakeVertexLight(yellow, bulb);
+						}
 
 						var eyes = jumpStart.spawnInstance("models/beeEyes", {"parent": body});
+						if( !this.userData.alreadyBaked )
+							eyes.material.color.set("#FF0000");
 
 						var wing0 = jumpStart.spawnInstance("models/beeWing0", {"parent": body});
 						wing0.position.set(3.63, 5.956, -6.929);
-						//wing0.children[0].geometry = wing0.children[0].geometry.clone();	// clone for unique lighting conditions
-						bulb.userData.falloff = 28;
+						
 						if( !this.userData.alreadyBaked )
-							bakeVertexLight(wing0.children[0], bulb);
+						{
+							wing0.material.color.set("#CCCCCC");
+							bulb.userData.falloff = 28;
+							bakeVertexLight(wing0, bulb);
+						}
 
 						wing0.userData.direction = -1.0;
 						wing0.addEventListener("tick", function()
@@ -499,10 +538,12 @@
 						var wing1 = jumpStart.spawnInstance("models/beeWing1", {"parent": body});
 						wing1.position.set(-3.63, 5.956, -6.929);
 
-						//wing1.children[0].geometry = wing1.children[0].geometry.clone();	// clone for unique lighting conditions
 						bulb.userData.falloff = 28;
 						if( !this.userData.alreadyBaked )
-							bakeVertexLight(wing1.children[0], bulb);
+						{
+							wing1.material.color.set("#CCCCCC");
+							bakeVertexLight(wing1, bulb);
+						}
 
 						wing1.userData.direction = 1.0;
 						wing1.addEventListener("tick", function()
@@ -1065,7 +1106,7 @@
 				});
 
 				shipDispenser.userData.maxInterval = 1.0;
-				
+
 				shipDispenser.userData.spawnEnemyShip = function()
 				{
 					var enemyShip = jumpStart.spawnInstance();
@@ -1102,6 +1143,9 @@
 						delete g_birds[this.uuid];
 					});
 
+					var bulb = jumpStart.scene.getObjectByName("bulb");
+					enemyShip.userData.bulb = bulb;
+					enemyShip.userData.alreadyBaked = false;
 					enemyShip.addEventListener("spawn", function()
 					{
 					//	var tester = jumpStart.spawnInstance("models/thai", {"parent": this});
@@ -1111,10 +1155,38 @@
 						body.userData.dead = false;
 						this.userData.body = body;
 
+						if( !this.userData.alreadyBaked )
+						{
+							body.material.color.set("#243A4A");
+							bulb.userData.falloff = 220.0;
+							bulb.position.copy(this.position);
+							bulb.quaternion.copy(this.quaternion);
+							bulb.translateZ(200);
+							bulb.translateY(200);
+							bakeVertexLight(body, bulb);
+						}
+
 						var eyes = jumpStart.spawnInstance("models/eyes", {"parent": body});
+						if( !this.userData.alreadyBaked )
+						{
+							eyes.material.color.set("#FF0000");
+							bakeVertexLight(eyes, bulb);
+						}
+
 						var beak = jumpStart.spawnInstance("models/beak", {"parent": body});
+						if( !this.userData.alreadyBaked )
+						{
+							beak.material.color.set("#FFF01D");
+							bakeVertexLight(beak, bulb);
+						}
 
 						var wing0Base = jumpStart.spawnInstance("models/wing0Base", {"parent": body});
+						if( !this.userData.alreadyBaked )
+						{
+							wing0Base.material.color.set("#243A4A");
+							bakeVertexLight(wing0Base, bulb);
+						}
+
 						wing0Base.position.set(3.501, -4.198, 6.811);
 						wing0Base.userData.direction = 1.0;
 						wing0Base.addEventListener("tick", function()
@@ -1148,6 +1220,12 @@
 						});
 
 						var wing0Tip = jumpStart.spawnInstance("models/wing0Tip", {"parent": wing0Base});
+						if( !this.userData.alreadyBaked )
+						{
+							wing0Tip.material.color.set("#243A4A");
+							bakeVertexLight(wing0Tip, bulb);
+						}
+
 						wing0Tip.position.set(26.0, 19.0, 5.0);
 						wing0Tip.userData.base = wing0Base;
 						wing0Tip.addEventListener("tick", function()
@@ -1170,6 +1248,12 @@
 						});
 
 						var wing1Base = jumpStart.spawnInstance("models/wing1Base", {"parent": body});
+						if( !this.userData.alreadyBaked )
+						{
+							wing1Base.material.color.set("#243A4A");
+							bakeVertexLight(wing1Base, bulb);
+						}
+
 						wing1Base.position.set(-3.501, -4.198, 6.811);
 						wing1Base.userData.direction = -1.0;
 						wing1Base.addEventListener("tick", function()
@@ -1202,6 +1286,12 @@
 						});
 
 						var wing1Tip = jumpStart.spawnInstance("models/wing1Tip", {"parent": wing1Base});
+						if( !this.userData.alreadyBaked )
+						{
+							wing1Tip.material.color.set("#243A4A");
+							bakeVertexLight(wing1Tip, bulb);
+						}
+
 						wing1Tip.position.set(-26.0, 19.0, 5.0);
 						wing1Tip.userData.base = wing1Base;
 						wing1Tip.addEventListener("tick", function()
@@ -1222,6 +1312,8 @@
 							else
 								this.rotation.z += 2.0 * jumpStart.deltaTime * this.userData.base.userData.direction;
 						});
+
+						this.userData.alreadyBaked = true;
 					});
 					/*
 					enemyShip.position.x = -jumpStart.worldOffset.y - 50.0;
@@ -1622,9 +1714,10 @@
 					var oldQuaternion = this.quaternion.clone();
 
 					this.lookAt(targetPos);
+
 					var directLookQuaternion = this.quaternion.clone();
 
-					if( jumpStart.isAltspace )
+					if( jumpStart.isAltspace && !g_hasHands)
 						directLookQuaternion.inverse();
 
 					this.quaternion.copy(this.userData.handObject.quaternion);
@@ -1697,6 +1790,8 @@
 							this.scale.set(1.0, 1.0, 1.0);
 						}
 					}
+
+					//this.scale.set(1, 1,1 );
 				}
 
 				// just assume we're all good, for now.
@@ -1886,9 +1981,83 @@
 				this.userData.textPlane = textPlaneContainer;
 			}
 
+			function handFire()
+			{
+				if( !isPlaying || isDead || g_ammoObject.userData.number <= 0)
+					return;
+
+				if( localShotRecharge > 0 )
+					localShotRecharge -= jumpStart.deltaTime;
+
+				if( localShotRecharge <= 0 )
+				{
+					// make it exactly 0
+					localShotRecharge = 0;
+				}
+				else if( localShotRecharge > 0 )
+					return;
+
+				// get the skeleton
+				var skeleton = jumpStart.localUser.skeleton;
+
+				// confirm skeleton exists
+				if( !!!skeleton )
+				{
+					console.log("No skeleton detected!");
+					return;
+				}
+
+				localShotRecharge = 0.2;
+				localShotsFired++;
+				g_ammoObject.userData.number--;
+				setAmmoNumber.call(g_ammoObject, g_ammoObject.userData.number, "Right");
+
+				//g_ammoObjectLeft.userData.number = 0;
+				//g_ammoObjectLeft.call(g_ammoObjectLeft, g_ammoObjectLeft.userData.number);
+
+				//if( localShotsFired === 1 )
+					//startSequence();
+
+				// get the tracking joints
+				//var trackingJoints = skeleton.trackingJoints;
+				// right index 0-3
+				var rightIndex3 = skeleton.getJoint("Index", "Right", 3);
+				//var rightIndex2 = skeleton.getJoint("Index", "Right", 2);
+
+				var laser = jumpStart.spawnInstance("models/enemy_laser");
+				laser.position.copy(jumpStart.world.worldToLocal(rightIndex3.position.clone()));
+				laser.quaternion.copy(rightIndex3.quaternion);
+				//laser.lookAt(jumpStart.world.worldToLocal(rightIndex3.position.clone()));
+				laser.scale.set(0.2, 0.2, 4.0);
+				laser.translateZ(80.0);
+				laser.userData.hand = "Right";
+
+				laser.addEventListener("tick", function()
+				{
+					if( isDead )
+						return;
+
+					this.translateZ(1600.0 * jumpStart.deltaTime);
+					this.rotateZ(4.0 * jumpStart.deltaTime);
+
+					if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
+						jumpStart.removeInstance(this);
+				});
+
+				laser.addEventListener("remove", function()
+				{
+					delete playerLasers[this.uuid];
+				});
+
+				playerLasers[laser.uuid] = laser;
+			}
+
 			function cannonFire()
 			{
-				g_cannon.userData.fire.call(g_cannon);
+				if( !!g_cannon )
+					g_cannon.userData.fire.call(g_cannon);
+				else
+					handFire();
 			}
 
 			function realFire()
@@ -1928,6 +2097,7 @@
 				bullet.position.copy(g_cannon.position);
 				bullet.quaternion.copy(g_cannon.quaternion);
 				bullet.boundingSphere.radius *= 2.0;
+
 				bullet.addEventListener("tick", function()
 				{
 					if( !!this.userData.physics && this.userData.physics.velocity.x === 0 )
@@ -2034,10 +2204,32 @@
 				//if( !hasHands && jumpStart.isAltspace )
 				//	return;
 
+				var floor = jumpStart.enclosureBoundaries["floor"];
+				if( !!!floor )
+					floor = jumpStart.enclosureBoundary("floor");
+				floor.scale.multiplyScalar(1.4);
+
+				floor.addEventListener("cursordown", cannonFire);
+
+				var backRight = jumpStart.enclosureBoundaries["east"];
+				if( !!!backRight )
+					backRight = jumpStart.enclosureBoundary("east");
+				backRight.scale.multiplyScalar(1.4);
+				//jumpStart.makeCollide(backRight);
+				backRight.addEventListener("cursordown", cannonFire);
+
+				var backLeft = jumpStart.enclosureBoundaries["south"];
+				if( !!!backLeft )
+					backLeft = jumpStart.enclosureBoundary("south");
+				backLeft.scale.multiplyScalar(1.4);
+				//jumpStart.makeCollide(backLeft);
+				backLeft.addEventListener("cursordown", cannonFire);
+
 				if( !g_hasHands )
 				{
 					if( !!!g_cannon )
 					{
+						/*
 						var floor = jumpStart.enclosureBoundaries["floor"];
 						if( !!!floor )
 							floor = jumpStart.enclosureBoundary("floor");
@@ -2058,6 +2250,7 @@
 						backLeft.scale.multiplyScalar(1.4);
 						//jumpStart.makeCollide(backLeft);
 						backLeft.addEventListener("cursordown", cannonFire);
+						*/
 
 						g_cannon = jumpStart.spawnInstance("models/stone");
 
@@ -2065,9 +2258,10 @@
 						bulb.position.copy(g_cannon.position);
 						bulb.quaternion.copy(g_cannon.quaternion);
 						//bulb.position.y += 80.0;
-						bulb.translateZ(80.0);
+						bulb.translateZ(150.0);
+						bulb.translateY(80.0);
 
-						bulb.userData.falloff = 80.0;
+						bulb.userData.falloff = 650.0;
 						bakeVertexLight(g_cannon, bulb);
 
 						g_cannon.userData.oldPosition = new THREE.Vector3();
@@ -2141,19 +2335,19 @@
 
 							var max = maxBound - 30.0;
 							if( targetPosition.x > max )
-								targetPosition.x = max;
+								targetPosition.x = max - 10.0;
 							else if( targetPosition.x < -max )
-								targetPosition.x = -max;
+								targetPosition.x = -max + 10.0;
 
 							if( targetPosition.y > max )
-								targetPosition.y = max;
+								targetPosition.y = max - 10.0;
 							else if( targetPosition.y < -max )
-								targetPosition.y = -max;
+								targetPosition.y = -max + 10.0;
 
 							if( targetPosition.z > max )
-								targetPosition.z = max;
+								targetPosition.z = max - 10.0;
 							else if( targetPosition.z < -max )
-								targetPosition.z = -max;
+								targetPosition.z = -max + 10.0;
 
 							this.userData.oldPosition.copy(this.position);
 							this.userData.oldQuaternion.copy(this.quaternion);
@@ -2225,6 +2419,7 @@
 
 			function startSequence()
 			{
+				///*
 				var shipDispenser = spawnShipDispenser();
 
 				var maxBound = (jumpStart.enclosure.scaledWidth * jumpStart.options.sceneScale) / 2.0;
@@ -2235,7 +2430,8 @@
 				{
 					console.log("SHIP DISPENSER SPENT!");
 				};
-
+				//*/
+				
 				/*
 				var gatorDispenser = spawnGatorDispenser();
 				var min = 120.0;
@@ -2383,8 +2579,29 @@
 					g_wristBandLeft = undefined;
 				}
 
+				var floor = jumpStart.enclosureBoundaries["floor"];
+				if( !!floor )
+				{
+					floor.scale.set(1, 1, 1);
+					floor.removeEventListener("cursordown", cannonFire);
+				}
+
+				var backRight = jumpStart.enclosureBoundaries["east"];
+				{
+					backRight.scale.set(1, 1, 1);
+					backRight.removeEventListener("cursordown", cannonFire);
+				}
+
+				var backLeft = jumpStart.enclosureBoundaries["south"];
+				if( !!backLeft )
+				{
+					backLeft.scale.set(1, 1, 1);
+					backLeft.removeEventListener("cursordown", cannonFire);
+				}
+
 				if( !!g_cannon )
 				{
+					/*
 					var floor = jumpStart.enclosureBoundaries["floor"];
 					if( !!floor )
 					{
@@ -2404,6 +2621,7 @@
 						backLeft.scale.set(1, 1, 1);
 						backLeft.removeEventListener("cursordown", cannonFire);
 					}
+					*/
 
 					jumpStart.removeInstance(g_cannon);
 					g_cannon = undefined;
@@ -2501,62 +2719,85 @@
 
 			jumpStart.addEventListener("ready", function()
 			{
-				//debugSlate.innerHTML += "<br />READY called.";
 				var bulb = jumpStart.spawnInstance();
 				bulb.name = "bulb";
-				bulb.position.y += 800.0;
-				bulb.position.x -= 100.0;
-				bulb.position.z += 100.0;
 
 				var container = jumpStart.spawnInstance();
 
-				//var bounds = jumpStart.spawnInstance("models/enclosureBounds");
 				var terrain = jumpStart.spawnInstance("models/terrain");
+				terrain.material.color.set("#61E94C");
 				terrain.position.y += 24.0;
-				//console.log(terrain.children[0]);
-				bakeVertexLight(terrain.children[0], bulb);
 
-//debugSlate.innerHTML += "<br />Checkpoint B.";
+				bulb.userData.falloff = 1800.0;
+				bulb.position.set(-800.0, 400.0, 800.0);
+				bakeVertexLight(terrain, bulb);
+
 				var water = jumpStart.spawnInstance("models/water", {"parent": terrain});
+				water.material.color.set("#0446AF");
+
+				bulb.userData.falloff = 1000.0;
+				bulb.position.set(-600.0, 500.0, 600.0);
 				bakeVertexLight(water, bulb);
 
 				var clouds = jumpStart.spawnInstance("models/clouds", {"parent": terrain});
-				bakeVertexLight(clouds.children[0], bulb);
+
+				bulb.userData.falloff = 800.0;
+				bulb.position.set(-300.0, 600.0, 300.0);
+				bakeVertexLight(clouds, bulb);
 
 				var rocks = jumpStart.spawnInstance("models/rocks", {"parent": terrain});
-				bakeVertexLight(rocks.children[0], bulb);
+				rocks.material.color.set("rgb(150, 150, 150)");
+
+				bulb.userData.falloff = 500.0;
+				bulb.position.set(0.0, 600.0, 0.0);
+				bakeVertexLight(rocks, bulb);
 
 				var trunks = jumpStart.spawnInstance("models/trunks", {"parent": terrain});
-				bakeVertexLight(trunks.children[0], bulb);
+				trunks.material.color.set("#8B4B1A");
+
+				bulb.userData.falloff = 450.0;
+				bulb.position.set(-300.0, 600.0, 300.0);
+				bakeVertexLight(trunks, bulb);
 
 				var blanketRed = jumpStart.spawnInstance("models/blanketRed", {"parent": terrain});
-				bakeVertexLight(blanketRed.children[0], bulb);
+				blanketRed.material.color.set("#CF4C4C");
+
+				bulb.userData.falloff = 500.0;
+				bulb.position.set(-300.0, 600.0, 300.0);
+				bakeVertexLight(blanketRed, bulb);
 
 				var blanketWhite = jumpStart.spawnInstance("models/blanketWhite", {"parent": terrain});
-				bakeVertexLight(blanketWhite.children[0], bulb);
+				blanketWhite.material.color.set("#FFFFFF");
+
+				bulb.userData.falloff = 500.0;
+				bulb.position.set(-300.0, 600.0, 300.0);
+				bakeVertexLight(blanketWhite, bulb);
 
 				var canopy = jumpStart.spawnInstance("models/canopy", {"parent": terrain});
-				bulb.userData.falloff = 350.0;
-				bulb.position.y = 600;//1024.0;
-				//bulb.position.x = -300;
-				//bulb.position.z = 300;
-				bakeVertexLight(canopy.children[0], bulb);
+				canopy.material.color.set("#00C400");
+
+				bulb.userData.falloff = 450.0;
+				bulb.position.set(-300.0, 600.0, 300.0);
+				bakeVertexLight(canopy, bulb);
 
 				var basket = jumpStart.spawnInstance("models/basketBlack", {"parent": terrain});
+				basket.material.color.set("#251803");
 				basket.position.set(-420.0, 28.753, 460.0);
 				basket.rotation.y = -0.4;
 
 				bulb.position.copy(basket.position);
 				bulb.userData.falloff = 150.0;
 				bulb.position.y = 200.0;
-				bakeVertexLight(basket.children[0], bulb);
+				bakeVertexLight(basket, bulb);
 				basket.addEventListener("spawn", function()
 				{
 					var dark = jumpStart.spawnInstance("models/basketDark", {"parent": this});
-					bakeVertexLight(dark.children[0], bulb);
+					dark.material.color.set("#644007");
+					bakeVertexLight(dark, bulb);
 
 					var light = jumpStart.spawnInstance("models/basketLight", {"parent": this});
-					bakeVertexLight(light.children[0], bulb);
+					light.material.color.set("#B7770D");
+					bakeVertexLight(light, bulb);
 				});
 
 				g_basket = basket;
@@ -2677,6 +2918,20 @@
 				// shooting behavior
 				jumpStart.addEventListener("tick", function()
 				{
+					if( !g_hasHands || !isPlaying || isDead )
+						return;
+
+					if( localShotRecharge > 0 )
+						localShotRecharge -= jumpStart.deltaTime;
+
+					if( localShotRecharge <= 0 )
+					{
+						// make it exactly 0
+						localShotRecharge = 0;
+					}
+
+					return;
+
 					if( !isPlaying || isDead )
 						return;
 
@@ -2719,7 +2974,7 @@
 							var thumbIsDown = false;
 
 							// TODO: A skeletal approach would be gamepad agnostic (and work with Leap)
-							if( gamepad.mapping === "steamvr" || gamepad.mapping === "touch" )
+							if( gamepad.mapping === "steamvr" )//|| gamepad.mapping === "touch" )
 							{
 								// steamvr thumb means any x/y value other than 0/0
 								if( gamepad.axes.length > 1 )
@@ -2728,6 +2983,8 @@
 							else if( gamepad.mapping === "touch" )	// inactive due to prior condition ^
 							{
 								// touch might have a different way to detect thumb being closed.
+								if( gamepad.buttons[3] > 0 )
+									thumbIsDown = true;
 							}
 
 							if( thumbIsDown )
@@ -2736,58 +2993,7 @@
 
 								if( g_ammoObject.userData.number > 0 )
 								{
-									// get the skeleton
-									var skeleton = jumpStart.localUser.skeleton;
-
-									// confirm skeleton exists
-									if( !!!skeleton )
-									{
-										console.log("No skeleton detected!");
-										return;
-									}
-
-									localShotRecharge = 0.2;
-									localShotsFired++;
-									g_ammoObject.userData.number--;
-									setAmmoNumber.call(g_ammoObject, g_ammoObject.userData.number, "Right");
-
-									//g_ammoObjectLeft.userData.number = 0;
-									//g_ammoObjectLeft.call(g_ammoObjectLeft, g_ammoObjectLeft.userData.number);
-
-									//if( localShotsFired === 1 )
-										//startSequence();
-
-									// get the tracking joints
-									//var trackingJoints = skeleton.trackingJoints;
-									// right index 0-3
-									var rightIndex3 = skeleton.getJoint("Index", "Right", 3);
-									var rightIndex2 = skeleton.getJoint("Index", "Right", 2);
-
-									var laser = jumpStart.spawnInstance("models/enemy_laser");
-									laser.position.copy(jumpStart.world.worldToLocal(rightIndex2.position.clone()));
-									laser.lookAt(jumpStart.world.worldToLocal(rightIndex3.position.clone()));
-									laser.scale.set(0.2, 0.2, 4.0);
-									laser.translateZ(80.0);
-									laser.userData.hand = "Right";
-
-									laser.addEventListener("tick", function()
-									{
-										if( isDead )
-											return;
-
-										this.translateZ(1600.0 * jumpStart.deltaTime);
-										this.rotateZ(4.0 * jumpStart.deltaTime);
-
-										if( !jumpStart.isWorldPosInsideOfEnclosure(this.position) )
-											jumpStart.removeInstance(this);
-									});
-
-									laser.addEventListener("remove", function()
-									{
-										delete playerLasers[this.uuid];
-									});
-
-									playerLasers[laser.uuid] = laser;
+									handFire();
 								}
 							}
 						}

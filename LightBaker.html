@@ -17,15 +17,17 @@
 			jumpStart.addEventListener("precache", function()
 			{
 				// Async
-				jumpStart.loadModelsEx(["models/clouds"], function()
+				/*
+				jumpStart.loadModelsGLTF(["models/clouds.glb", "models/thai.gltf"], function()
 				{
 					jumpStart.doneCaching();
 				});
+*/
 
 				// true	: SYNCHRONOUS
 				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
-				//return true;
-				return false;
+				return true;
+				//return false;
 			});
 
 			jumpStart.addEventListener("initialize", function()
@@ -34,7 +36,7 @@
 				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
 				return true;
 			});
-
+/*
 			function bakeVertexLight(object, light)
 			{
 				function getLightValue(dot, dist)
@@ -160,6 +162,136 @@
 				}
 
 			}
+			*/
+
+			function bakeVertexLight(object, light)
+			{
+				function getLightValue(dot, dist)
+				{
+					var falloff = (!!light.userData.falloff) ? light.userData.falloff : 400.0;
+					var dist = dist / falloff;
+					var intensity = 1 / (dist * dist);
+
+					var midLight = 255 / 2.0;
+					var maxLight = 255 - midLight;
+					var colorNumber = parseInt((midLight + (maxLight * dot)) * intensity);
+
+					if( colorNumber > 255 )
+						colorNumber = 255;
+					else if( colorNumber < 0 )
+						colorNumber = 0;
+
+					return colorNumber / 255.0;
+				}
+
+				if( !!!object.geometry )
+				{
+					object.traverse(function(child)
+					{
+						if( !!child.geometry )
+							object = child;
+					});
+
+					if( !!!object.geometry )
+						return;
+				}
+
+				object.parent.updateMatrixWorld();
+
+			//	var dist = object.getWorldPosition().distanceTo(light.getWorldPosition());
+				//var dist = new THREE.Vector3();
+
+				var count = (!!!object.geometry.attributes) ? object.geometry.faces.length : object.geometry.attributes.position.count;
+
+				var keyLetters = ["a", "b", "c"];	// for structured geometry
+				var displacement = new THREE.Vector3();	// for array geometry
+				var vertexPosition = new THREE.Vector3();
+				var vertexNormal = new THREE.Vector3();
+				var normalLook = new THREE.Vector3();
+				var lightLook = new THREE.Vector3();
+
+				var normals = (!!object.geometry.attributes) ? object.geometry.attributes.normal.array : undefined;
+				
+				var positions = (!!object.geometry.attributes) ? object.geometry.attributes.position.array : undefined;
+
+				var i, face, j, dot, value;
+				for( i = 0; i < count; i++ )
+				{
+					if( !!!object.geometry.attributes )
+						face = object.geometry.faces[i];
+
+					for( j = 0; j < 3 || !!object.geometry.attributes; j++ )
+					{
+						// get vertexPosition
+						if(!!!object.geometry.attributes)
+							vertexPosition.copy(object.geometry.vertices[face[keyLetters[j]]]);
+						else
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+						vertexPosition.applyMatrix4(object.matrixWorld);
+
+						if( object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexPosition);
+
+						var dist = vertexPosition.distanceTo(light.position);
+
+						// get vertexNormal
+						if( !!!object.geometry.attributes )
+						{
+							vertexNormal.copy(object.geometry.vertices[face[keyLetters[j]]]);
+							vertexNormal.add(face.vertexNormals[j]);
+						}
+						else
+						{
+							displacement.set(normals[(3*i) + 0], normals[(3*i) + 1], normals[(3*i) + 2]);
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+							vertexNormal.add(displacement);
+						}
+
+						vertexNormal.applyMatrix4(object.matrixWorld);
+
+						if( object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexNormal);
+
+						// get vertexNormalLook
+						normalLook.copy(vertexPosition);
+						normalLook.sub(vertexNormal);
+						normalLook.normalize();
+
+						// get vertexLightLook
+						lightLook.copy(vertexPosition);
+						lightLook.sub(light.position);
+						lightLook.normalize();
+
+						// get dot
+						dot = normalLook.dot(lightLook);
+						value = getLightValue(dot, dist);	// a light value between 0.0 and 1.0
+
+						if( !!!object.geometry.attributes )
+						{
+							value = parseInt(255 * value);
+							value = "rgb(" + value + ", " + value + ", " + value + ")";
+
+							if( !!face.vertexColors[j] )
+							{
+								face.vertexColors[j].set(value);
+							}
+							else
+								face.vertexColors[j] = new THREE.Color(value);
+
+							object.geometry.colorsNeedUpdate = true;
+						}
+						else
+						{
+							object.geometry.attributes.color.array[(3*i) + 0] = value;
+							object.geometry.attributes.color.array[(3*i) + 1] = value;
+							object.geometry.attributes.color.array[(3*i) + 2] = value;
+							object.geometry.attributes.color.needsUpdate = true;
+							break;
+						}
+					}
+				}
+			}
+
 /*
 			var g_debugMarker;
 			function getDebugMarker()
@@ -584,30 +716,34 @@
 					makeLightable.call(math);
 					*/
 
-
-					//g_obj = jumpStart.spawnInstance("models/clouds", {"parent": tableTop});
-					//g_obj.position.y = 200;
-					//makeLightable.call(g_obj);
 /*
-UltimateLoader.load('assets/LightBaker/models/thai.DAE', function(object)
+					g_obj = jumpStart.spawnInstance("models/thai", {"parent": tableTop});
+					g_obj.position.y = 200;
+					makeLightable.call(g_obj);
+					*/
+					//makeLightable.call(ship);
+/*
+UltimateLoader.load('assets/LightBaker/models/clouds.gltf', function(object)
 {
+	var table = jumpStart.scene.getObjectByName("table");
 	var actualObject = object.children[0].children[0];
-	console.log(actualObject);
-	//console.log(actualObject);
+	console.log(actualObject.geometry.attributes.position.count);
+	//jumpStart.scene.add(object);
 
-	//var material = actualObject.children[0].material;
-	//console.log(material);
+	var material = object.children[0].children[0].material;
+	console.log(material);
 
-	var goodObject = jumpStart.spawnInstance(null, {"object": actualObject});
+	var goodObject = jumpStart.spawnInstance(null, {"object": actualObject, "parent": table});
 	goodObject.position.y = 350.0;
 
 	g_obj = goodObject
-	//g_obj.position.y = 200;
+	g_obj.position.y = 200;
 	makeLightable.call(g_obj);
 
 	//console.log("Do it.");
 	computeLighting();
 	console.log("Do it.");
+
   // Do work...
 
   //Example work

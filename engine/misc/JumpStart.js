@@ -1,7 +1,7 @@
 // Global objects
 function JumpStart(options, appBehaviors)
 {
-	this.version = "0.2.2";
+	this.version = "0.2.3";
 	this.shouldSimulateLag = false;
 	this.tickLag = 0.0;	// for simulating bad performance.
 
@@ -167,7 +167,7 @@ function JumpStart(options, appBehaviors)
 	this.needsLocationUpdate = false;
 	this.lastPushTime = 0;
 	this.lastRandChars = [];
-	this.audioContext = new window.webkitAudioContext();	// Is webkit required? (probably??)
+	this.audioContext = new AudioContext();//new window.webkitAudioContext();	// Is webkit required? (probably??)
 	this.enclosureBoundaries = 
 	{
 		"floor": null,
@@ -1139,6 +1139,9 @@ console.log("Spawning");
 	{
 		// THREE & Firebase are now loaded.
 
+		// test some stuff with vertexcolors
+		//console.log(THREE.GLTFLoader);
+
 		//modify the MTLLoader...
 		//THREE.MTLLoader.MaterialCreator.prototype = 
 		//{
@@ -1727,8 +1730,14 @@ console.log("Spawning");
 							"https://cdn.rawgit.com/mrdoob/three.js/r84/build/three.min.js",
 							"https://cdn.rawgit.com/mrdoob/three.js/r84/examples/js/loaders/MTLLoader.js",
 							"https://cdn.rawgit.com/mrdoob/three.js/r84/examples/js/loaders/OBJLoader.js",
+							//"https://cdn.rawgit.com/mrdoob/three.js/r84/examples/js/loaders/GLTFParserLoader.js",
 							//"engine/misc/UltimateLoader.min.js",
-							"http://altspacevr.github.io/AltspaceSDK/dist/altspace.min.js"
+							"http://altspacevr.github.io/AltspaceSDK/dist/altspace.min.js",
+							//"https://cdn.rawgit.com/norybiak/UltimateLoader/v0.4.3/dist/UltimateLoader.min.js",
+							"https://cdn.rawgit.com/norybiak/UltimateLoader/v0.3.1/dist/UltimateLoader.min.js",
+							"engine/misc/AltVRNC.min.js",
+							"engine/misc/GLTFLoader.js"
+
 							/*
 							"http://sdk.altvr.com/libs/three.js/r73/build/three.min.js",
 							"http://sdk.altvr.com/libs/three.js/r73/examples/js/loaders/OBJMTLLoader.js",
@@ -3300,6 +3309,86 @@ JumpStart.prototype.onWindowResize = function()
 	jumpStart.renderer.setSize(window.innerWidth, window.innerHeight);
 };
 
+JumpStart.prototype.loadModelsGLTF = function(fileNames, callback)
+{
+	var max = fileNames.length;
+	var i;
+	for( i = 0; i < max; i++ )
+	{
+		if( fileNames[i].indexOf("assets/") !== 0  && fileNames[i].indexOf("engine/") !== 0 )
+			fileNames[i] = "assets/" + this.options.appID + "/" + fileNames[i];
+	}
+
+	//new THREE.TextureLoader().load("assets/LightBaker/models/thaiComplete.png", function(texture)
+	//{
+		//console.log(texture);
+		/*
+	function computeBoundingSphere(geometry)
+	{
+		geometry.computeBoundingSphere();
+
+		var sphere = geometry.boundingSphere.clone();
+		sphere.radius *= 1.15;	// Scale up slightly
+		return sphere;
+	}
+	*/
+		UltimateLoader.multiload(fileNames, function(objects)
+		{
+			for( var i = 0; i < objects.length; i++ )
+			{
+				// load a texture & uv's
+				//var texture = new THREE.TextureLoader().load("assets/LightBaker/models/thaiComplete.png", function(er)
+				//{
+				//	console.log(er);
+				//});
+				//texture.wrapS = THREE.RepeatWrapping;
+				//texture.wrapT = THREE.RepeatWrapping;
+				//texture.repeat.set( 4, 4 );
+				//objects[i].children[0].children[0].material.image = "assets/LightBaker/models/thaiComplete.png";//map = texture;
+				//objects[i].children[0].children[0].material.map = texture;
+				//console.log(objects[i].children[0].children[0].material.map);
+				//objects[i].children[0].children[0].material.needsUpdate = true;
+
+				//objects[i].children[0].children[0].boundingSphere = computeBoundingSphere(objects[i].children[0].children[0].geometry);
+
+				var used = false;
+				objects[i].traverse(function(child)
+				{
+					if( !used )
+					{
+						if( !!child.geometry )
+						{
+							var slimName = fileNames[i];
+							var found = slimName.lastIndexOf(".");
+							if( found > 0 )
+								slimName = slimName.substring(0, found);
+							//console.log(child.geometry.attributes);
+							//var texture = new THREE.TextureLoader().load("assets/AirRush/models/wood.jpg");
+							//child.material = new THREE.MeshBasicMaterial({"color": "rgb(255, 255, 255)", "vertexColors": THREE.VertexColors, "map": texture});
+							jumpStart.models.push({
+								"modelFile": slimName,
+								"object": child,
+								"quality": this.quality,
+								"doneLoading": true
+								//"object": objects[i].children[0].children[0]
+							});
+
+							used = true;
+						}
+					}
+				});
+			}
+
+			callback(objects);
+			//console.log(objects);
+			//setTimeout(function()
+			//{
+			//	callback(fileNames);
+			//}, 100);
+		});
+	//});
+};
+
 JumpStart.prototype.loadModelsEx = function(fileNames, callback)
 {
 	// fileNames are relative to the "assets/[appID]/" path.
@@ -3702,6 +3791,32 @@ JumpStart.prototype.loadModelsEx = function(fileNames, callback)
 
 						}
 
+/*
+						// merg verts
+						var duplicates = [];
+						var i, j;
+						for( i = 0; i < state.vertices.length - 2; i += 3 )
+						{
+							for( j = 0; j < state.vertices.length - 2; j += 3)
+							{
+								if( j !== i )
+								{
+//console.log("yepperz");
+									// check each vertex with all others
+									if( 
+										state.vertices[i] == state.vertices[j] &&
+										state.vertices[i+1] == state.vertices[j+1] &&
+										state.vertices[i+2] == state.vertices[j+2]
+										)
+									{
+										//duplicates.push()
+										console.log("Duplicate found!");
+									}
+								}
+							}
+						}
+console.log(state.vertices);
+*/
 						state.finalize();
 
 						var container = new THREE.Group();
@@ -4041,15 +4156,51 @@ JumpStart.prototype.loadModelsEx = function(fileNames, callback)
 		{
 			object = loadRequest.objects[i];
 
-			fileName = this.fileNames[i];	// the clean filename w/o quality
-		//	console.log("yarrrrrrrrrrrrrrrrrr");
-		//	console.log(fileName);
-			jumpStart.models.push({
-				"modelFile": fileName,
-				"object": object,
-				"quality": this.objQualities[i],
-				"doneLoading": true
-			});
+			// load a texture & uv's
+			//var texture = new THREE.TextureLoader().load("assets/LightBaker/models/thaiComplete.png", function(er)
+			//{
+			//	console.log(er);
+			//});
+			//texture.wrapS = THREE.RepeatWrapping;
+			//texture.wrapT = THREE.RepeatWrapping;
+			//texture.repeat.set( 4, 4 );
+			//objects[i].children[0].children[0].material.image = "assets/LightBaker/models/thaiComplete.png";//map = texture;
+			//objects[i].children[0].children[0].material.map = texture;
+			//console.log(objects[i].children[0].children[0].material.map);
+			//objects[i].children[0].children[0].material.needsUpdate = true;
+
+			//objects[i].children[0].children[0].boundingSphere = computeBoundingSphere(objects[i].children[0].children[0].geometry);
+
+			var used = false;
+			object.traverse(function(child)
+			{
+				if( !used )
+				{
+					if( !!child.geometry )
+					{
+						var slimName = fileNames[i];
+						var found = slimName.lastIndexOf(".");
+						if( found > 0 )
+							slimName = slimName.substring(0, found);
+						//console.log(child.geometry.attributes);
+						//var texture = new THREE.TextureLoader().load("assets/AirRush/models/wood.jpg");
+						//child.material = new THREE.MeshBasicMaterial({"color": "rgb(255, 255, 255)", "vertexColors": THREE.VertexColors, "map": texture});
+						
+
+						fileName = this.fileNames[i];	// the clean filename w/o quality
+					//	console.log("yarrrrrrrrrrrrrrrrrr");
+					//	console.log(fileName);
+						jumpStart.models.push({
+							"modelFile": fileName,
+							"object": child,
+							"quality": this.objQualities[i],
+							"doneLoading": true
+						});
+
+						used = true;
+					}
+				}
+			}.bind(this));
 		}
 
 		console.log("JumpStart: Loaded " + loadRequest.objectsLoaded + " model(s).");
@@ -4433,7 +4584,8 @@ JumpStart.prototype.spawnInstance = function(modelFile, options)
 		//}
 	}
 
-	if( !computedBoundingSphere && !!instance.geometry && instance.geometry.faces && instance.geometry.faces.length > 0 )
+	//if( !computedBoundingSphere && !!instance.geometry && instance.geometry.faces && instance.geometry.faces.length > 0 )
+	if( !!instance.geometry )
 	{
 		//console.log("yip 222");
 		computedBoundingSphere = computeBoundingSphere(instance.geometry);

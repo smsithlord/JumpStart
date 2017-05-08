@@ -1,0 +1,4443 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>VRoxel Fashion</title>
+		<script src="engine/misc/JumpStart.js"></script>
+		<script>
+			/*
+				VRoxel Fashion
+				VERSION 1.0
+
+				Description:
+					Create voxel art in VR.  Then wear your creation on your head,
+					on your torso, or held in your hands.
+
+				Features:
+					- Look & tap controls for GearVR & others with no hand tracking.
+					- Hand tracking controls for Leap Motion, Touch, & Vive.
+					- Multiple 3D canvases so you can build an entire outfit.
+					- Adjustable zoom & height on the 3D canvas as you work.
+					- Multiplayer support so others can see the voxels you're wearing.
+
+				Change Log:
+					1.0 (5/8/2017)
+						- Original version.
+			*/
+
+			// OVERVIEW:
+			//	1. precache listener is fired.
+			//	2. ready listener is fired.
+			//	3. startLinkSpawn is fired and the hands / no hands menu is created.
+			//	4. spawnPuzzleBoard is fired by the user, and that's where the fun begins.
+
+			// NOTE: JumpStart is a library that automates common tasks for me. It also
+			//	extends the THREE.Object3D and THREE.Group objects that it creates to
+			//	have methods to automate common tasks.  If you aren't using JumpStart,
+			//	a lot of this code can still work for you, but you'll just have to write
+			//	your own versions of any JumpStart methods that are used.
+
+			// General options to use the JumpStart system
+			loadJumpStart({
+				"appID": "VRoxelFashion",
+				"multiuserOnly": true,
+				"sceneScale": 1.0,
+				"enclosureOnly": true,
+				"scaleWithEnclosure": false,
+				"debug": {"showCursorPlanes": false}
+			});
+
+			var g_sounds = {};
+			var g_actionMode = "Spawn";
+			var g_actionModes = ["Spawn", "Move", "Delete"];
+			var g_spawnActionPieceType;
+			var g_moveMode = "Pull";
+			var g_arrowClickCatcherMesh;
+
+			// globals
+			var basicQuaternions = [];
+			var g_blockSize = 4.0;
+			var g_gridScale = g_blockSize / 8.0;	// constant.  this is to adjust the grid model to match your block size.
+			var g_blockMesh, g_blockGeo, g_blockMat;
+
+			function playSound(res)
+			{
+				if( !!g_sounds[res] )
+				{
+					g_sounds[res].call('pause');
+					g_sounds[res].call('seek', {time: 0});
+					g_sounds[res].call('play');
+				}
+			}
+
+			function cycleActionMode(direction)
+			{
+				var currentIndex = g_actionModes.indexOf(g_actionMode);
+				currentIndex += direction;
+				if( currentIndex > g_actionModes.length - 1 )
+					currentIndex = 0;
+				else if( currentIndex < 0 )
+					currentIndex = g_actionModes.length - 1;
+
+				g_actionMode = g_actionModes[currentIndex];
+				console.log("Mode: " + g_actionMode);
+			}
+
+			jumpStart.addEventListener("precache", function()
+			{
+				// define snap quaternions
+				basicQuaternions.push(new THREE.Quaternion(0, 0, 0, 1));
+				basicQuaternions.push(new THREE.Quaternion(0, 0.7071, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0, 1, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(0, -0.7071, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0, 0, 0.7071, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0.5, 0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0.7071, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, -0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0, 0, -0.7071, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, 0.5, -0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(-0.7071, 0.7071, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.5, -0.5, -0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(0.5, 0.5, -0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0, 0.7071, -0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.5, -0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(1, 0, 0, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0, -0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(0, 0, 1, 0));
+				basicQuaternions.push(new THREE.Quaternion(0.7071, 0, 0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(-0.7071, 0, 0, 0.7071));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, 0.5, 0.5, 0.5));
+				basicQuaternions.push(new THREE.Quaternion(0, 0.7071, 0.7071, 0));
+				basicQuaternions.push(new THREE.Quaternion(-0.5, -0.5, -0.5, 0.5));
+
+				if( true )
+				{
+					// Async
+					jumpStart.loadModelsGLTF(["models/block_frame.glb", "models/block_handle.glb", "models/joint_frame.glb", "models/joint_handle.glb", "models/joint_selector.glb", "models/lever.glb", "models/lever_base.glb", "models/table.glb", "models/trashcan.glb", "models/zoom_lever.glb", "models/grid.glb", "models/arrow.glb", "models/push_mode.glb", "models/pull_mode.glb", "models/head_dummy.glb", "models/torso_dummy.glb", "models/hand_dummy.glb"], function()
+					{
+						jumpStart.doneCaching();
+					});
+				}
+				else
+				{
+					// Async
+					jumpStart.loadModelsEx(["models/block_frame", "models/block_handle", "models/joint_frame", "models/joint_handle", "models/joint_selector", "models/lever", "models/lever_base", "models/table", "models/text", "models/trashcan", "models/zoom_lever", "models/grid", "models/arrow", "models/push_mode", "models/pull_mode", "models/head_dummy", "models/torso_dummy"], function()
+					{
+						//debugSlate.innerHTML += "<br />All models loaded.";
+						jumpStart.doneCaching();
+					});
+				}
+
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneCaching)
+				return false;
+			});
+
+			function changeCanvas(canvas)
+			{
+				var oldScale = g_activeCanvas.scale.x;
+				var oldHeight = g_activeCanvas.position.y;
+
+				g_activeCanvas.scale.set(0.0001, 0.0001, 0.0001);
+				g_activeCanvas = canvas;
+
+				g_activeCanvas.scale.set(oldScale, oldScale, oldScale);
+				g_activeCanvas.position.y = oldHeight;
+
+				if( g_noHandsMode )
+					confirmNoHandsCenterVoxel();
+
+				playSound("ui/toggle");
+			}
+
+			function onBlockClicked()
+			{
+				var piece;
+				var hasPiece = false;
+				var parent = this;
+				while( !!parent )
+				{
+					if( parent === g_activeCanvas )
+					{
+						if( !!!piece )
+							piece = this;
+
+						hasPiece = true;
+						break;
+					}
+
+					piece = parent;
+					parent = piece.parent;
+				}
+
+				if( !hasPiece && !!piece )
+					piece = undefined;
+
+				if( !!!piece )
+					return;
+
+				if( g_actionMode === "Spawn" )
+				{
+					if( !!!g_spawnActionPieceType )
+						g_spawnActionPieceType = "white";
+
+
+					var babyPiece = spawnPuzzlePiece({"type": g_spawnActionPieceType, "parent": g_activeCanvas});
+					babyPiece.position.copy(piece.position);
+					g_activeCanvas.add(babyPiece);
+					babyPiece.userData.boardName = g_boardName;
+
+					var offset = jumpStart.localUser.cursorHit.face.normal.clone().normalize().multiplyScalar(g_blockSize);
+
+					babyPiece.translateX(offset.x);
+					babyPiece.translateY(offset.y);
+					babyPiece.translateZ(offset.z);
+
+					playSound("ui/select");
+				}
+				else if( g_actionMode === "Move" )
+				{
+					if( !!jumpStart.localUser.cursorHit && !!jumpStart.localUser.cursorHit.face )
+					{
+						var offset = jumpStart.localUser.cursorHit.face.normal.clone().normalize().multiplyScalar(g_blockSize);
+
+						if( g_moveMode === "Push" )
+							offset.multiplyScalar(-1);
+
+						piece.translateX(offset.x);
+						piece.translateY(offset.y);
+						piece.translateZ(offset.z);
+
+						piece.updateMatrixWorld();
+						while(checkPieceCollide(piece))
+						{
+							piece.position.y += g_blockSize;
+							piece.updateMatrixWorld();
+						}
+
+						showOrHideGrid();
+					}
+				}
+				else if( g_actionMode === "Delete" )
+				{
+					deletePiece(piece);
+				}
+			}
+
+			// create the start button
+			function buildImagePlane(imageName, transparent, width, height)
+			{
+				var width = (width == undefined) ? 32 : width;
+				var height = (height == undefined) ? 32 : height;
+
+				var imageFile = "assets/VRoxelFashion/misc/" + imageName;
+				var imageMaterial;
+				if( transparent == undefined || !transparent )
+				{
+					imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile)});
+				}
+				else
+					imageMaterial = new THREE.MeshBasicMaterial({map: THREE.ImageUtils.loadTexture(imageFile), "transparent": true, "opacity": 1.0});
+
+				var imageGeometry = new THREE.PlaneGeometry(width, height, 1 , 1);
+				var imagePlane = new THREE.Mesh(imageGeometry, imageMaterial);
+				return imagePlane;
+			}
+
+			var g_table;
+			var g_tableWidth = 100.0;
+			function startLinkSpawn()
+			{
+				var table = jumpStart.spawnInstance("models/table");
+				table.material.color.set("#555555");
+				bakeVertexLight(table, {"offset": new THREE.Vector3(120, 120, 120), "falloff": 450});
+				g_table = table;
+
+				var startLogo = jumpStart.spawnInstance(null, {"object": buildImagePlane("vroxelfashion.png", true, 64, 32), "parent": this});
+				startLogo.position.y += g_tableHeight + 90.0;
+
+				var startHands = jumpStart.spawnInstance(null, {"object": buildImagePlane("hands.png"), "parent": this});
+				startHands.position.y += g_tableHeight + 50.0;
+				startHands.position.x -= 25.0;
+				startHands.blocksLOS = true;
+				jumpStart.makeCollide(startHands);
+				startHands.addEventListener("cursordown", function()
+				{
+					if( !handsReady() )
+					{
+						console.log("Hands not ready.");
+						playSound("ui/fail");
+						return;
+					}
+
+					jumpStart.removeInstance(this.parent);
+
+					jumpStart.addEventListener("tick", updateGrips);
+					spawnPuzzleBoard();
+				});
+
+				var startNoHands = jumpStart.spawnInstance(null, {"object": buildImagePlane("nohands.png"), "parent": this});
+				startNoHands.position.y += g_tableHeight + 50.0;
+				startNoHands.position.x += 25.0;
+				startNoHands.blocksLOS = true;
+				jumpStart.makeCollide(startNoHands);
+				startNoHands.addEventListener("cursordown", function()
+				{
+					jumpStart.removeInstance(this.parent);
+
+					g_noHandsMode = true;
+
+					g_indicator = jumpStart.spawnInstance(null);
+					g_indicator.userData.spawnCursor = jumpStart.spawnInstance(null, {"object": g_blockMesh.clone(), "parent": g_indicator});
+
+					g_indicator.userData.spawnCursor.userData.oldColor = new THREE.Vector3(255, 100, 50);
+					g_indicator.userData.spawnCursor.userData.colorDelta = new THREE.Vector3(-2.0, 1.3, -1.0);
+					g_indicator.userData.spawnCursor.material.color.set(g_indicator.userData.spawnCursor.userData.oldColor);
+					g_indicator.userData.spawnCursor.addEventListener("tick", function()
+					{
+						var slot;
+						var slots = ["x", "y", "z"];
+						for( var i = 0; i < 3; i++ )
+						{
+							slot = slots[i];
+
+							if( this.userData.colorDelta[slot] !== 0 )
+							{
+								this.userData.oldColor[slot] = parseInt(this.userData.oldColor[slot] + this.userData.colorDelta[slot]);
+
+								if( this.userData.oldColor[slot] >= 255 )
+								{
+									this.userData.oldColor[slot] = 255;
+									this.userData.colorDelta[slot] *= -1;
+								}
+								else if( this.userData.oldColor[slot] <= 0 )
+								{
+									this.userData.oldColor[slot] = 0;
+									this.userData.colorDelta[slot] *= -1;
+								}
+							}
+
+							// works in Chrome
+							//this.material.color[slot] = this.userData.oldColor[slot] / 255.0;
+						}
+
+						// works in Altspace & Chrome
+						this.material.color = new THREE.Color(this.userData.oldColor.x / 255.0, this.userData.oldColor.y / 255.0, this.userData.oldColor.z / 255.0);
+						this.material.needsUpdate = true;
+					});
+					g_indicator.userData.spawnCursor.scale.set(0.0001, 0.0001, 0.0001);
+
+					g_indicator.userData.deleteCursor = jumpStart.spawnInstance(null, {"object": g_deleteMesh.clone(), "parent": g_indicator});
+					g_indicator.userData.deleteCursor.scale.set(0.0001, 0.0001, 0.0001);
+
+					g_indicator.userData.arrow = jumpStart.spawnInstance("models/arrow", {"parent": g_indicator});
+					g_indicator.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+
+					g_indicator.addEventListener("tick", function()
+					{
+						var hideMe = true;
+						var gizmoScale = 1.0 * g_gridScale * g_activeCanvas.scale.x;
+						var minGizmoScale = 0.0001;
+
+						if( !!jumpStart.localUser.cursorHit && !!jumpStart.localUser.cursorHit.scaledPoint && !!jumpStart.localUser.cursorHit.object )
+						{
+							// get the puzzle piece that owns this surface/mesh
+							var piece;
+							var hasPiece = false;
+							var parent = jumpStart.localUser.cursorHit.object;
+							while( !!parent )
+							{
+								if( !!piece && !!g_puzzlePieces[piece.uuid] )
+								{
+									if( !!!piece )
+										piece = jumpStart.localUser.cursorHit.object;
+
+									hasPiece = true;
+									break;
+								}
+
+								piece = parent;
+								parent = piece.parent;
+							}
+
+							if( !hasPiece && !!piece )
+								piece = undefined;
+
+							if( !!piece && piece.parent === g_activeCanvas )
+							{
+								if( g_actionMode === "Spawn" )
+								{
+									if( this.userData.deleteCursor.scale.x > minGizmoScale )
+										this.userData.deleteCursor.scale.set(minGizmoScale, minGizmoScale, minGizmoScale);
+
+									if( this.userData.arrow.scale.x > minGizmoScale )
+										this.userData.arrow.scale.set(minGizmoScale, minGizmoScale, minGizmoScale);
+
+									var offset = jumpStart.localUser.cursorHit.face.normal.clone().normalize().multiplyScalar(g_blockSize);
+
+									var scale = 1.0 * g_activeCanvas.scale.x;
+									offset.multiplyScalar(scale);
+
+									var dest = piece.position.clone().multiplyScalar(scale);
+									this.position.copy(dest);
+									this.position.add(g_activeCanvas.position);
+									this.quaternion.copy(new THREE.Quaternion());
+
+									this.translateX(offset.x);
+									this.translateY(offset.y);
+									this.translateZ(offset.z);
+
+									this.userData.spawnCursor.scale.set(scale, scale, scale);
+									hideMe = false;
+								}
+								else if( g_actionMode === "Delete" )
+								{
+									if( this.userData.spawnCursor.scale.x > minGizmoScale )
+										this.userData.spawnCursor.scale.set(minGizmoScale, minGizmoScale, minGizmoScale);
+
+									if( this.userData.arrow.scale.x > minGizmoScale )
+										this.userData.arrow.scale.set(minGizmoScale, minGizmoScale, minGizmoScale);
+
+									var scale = 1.0 * g_activeCanvas.scale.x;
+									var dest = piece.position.clone().multiplyScalar(scale);
+									this.position.copy(dest);
+									this.position.add(g_activeCanvas.position);
+
+									if( this.userData.deleteCursor.scale.x < scale + (0.1 * scale) )
+										this.userData.deleteCursor.scale.set(scale + (0.1 * scale), scale + (0.1 * scale), scale + (0.1 * scale));
+
+									hideMe = false;
+								}
+								else if( g_actionMode === "Move" )
+								{
+									if( this.userData.spawnCursor.scale.x > minGizmoScale )
+										this.userData.spawnCursor.scale.set(minGizmoScale, minGizmoScale, minGizmoScale);
+
+									if( this.userData.deleteCursor.scale.x > minGizmoScale )
+										this.userData.deleteCursor.scale.set(minGizmoScale, minGizmoScale, minGizmoScale);
+
+									var scale = 1.0 * g_activeCanvas.scale.x;
+
+									var offset = jumpStart.localUser.cursorHit.face.normal.clone().normalize().multiplyScalar(g_blockSize);
+									offset.multiplyScalar(scale);
+
+									var dest = piece.position.clone().multiplyScalar(scale);
+									dest.add(g_activeCanvas.position)
+
+									this.position.copy(dest);
+									this.quaternion.copy(new THREE.Quaternion());
+
+									this.translateX(offset.x);
+									this.translateY(offset.y);
+									this.translateZ(offset.z);
+
+									if( this.userData.arrow.scale.x !== gizmoScale )
+										this.userData.arrow.scale.set(gizmoScale, gizmoScale, gizmoScale);
+
+									if( offset.x > 0 )
+									{
+										if( g_moveMode === "Pull" )
+											g_indicator.userData.arrow.rotation.set(0, Math.PI, 0);
+										else
+											g_indicator.userData.arrow.rotation.set(0, 0, 0);
+									}
+									else if( offset.x < 0 )
+									{
+										if( g_moveMode === "Pull" )
+											g_indicator.userData.arrow.rotation.set(0, 0, 0);
+										else
+											g_indicator.userData.arrow.rotation.set(0, Math.PI, 0);
+									}
+									else if( offset.y > 0 )
+									{
+										if( g_moveMode === "Pull" )
+											g_indicator.userData.arrow.rotation.set(0, 0, -Math.PI / 2.0);
+										else
+											g_indicator.userData.arrow.rotation.set(0, 0, Math.PI / 2.0);
+									}
+									else if( offset.y < 0 )
+									{
+										if( g_moveMode === "Pull" )
+											g_indicator.userData.arrow.rotation.set(0, 0, Math.PI / 2.0);
+										else
+											g_indicator.userData.arrow.rotation.set(0, 0, -Math.PI / 2.0);
+									}
+									else if( offset.z > 0 )
+									{
+										if( g_moveMode === "Pull" )
+											g_indicator.userData.arrow.rotation.set(0, Math.PI / 2.0, 0);
+										else
+											g_indicator.userData.arrow.rotation.set(0, -Math.PI / 2.0, 0);
+									}
+									else if( offset.z < 0 )
+									{
+										if( g_moveMode === "Pull" )
+											g_indicator.userData.arrow.rotation.set(0, -Math.PI / 2.0, 0);
+										else
+											g_indicator.userData.arrow.rotation.set(0, Math.PI / 2.0, 0);
+									}
+
+									hideMe = false;
+								}
+							}
+						}
+
+						if( hideMe && this.scale.x > 0.0001 )
+							this.scale.set(0.0001, 0.0001, 0.0001);
+						else if( !hideMe && this.scale.x < 1.0 )
+							this.scale.set(1, 1, 1);
+					});
+
+					if( !jumpStart.isAltspace )
+					{
+						document.addEventListener("wheel", function(e)
+						{
+							var direction = (e.deltaY <= 0) ? 1 : -1;
+							cycleActionMode(direction);
+						}, true);
+
+						window.addEventListener("keypress", function(e)
+						{
+							var moveMode;
+							if( e.code === "KeyE" )
+								moveMode = "Push";
+							else if( e.code === "KeyQ" )
+								moveMode = "Pull";
+
+							if( !!moveMode )
+							{
+								if( g_actionMode !== "Move" )
+								{
+									g_actionMode = "Move";
+									console.log("Action Mode: " + g_actionMode);
+								}
+
+								if( g_moveMode !== moveMode )
+								{
+									g_moveMode = moveMode;
+									console.log("Move Mode: " + g_moveMode);
+								}
+							}
+						}, true);
+					}
+					spawnPuzzleBoard();
+				});
+			}
+
+			jumpStart.addEventListener("initialize", function()
+			{
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.doneInitializing)
+				return true;
+			});
+
+			function spawn3DText(text, color, options)
+			{
+				function paintVertexLight(geometry)
+				{
+					function generateColor(amp)
+					{
+						///* GREEN AND YELLOW
+						var colorNumber = 255 - parseInt(255 * amp);
+						if( colorNumber < 0 )
+							colorNumber = 0;
+						else if( colorNumber > 255 )
+							colorNumber = 255;
+
+						var colorText = "rgb(" + colorNumber + ", 255, 0)";
+						var color = new THREE.Color(colorText);
+						return color;
+					}
+
+					var yMax = geometry.boundingBox.max.y - geometry.boundingBox.min.y;
+
+					var count = geometry.faces.length;
+					var i, face, vertex, normal, vertexNormal, dot, color, yPos;
+					for( i = 0; i < count; i++ )
+					{
+						face = geometry.faces[i];
+						vertex = geometry.vertices[face.b];
+
+						color = generateColor((vertex.y / yMax));
+						face.vertexColors[0] = color;
+						face.vertexColors[1] = color;
+						face.vertexColors[2] = color;
+					}
+				}
+
+				var geometry = new THREE.TextGeometry(text, options);
+
+				var material = new THREE.MeshBasicMaterial({"color": color, "vertexColors": THREE.VertexColors});
+				var mesh = new THREE.Mesh(geometry, material);
+
+				geometry.computeBoundingBox();
+				var displacement = new THREE.Vector3().copy(geometry.boundingBox.max).sub(geometry.boundingBox.min);
+
+				var textContainer = jumpStart.spawnInstance(null);
+				var textObject = jumpStart.spawnInstance(null, {"object": mesh, "parent": textContainer})
+
+				var offset = new THREE.Vector3().copy(displacement);
+				offset.multiply(textObject.scale);
+				textObject.position.set(-offset.x / 2.0, -offset.y / 2.0, -offset.z / 2.0);
+
+				return textContainer;
+			}
+
+			function puzzleBoardSpawn()
+			{
+				// create the help button
+				var helpObject = jumpStart.spawnInstance(null);
+				helpObject.position.copy(g_table.position);
+				helpObject.quaternion.copy(g_table.quaternion);
+
+				helpObject.position.y += g_tableHeight + 13.0;
+				helpObject.position.z += 25.0;
+				helpObject.rotation.x = -Math.PI / 2.0;
+
+				var helpZoomPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_zoom.png", true, 16, 8), "parent": helpObject});
+				helpZoomPlane.userData.helpObject = helpObject;
+				helpZoomPlane.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpZoomPlane = helpZoomPlane;
+
+				var helpHeightPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_height.png", true, 16, 8), "parent": helpObject});
+				helpHeightPlane.userData.helpObject = helpObject;
+				helpHeightPlane.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpHeightPlane = helpHeightPlane;
+
+				var helpMovePlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_move.png", true, 16, 8), "parent": helpObject});
+				helpMovePlane.userData.helpObject = helpObject;
+				helpMovePlane.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpMovePlane = helpMovePlane;
+
+				var helpVoxelPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_voxel.png", true, 16, 8), "parent": helpObject});
+				helpVoxelPlane.userData.helpObject = helpObject;
+				helpVoxelPlane.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpVoxelPlane = helpVoxelPlane;
+
+				var helpJointPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_joint.png", true, 16, 8), "parent": helpObject});
+				helpJointPlane.userData.helpObject = helpObject;
+				helpJointPlane.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpJointPlane = helpJointPlane;
+
+				var helpAttachPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_attach.png", true, 16, 8), "parent": helpObject});
+				helpAttachPlane.userData.helpObject = helpObject;
+				helpAttachPlane.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpAttachPlane = helpAttachPlane;
+
+				var helpAttachPlaneAlt = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_wear_nohands.png", true, 16, 8), "parent": helpObject});
+				helpAttachPlaneAlt.userData.helpObject = helpObject;
+				helpAttachPlaneAlt.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpAttachPlaneAlt = helpAttachPlaneAlt;
+
+				var helpBuildPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help_build.png", true, 16, 8), "parent": helpObject});
+				helpBuildPlane.userData.helpObject = helpObject;
+				helpBuildPlane.scale.set(0.0001, 0.0001, 0.0001);
+				helpObject.userData.helpBuildPlane = helpBuildPlane;
+
+				var helpPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("help.png", true, 16, 8), "parent": helpObject});
+				helpPlane.userData.helpObject = helpObject;
+				helpPlane.blocksLOS = true;
+				jumpStart.makeCollide(helpPlane);
+				helpObject.userData.helpPlane = helpPlane;
+
+				helpPlane.addEventListener("cursordown", function()
+				{
+					var helpObject = this.userData.helpObject;
+
+					if( !!helpObject.userData.originalPosition )
+					{
+						if( helpObject.userData.lerpState === "ready" )
+						{
+							helpObject.userData.lerpOrigin = helpObject.position.clone();
+
+							helpObject.userData.lerpTarget.copy(g_activeCanvas.position);
+							helpObject.userData.lerpTarget.y += 20.0;
+							helpObject.userData.lerpTarget.z += 40.0;
+
+							helpObject.userData.slerpTarget.copy(g_table.quaternion);
+
+							helpObject.userData.slerpTarget.copy(g_table.quaternion);
+							helpObject.userData.slerpOrigin.copy(helpObject.quaternion);
+
+							helpObject.userData.scaleOrigin.copy(helpObject.scale);
+							helpObject.userData.scaleTarget = new THREE.Vector3(3, 3, 3);
+
+							helpObject.userData.lerpProgress = 0.0;
+							helpObject.userData.lerpDelay = 0;
+							helpObject.userData.lerpState = "moveToOrigin";
+						}
+					}
+					else
+					{
+						helpObject.userData.originalPosition = helpObject.position.clone();
+						helpObject.userData.originalQuaternion = helpObject.quaternion.clone();
+						helpObject.userData.originalScale = helpObject.scale.clone();
+
+						helpObject.userData.lerpOrigin = helpObject.position.clone();
+						helpObject.userData.lerpTarget = g_activeCanvas.position.clone();
+						helpObject.userData.lerpTarget.y += 20.0;
+						helpObject.userData.lerpTarget.z += 40.0;
+
+						helpObject.userData.slerpTarget = g_table.quaternion.clone();
+						helpObject.userData.slerpOrigin = helpObject.quaternion.clone();
+
+						helpObject.userData.scaleOrigin = helpObject.scale.clone();
+						helpObject.userData.scaleTarget = new THREE.Vector3(3, 3, 3);
+
+						helpObject.userData.lerpProgress = 0.0;
+						helpObject.userData.lerpDelay = 0;
+						helpObject.userData.lerpState = "moveToOrigin";
+
+						helpObject.addEventListener("tick", function()
+						{
+							if( this.userData.lerpDelay > 0 )
+								this.userData.lerpDelay -= jumpStart.deltaTime;
+
+							if( this.userData.lerpDelay <= 0 )
+							{
+								this.userData.lerpDelay = 0;
+
+								if( this.userData.lerpProgress < 1.0 )
+								{
+									this.userData.lerpProgress += jumpStart.deltaTime;
+
+									if( this.userData.lerpProgress >= 1.0 )
+									{
+										this.userData.lerpProgress = 1.0;
+										this.position.copy(this.userData.lerpTarget);
+										this.quaternion.copy(this.userData.slerpTarget);
+										this.scale.copy(this.userData.scaleTarget);
+
+										if( this.userData.lerpState === "moveToOrigin" )
+										{
+											this.userData.lerpDelay = 5.0;
+											this.userData.lerpProgress = 0;
+											this.userData.lerpOrigin.copy(this.position);
+											this.userData.slerpOrigin.copy(this.quaternion);
+											this.userData.scaleOrigin.copy(this.scale);
+
+											if( !g_noHandsMode )
+											{
+												this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_wearLever.userData.grip.getWorldPosition()));
+												this.userData.lerpTarget.y += 20.0;
+											}
+											else
+											{
+												this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_wearButton.getWorldPosition()));
+												this.userData.lerpTarget.y += 20.0;
+											}
+
+											this.userData.slerpTarget.copy(g_table.quaternion);
+											this.userData.scaleTarget = new THREE.Vector3(3, 3, 3);
+
+											this.userData.helpPlane.scale.set(0.0001, 0.0001, 0.0001);
+											this.userData.helpBuildPlane.scale.set(1, 1, 1);
+
+											this.userData.lerpState = "moveToWearLever";
+										}
+										else if( this.userData.lerpState === "moveToWearLever" )
+										{
+											this.userData.lerpDelay = 5.0;
+											this.userData.lerpProgress = 0;
+											this.userData.lerpOrigin.copy(this.position);
+											this.userData.slerpOrigin.copy(this.quaternion);
+											this.userData.scaleOrigin.copy(this.scale);
+
+											if( g_noHandsMode )
+												g_jointFrameGrip.updateMatrixWorld();
+
+											this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_jointFrameGrip.getWorldPosition()));
+											this.userData.lerpTarget.y -= 20.0;
+
+											this.userData.slerpTarget.copy(g_table.quaternion);
+											this.userData.scaleTarget.set(3, 3, 3);
+
+											this.userData.helpBuildPlane.scale.set(0.0001, 0.0001, 0.0001);
+
+											if( g_noHandsMode )
+												this.userData.helpAttachPlaneAlt.scale.set(1, 1, 1);
+											else
+												this.userData.helpAttachPlane.scale.set(1, 1, 1);
+
+											this.userData.lerpState = "moveToJointMenu";
+										}
+										else if( this.userData.lerpState === "moveToJointMenu" )
+										{
+											this.userData.lerpDelay = 5.0;
+											this.userData.lerpProgress = 0;
+											this.userData.lerpOrigin.copy(this.position);
+											this.userData.slerpOrigin.copy(this.quaternion);
+											this.userData.scaleOrigin.copy(this.scale);
+
+											if( g_noHandsMode )
+												g_blockFrameGrip.updateMatrixWorld();
+
+											this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_blockFrameGrip.getWorldPosition()));
+											this.userData.lerpTarget.y -= 20.0;
+
+											this.userData.slerpTarget.copy(g_table.quaternion);
+											this.userData.scaleTarget.set(3, 3, 3);
+
+											if( g_noHandsMode )
+												this.userData.helpAttachPlaneAlt.scale.set(0.0001, 0.0001, 0.0001);
+											else
+												this.userData.helpAttachPlane.scale.set(0.0001, 0.0001, 0.0001);
+											this.userData.helpJointPlane.scale.set(1, 1, 1);
+
+											this.userData.lerpState = "moveToVoxelMenu";
+										}
+										else if( this.userData.lerpState === "moveToVoxelMenu" )
+										{
+											this.userData.lerpDelay = 5.0;
+											this.userData.lerpProgress = 0;
+											this.userData.lerpOrigin.copy(this.position);
+											this.userData.slerpOrigin.copy(this.quaternion);
+											this.userData.scaleOrigin.copy(this.scale);
+
+											if( g_noHandsMode )
+											{
+												if( g_noHandsMode )
+													g_trashcan.updateMatrixWorld();
+
+												this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_trashcan.getWorldPosition()));
+												this.userData.lerpTarget.y += 20.0;
+
+												this.userData.slerpTarget.copy(g_table.quaternion);
+												this.userData.scaleTarget.set(3, 3, 3);
+
+												this.userData.helpJointPlane.scale.set(0.0001, 0.0001, 0.0001);
+												this.userData.helpVoxelPlane.scale.set(1, 1, 1);
+
+												this.userData.lerpState = "moveToVoxelMenuTools";
+											}
+											else
+											{
+												this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_zoomLever.userData.grip.getWorldPosition()));
+												this.userData.lerpTarget.y += 20.0;
+
+												this.userData.slerpTarget.copy(g_table.quaternion);
+												this.userData.scaleTarget.set(3, 3, 3);
+
+												this.userData.helpJointPlane.scale.set(0.0001, 0.0001, 0.0001);
+												this.userData.helpVoxelPlane.scale.set(1, 1, 1);
+
+												this.userData.lerpState = "moveToZoomLever";
+											}
+										}
+										else if( this.userData.lerpState === "moveToVoxelMenuTools" )
+										{
+											this.userData.lerpDelay = 5.0;
+											this.userData.lerpProgress = 0;
+											this.userData.lerpOrigin.copy(this.position);
+											this.userData.slerpOrigin.copy(this.quaternion);
+											this.userData.scaleOrigin.copy(this.scale);
+
+											this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_zoomLever.userData.grip.getWorldPosition()));
+											this.userData.lerpTarget.y += 20.0;
+
+											this.userData.slerpTarget.copy(g_table.quaternion);
+											this.userData.scaleTarget.set(3, 3, 3);
+
+											this.userData.helpVoxelPlane.scale.set(0.0001, 0.0001, 0.0001);
+											this.userData.helpMovePlane.scale.set(1, 1, 1);
+
+											this.userData.lerpState = "moveToZoomLever";
+										}
+										else if( this.userData.lerpState === "moveToZoomLever" )
+										{
+											this.userData.lerpDelay = 5.0;
+											this.userData.lerpProgress = 0;
+											this.userData.lerpOrigin.copy(this.position);
+											this.userData.slerpOrigin.copy(this.quaternion);
+											this.userData.scaleOrigin.copy(this.scale);
+
+											this.userData.lerpTarget.copy(jumpStart.world.worldToLocal(g_heightLever.userData.grip.getWorldPosition()));
+											this.userData.lerpTarget.y += 20.0;
+
+											this.userData.slerpTarget.copy(g_table.quaternion);
+											this.userData.scaleTarget.set(3, 3, 3);
+
+											this.userData.helpVoxelPlane.scale.set(0.0001, 0.0001, 0.0001);
+											this.userData.helpMovePlane.scale.set(0.0001, 0.0001, 0.0001);
+											this.userData.helpZoomPlane.scale.set(1, 1, 1);
+
+											this.userData.lerpState = "moveToHeightLever";
+										}
+										else if( this.userData.lerpState === "moveToHeightLever" )
+										{
+											this.userData.lerpDelay = 5.0;
+											this.userData.lerpProgress = 0;
+											this.userData.lerpOrigin.copy(this.position);
+											this.userData.slerpOrigin.copy(this.quaternion);
+											this.userData.scaleOrigin.copy(this.scale);
+
+											this.userData.lerpTarget.copy(this.userData.originalPosition);
+											this.userData.slerpTarget.copy(this.userData.originalQuaternion);
+											this.userData.scaleTarget.copy(this.userData.originalScale);
+
+											this.userData.helpZoomPlane.scale.set(0.0001, 0.0001, 0.0001);
+											this.userData.helpHeightPlane.scale.set(1, 1, 1);
+
+											this.userData.lerpState = "moveBackToStart";
+										}
+										else if( this.userData.lerpState === "moveBackToStart" )
+										{
+											this.userData.lerpDelay = 0;
+											this.userData.lerpProgress = 1;
+
+											this.userData.helpHeightPlane.scale.set(0.0001, 0.0001, 0.0001);
+											this.userData.helpPlane.scale.set(1, 1, 1);
+
+											this.userData.lerpState = "ready";
+										}
+									}
+									else
+									{
+										this.position.lerpVectors(this.userData.lerpOrigin, this.userData.lerpTarget, this.userData.lerpProgress);
+
+										THREE.Quaternion.slerp(this.userData.slerpOrigin, this.userData.slerpTarget, this.quaternion, this.userData.lerpProgress);
+
+										this.scale.lerpVectors(this.userData.scaleOrigin, this.userData.scaleTarget, this.userData.lerpProgress);
+									}
+								}
+							}
+						});
+					}
+				});
+			}
+
+			function puzzleBoardRemove()
+			{
+				// cycle through all pieces and remove any pieces belonging to this board
+				var pieceKeys = Object.keys(g_puzzlePieces);
+				var piece;
+				for( var i = 0; i < pieceKeys.length; i++ )
+				{
+					piece = g_puzzlePieces[pieceKeys[i]];
+					if( piece.userData.tableName === this.name )
+						jumpStart.removeInstance(piece);
+				}
+
+				// TODO: Recreate the start link
+			}
+
+			function makeThrob(options)
+			{
+				// Throb
+				// FIX ME: This should be a behavior, and needs to have info split between userData and syncData to do so.
+				options = {
+					"rate": (!!options.rate) ? options.rate : 25.0,
+					"maxScale": (!!options.maxScale) ? options.maxScale : 14.0,
+					"minScale": (!!options.minScale) ? options.minScale : 8.0,
+					"direction": (!!options.direction) ? options.direction : 1.0,
+					"axes": (!!options.axes) ? options.axes : "xyz"
+				};
+				this.userData.throb = options;
+
+				this.addEventListener("tick", throbHelper);
+			}
+
+			function unmakeThrob()
+			{
+				if( !!this.userData.throb )
+				{
+					delete this.userData.throb;
+					this.removeEventListener("tick", throbHelper);
+				}
+			}
+
+			function throbHelper()
+			{
+				// don't throb if we're bubbling in still
+				if( (!!this.userData.bubbleIn && this.userData.bubbleIn.scaleDirection !== 0) || this.userData.hidden === true )
+					return;
+
+				var i;
+				var axes = this.userData.throb.axes;
+				var amount = this.userData.throb.rate * jumpStart.deltaTime * this.userData.throb.direction;
+				if( this.scale[axes[0]] + amount > this.userData.throb.maxScale )
+				{
+					this.userData.throb.direction = -1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.maxScale;
+				}
+				else if( this.scale[axes[0]] + amount < this.userData.throb.minScale )
+				{
+					this.userData.throb.direction = 1.0;
+
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] = this.userData.throb.minScale;
+				}
+				else
+				{
+					for( i = 0; i < axes.length; i++ )
+						this.scale[axes[i]] += amount;
+				}
+			}
+
+			function buildVoxelCluster(canvas)
+			{
+				// 1. Create a placeholder object.
+				var voxelCluster = jumpStart.spawnInstance();
+
+				// 2. Copy the config needed for attaching it into syncData.
+				var config = {
+					"index": 0,
+					"userId": jumpStart.localUser.userID
+				};
+
+				var offset = new THREE.Vector3();
+				if( canvas.name === "head_canvas" )
+				{
+					config.part = "head";
+					config.side = "center";
+					offset.y = g_blockSize * 2.7;
+					//offset.z = g_blockSize * 1.0;
+				}
+				else if( canvas.name === "torso_canvas" )
+				{
+					config.part = "neck";
+					config.side = "center";
+					offset.y = -g_blockSize * 2.0;
+					offset.z = g_blockSize * 1.0;
+				}
+				else if( canvas.name === "rhand_canvas" )
+				{
+					config.part = "hand";
+					config.side = "right";
+					offset.z = g_blockSize * 2.0;
+					offset.x = g_blockSize * 1.0;
+				}
+				else if( canvas.name === "lhand_canvas" )
+				{
+					config.part = "hand";
+					config.side = "left";
+					offset.z = g_blockSize * 2.0;
+					offset.x = -g_blockSize * 1.0;
+				}
+
+				if( !!g_myClusters[config.part + config.side] )
+					jumpStart.removeInstance(g_myClusters[config.part + config.side]);
+
+				voxelCluster.syncData.config = config;
+
+				// 3. Copy the pieces on the canvas into syncData. {type: STRING, position: VECTOR, quaternion: QUATERNION}
+				// NOTE: To support pieces w/ more than 1 block, QUATERNION must also be synced.
+				// NOTE 2: To support pieces w/ more than 1 block, in-scene versions *must* be created to get object hierarchy offsets correcty.
+				// NOTE 3: UNLESS magic is applied to individual blocks instead during the clone.
+
+				var entries = {};
+				var pieceKeys = Object.keys(g_puzzlePieces);
+				var i, piece, entry;
+				for( i = 0; i < pieceKeys.length; i++ )
+				{
+					piece = g_puzzlePieces[pieceKeys[i]];
+					if( piece.parent !== canvas || piece.type === "grip" )
+						continue;
+
+					entry = {
+						"type": piece.userData.type,
+						"position": piece.position.clone().add(offset),
+						"quaternion": piece.quaternion.clone()
+					};
+
+					entries[piece.uuid] = entry;	// NOTE: UUID's are not consistent between users, but the name doesn't matter, it's just gotta be unique amongst its siblings.
+				}
+
+				voxelCluster.syncData.entries = entries;
+
+				// 4. Add event listeners to the placeholder object.
+				voxelCluster.addEventListener("spawn", voxelClusterSpawn);
+				voxelCluster.addEventListener("remove", voxelClusterRemove);
+				voxelCluster.applyBehavior("autoRemoval");
+
+				// 5. Spawn & sync the placeholder object.
+				voxelCluster.sync();
+			}
+
+			var g_myClusters = {};
+			function voxelClusterSpawn()
+			{
+				this.userData.nativeObjects = [];
+
+				if( this.ownerID === jumpStart.localUser.userID && jumpStart.clock.elapsedTime < 1.0 )
+					return;
+
+				// 6. Upon spawning of the placeholder, the voxel cluster should be cloned & attached.
+
+				// NOTE: TRY TO DO THIS WITHOUT ACTUALLY CREATING ANY IN-SCENE OBJECTS BECAUSE THIS TYPE OF VOXEL CLUSTER GETS ATTACHED TO NATIVE SKELETON AND DOES *NOT* NEED ANY IN-SCENE REPRESENTATION.  IT HAS NO RIGHTS!!
+
+				var config = this.syncData.config;
+				var cluster = this;
+
+				var scaleValue = 1.0 / (jumpStart.scene.scale.x * 100.0);
+
+				var entryKeys = Object.keys(this.syncData.entries);
+				var translation = new THREE.Vector3();
+				var i, entry, mesh, pieceSchema, blockKeys, j, block, nativeObject;
+				for( i = 0; i < entryKeys.length; i++ )
+				{
+					entry = this.syncData.entries[entryKeys[i]];
+
+					if( entry.type === "red" )
+						mesh = g_redBlockMesh;
+					else if( entry.type === "blue" )
+						mesh = g_blueBlockMesh;
+					else if( entry.type === "green" )
+						mesh = g_greenBlockMesh;
+					else if( entry.type === "cyan" )
+						mesh = g_cyanBlockMesh;
+					else if( entry.type === "magenta" )
+						mesh = g_magentaBlockMesh;
+					else if( entry.type === "yellow" )
+						mesh = g_yellowBlockMesh;
+					else if( entry.type === "black" )
+						mesh = g_blackBlockMesh;
+					else if( entry.type === "white" )
+						mesh = g_whiteBlockMesh;
+
+					// Each entry translates into a piece,
+					// but pieces don't need to be replicated,
+					// only the blocks contained in them do.
+					pieceSchema = pieceTypes[entry.type];
+
+					// step through all of the blocks of this piece
+					for( j = 0; j < pieceSchema.blocks.length; j++ )
+					{
+						block = pieceSchema.blocks[j];
+						clonedMesh = mesh.clone();
+
+						// start at the entry matrix
+						clonedMesh.quaternion.copy(entry.quaternion);
+						clonedMesh.position.copy(entry.position);
+
+						if( config.part === "head" )
+						{
+							clonedMesh.position.x *= -1.0;
+							clonedMesh.position.z *= -1.0;
+						}
+						else if( config.part === "neck" )
+						{
+							clonedMesh.position.set(
+								-clonedMesh.position.x,
+								clonedMesh.position.y,
+								-clonedMesh.position.z
+							);
+						}
+						else if( config.part === "hand" && config.side === "left" )
+						{
+							clonedMesh.position.set(
+								clonedMesh.position.y,
+								clonedMesh.position.x,
+								-clonedMesh.position.z
+							);
+						}
+						else if( config.part === "hand" && config.side === "right" )
+						{
+							clonedMesh.position.set(
+								-clonedMesh.position.y,
+								-clonedMesh.position.x,
+								-clonedMesh.position.z
+							);
+						}
+
+						clonedMesh.position.multiplyScalar(scaleValue);
+
+						// translate our block position without our piece
+						clonedMesh.translateX(block.x * g_blockSize);
+						clonedMesh.translateY(block.y * g_blockSize);
+						clonedMesh.translateZ(block.z * g_blockSize);
+
+						// re-orient us
+						clonedMesh.quaternion.copy(new THREE.Quaternion());
+
+						if( config.part === "head" )
+						{
+							clonedMesh.rotateY(Math.PI);
+						}
+						else if( config.part === "neck" )
+						{
+							clonedMesh.rotateY(Math.PI);
+						}
+						else if( config.part === "hand" && config.side === "left" )
+						{
+							clonedMesh.rotateY(Math.PI / 2.0);
+						}
+						else if( config.part === "hand" && config.side === "right" )
+						{
+							clonedMesh.rotateY(Math.PI);
+							clonedMesh.rotateX(Math.PI / 2.0);
+						}
+
+						clonedMesh.scale.set(scaleValue, scaleValue, scaleValue);
+
+						nativeObject = new NativeComponent('n-skeleton-parent', config, clonedMesh).addTo(jumpStart.scene);
+
+						cluster.userData.nativeObjects.push(nativeObject);
+					}
+				}
+
+				if( this.ownerID === jumpStart.localUser.userID )
+					g_myClusters[config.part + config.side] = cluster;
+
+				if( jumpStart.clock.elapsedTime > 4.0 && this.ownerID === jumpStart.localUser.userID )
+					playSound("ui/succeed");
+			}
+
+			function voxelClusterRemove()
+			{
+				// 7. Upon deletion of the placeholder, the voxel cluster should be destroyed.
+				//cluster.userData.nativeObjects.push(nativeObject);
+
+				for( var i = 0; i < this.userData.nativeObjects.length; i++ )
+					this.userData.nativeObjects[i].remove();
+
+				this.userData.nativeObjects = [];
+
+				var clusterKeys = Object.keys(g_myClusters);
+				for( var i = 0; i < clusterKeys.length; i++ )
+				{
+					if( g_myClusters[clusterKeys[i]] === this )
+					{
+						delete g_myClusters[clusterKeys[i]];
+						break;
+					}
+				}
+
+				if( jumpStart.clock.elapsedTime > 4.0 && this.ownerID === jumpStart.localUser.userID )
+					playSound("ui/join");
+			}
+
+			function wearCanvas(canvas)
+			{
+				var config = {
+					"index": 0,
+					"userId": jumpStart.localUser.userID
+				};
+
+				if( canvas.name === "head_canvas" )
+				{
+					config.part = "head";
+					config.side = "center";
+				}
+				else if( canvas.name === "torso_canvas" )
+				{
+					config.part = "neck";
+					config.side = "center";
+				}
+				else if( canvas.name === "rhand_canvas" )
+				{
+					config.part = "hand";
+					config.side = "right";
+				}
+				else if( canvas.name === "lhand_canvas" )
+				{
+					config.part = "hand";
+					config.side = "left";
+				}
+
+				g_activeCanvas.scale.set(1, 1, 1);
+				cloneCanvasToNativeSkeletonParent(g_activeCanvas, config);
+			}
+
+			function cloneCanvasToNativeSkeletonParent(canvas, config)
+			{
+				// 1. Get the object, the hand, its grip, and its gripTarget.
+				var skeletonHandSide = (config.side === "right") ? "Right" : "Left";
+				var hand = g_hands[skeletonHandSide];
+
+				// overkill?
+				canvas.updateMatrix();
+
+				var oldCanvasPosition = canvas.position.clone();
+				var oldCanvasQuaternion = canvas.quaternion.clone();
+				var oldCanvasScale = canvas.scale.clone();
+
+				var scaleValue = 1.0 / (jumpStart.options.sceneScale * jumpStart.scene.scale.x * 100.0);
+
+				// 4. Clone every mesh child of the object and attach to the user.
+				canvas.userData.clonedMeshes = {};
+				canvas.userData.hiddenMeshes = {};
+
+				var clonedMesh;
+				canvas.traverse(function(child)
+				{
+					if( child instanceof THREE.Mesh && child !== this.userData.grid.userData.gridMesh )
+					{
+						clonedMesh = child.clone();
+
+						var position = jumpStart.world.worldToLocal(child.getWorldPosition());
+						position.y += jumpStart.worldOffset.y;
+
+						var quaternion = child.getWorldQuaternion();
+						var scale = child.getWorldScale();
+
+						clonedMesh.position.copy(position);
+						clonedMesh.position.multiplyScalar(jumpStart.scene.scale.x);
+						clonedMesh.quaternion.copy(quaternion);
+						clonedMesh.scale.copy(scale);
+
+						// overkill?
+						clonedMesh.updateMatrixWorld();
+
+						THREE.SceneUtils.attach(clonedMesh, jumpStart.scene, canvas);
+
+						this.userData.clonedMeshes[child.uuid] = clonedMesh;
+						this.userData.hiddenMeshes[child.uuid] = child;
+					}
+				}.bind(canvas));
+
+				canvas.position.copy(jumpStart.world.worldToLocal(new THREE.Vector3()));
+
+				var val = jumpStart.worldOffset.y * scaleValue;
+
+				canvas.quaternion.copy(new THREE.Quaternion());
+
+				if( canvas === g_rhandCanvas)
+				{
+					canvas.rotateY(Math.PI);
+					canvas.rotateZ(-Math.PI / 2.0);
+				}
+				else if( canvas === g_lhandCanvas)
+				{
+					canvas.rotateY(Math.PI);
+					canvas.rotateZ(Math.PI / 2.0);
+				}
+				else
+				{
+					canvas.rotateY(Math.PI);
+				}
+
+				// overkill?
+				canvas.updateMatrixWorld();
+				
+
+				canvas.scale.set(scaleValue, scaleValue, scaleValue);
+
+				// overkill?
+				canvas.updateMatrixWorld();
+
+				var clonedMeshesKeys = Object.keys(canvas.userData.clonedMeshes);
+				for( var i = 0; i < clonedMeshesKeys.length; i++ )
+				{
+					clonedMesh = canvas.userData.clonedMeshes[clonedMeshesKeys[i]];
+					child = canvas.userData.hiddenMeshes[clonedMeshesKeys[i]];
+
+					// overkill?
+					clonedMesh.updateMatrixWorld();
+
+					THREE.SceneUtils.detach(clonedMesh, clonedMesh.parent, jumpStart.scene);
+
+					// overkill?
+					clonedMesh.updateMatrixWorld();
+
+					var nativeBlock = new NativeComponent('n-skeleton-parent', config, clonedMesh).addTo(jumpStart.scene);
+
+					canvas.userData.clonedMeshes[child.uuid] = nativeBlock;
+				}
+
+				// 5. Return the grip & the piece to their original position & quaternion.
+				canvas.position.copy(oldCanvasPosition);
+				canvas.quaternion.copy(oldCanvasQuaternion);
+				canvas.scale.copy(oldCanvasScale);
+
+				// overkill?
+				canvas.updateMatrix();
+			}
+
+			function paletteBlockClicked()
+			{
+				if( g_actionMode !== "Spawn" )
+				{
+					g_actionMode = "Spawn";
+					console.log("Mode: " + g_actionMode);
+				}
+
+				var block = this.parent;
+
+				if( g_spawnActionPieceType !== block.userData.pieceType )
+				{
+					g_spawnActionPieceType = block.userData.pieceType;
+					console.log("Voxel Color: " + g_spawnActionPieceType);
+				}
+
+				playSound("ui/toggle");
+			}
+
+			function zoomArrowClick()
+			{
+				var bestDirection = this.userData.bestDirection;
+				if( bestDirection !== 0 )
+				{
+					var speed = 0.1;
+					g_zoomLever.rotation.y += speed * bestDirection;
+				}
+
+				if( g_zoomLever.rotation.y < g_zoomMin )
+					g_zoomLever.rotation.y = g_zoomMin;
+				else if( g_zoomLever.rotation.y > g_zoomMax )
+					g_zoomLever.rotation.y = g_zoomMax;
+
+				g_zoomLever.updateMatrixWorld();
+
+				var amount = g_zoomLever.rotation.y - g_zoomMin;
+				var range = g_zoomMax - g_zoomMin;
+				var factor = amount / range;
+
+				var scale = 1.0 + factor;
+				g_activeCanvas.scale.set(scale, scale, scale);
+			}
+
+			function heightArrowClick()
+			{
+				var bestDirection = this.userData.bestDirection;
+				if( bestDirection !== 0 )
+				{
+					var speed = 0.1;
+					g_heightLever.rotation.y += speed * bestDirection;
+				}
+
+				if( g_heightLever.rotation.y < g_heightMin )
+					g_heightLever.rotation.y = g_heightMin;
+				else if( g_heightLever.rotation.y > g_heightMax )
+					g_heightLever.rotation.y = g_heightMax;
+
+				g_heightLever.updateMatrixWorld();
+
+				var amount = g_heightLever.rotation.y - g_heightMin;
+				var range = g_heightMax - g_heightMin;
+				var factor = amount / range;
+
+				var initialHeight = (g_tableHeight + 35.0);
+				var heightRange = 100.0;
+				g_activeCanvas.position.y = initialHeight + (heightRange * factor);
+			}
+
+			function wearArrowClick()
+			{
+				var leverInitial = 0;
+				var leverMin = leverInitial - 0.3;
+				var leverMax = leverInitial + 0.3;
+
+				g_wearLever.rotation.x = leverMax;
+				g_wearLever.updateMatrixWorld();
+
+				if( jumpStart.clock.elapsedTime - g_lastPulled > 4.0 )
+				{
+					console.log("WEAR THE THING!");
+					g_lastPulled = jumpStart.clock.elapsedTime;
+
+					buildVoxelCluster(g_activeCanvas);
+				}
+			}
+
+			function unwearArrowClick()
+			{
+				var leverInitial = 0;
+				var leverMin = leverInitial - 0.3;
+				var leverMax = leverInitial + 0.3;
+
+				g_wearLever.rotation.x = leverMin;
+				g_wearLever.updateMatrixWorld();
+
+				var config = {};
+				if( g_activeCanvas.name === "head_canvas" )
+				{
+					config.part = "head";
+					config.side = "center";
+				}
+				else if( g_activeCanvas.name === "torso_canvas" )
+				{
+					config.part = "neck";
+					config.side = "center";
+				}
+				else if( g_activeCanvas.name === "rhand_canvas" )
+				{
+					config.part = "hand";
+					config.side = "right";
+				}
+				else if( g_activeCanvas.name === "lhand_canvas" )
+				{
+					config.part = "hand";
+					config.side = "left";
+				}
+
+				if( !!g_myClusters[config.part + config.side] )
+				{
+					console.log("UN-WEAR THE THING!");
+					g_lastPulled = jumpStart.clock.elapsedTime;
+					jumpStart.removeInstance(g_myClusters[config.part + config.side]);
+				}
+			}
+
+			var g_indicator;
+			var g_noHandsMode = false;
+			var g_lastPulled = 0;
+			var g_zoomInitial = (Math.PI / 2.0);
+			var g_zoomMin = g_zoomInitial - (Math.PI / 4.0);
+			var g_zoomMax = g_zoomInitial + (Math.PI / 4.0);
+			var g_zoomLever;
+			var g_heightInitial = Math.PI / -2.0;
+			var g_heightMin = g_heightInitial - (Math.PI / 4.0);
+			var g_heightMax = g_heightInitial + (Math.PI / 4.0);
+			var g_heightLever;
+			var g_wearLever;
+			var g_wearButton;
+			var g_jointSelector;
+			var g_jointFrameGrip;
+			var g_blockFrameGrip;
+			var g_jointSelectorGrip;
+			var g_trashcan = null;
+			var g_activeCanvas = null;
+			var g_headCanvas;
+			var g_torsoCanvas;
+			var g_lhandCanvas;
+			var g_rhandCanvas;
+			var g_paletteBlocks = {};
+			var g_blackBlockMesh;
+			var g_blackBlockMat;
+			var g_whiteBlockMesh;
+			var g_whiteBlockMat;
+			var g_redBlockMesh;
+			var g_redBlockMat;
+			var g_greenBlockMesh;
+			var g_greenBlockMat;
+			var g_blueBlockMesh;
+			var g_blueBlockMat;
+			var g_cyanBlockMesh;
+			var g_cyanBlockMat;
+			var g_magentaBlockMesh;
+			var g_magentaBlockMat;
+			var g_yellowBlockMesh;
+			var g_yellowBlockMat;
+			var g_gripGeo;
+			var g_gripMat;
+			function confirmNoHandsCenterVoxel()
+			{
+				var atLeastOne = false;
+				var pieceKeys = Object.keys(g_puzzlePieces);
+				for( var i = 0; i < pieceKeys.length; i++ )
+				{
+					if( g_puzzlePieces[pieceKeys[i]].parent === g_activeCanvas )
+					{
+						atLeastOne = true;
+						break;
+					}
+				}
+
+				if( !atLeastOne )
+				{
+					var babyPiece = spawnPuzzlePiece({"type": "white", "parent": g_activeCanvas});
+					g_activeCanvas.add(babyPiece);
+					babyPiece.userData.boardName = g_boardName;
+					babyPiece.updateMatrixWorld();
+				}
+			}
+
+			function spawnPuzzleBoard()
+			{
+				if( g_noHandsMode )
+				{
+					var arrowClickCatcherGeo = new THREE.BoxGeometry(24.0, 4.0, 16.0);
+					var arrowClickCatcherMat = new THREE.MeshBasicMaterial({"color": "#00ff00", "visible": false});
+
+					g_arrowClickCatcherMesh = new THREE.Mesh(arrowClickCatcherGeo, arrowClickCatcherMat);
+				}
+
+				// spawn the "puzzle board"
+				// it can only be removed when it's solved.
+				// players locally check for solves after piece snapping.
+				var board = jumpStart.spawnInstance(null);
+				board.name = g_boardName;//"level1";	// NOTE: Every board needs a name!
+				board.userData.solved = false;
+				board.addEventListener("spawn", puzzleBoardSpawn);
+				board.addEventListener("remove", puzzleBoardRemove);
+
+				var table = board;
+
+				// HEAD CANVAS
+				var headCanvas = jumpStart.spawnInstance();
+				headCanvas.name = "head_canvas";
+				headCanvas.position.copy(table.position);
+				headCanvas.position.y = g_tableHeight + 35.0;
+				headCanvas.quaternion.copy(table.quaternion);
+				headCanvas.scale.set(1.5, 1.5, 1.5);
+
+				var headDummy = jumpStart.spawnInstance("models/head_dummy");
+				headDummy.material.color.set("#99ddff");//.set("#ff5555");
+				headDummy.material.transparent = true;
+				headDummy.material.opacity = 0.5;
+				bakeVertexLight(headDummy, {"offset": new THREE.Vector3(50, 100, 50), "falloff": 1200});
+				headCanvas.add(headDummy);
+				headDummy.scale.set(g_gridScale, g_gridScale, g_gridScale);
+				headDummy.position.y = -g_blockSize * 2.7;
+				headDummy.rotation.y = Math.PI;
+
+				var grid = jumpStart.spawnInstance("models/grid");
+				grid.userData.hidden = false;
+				grid.material.color.set("#99ddff");
+				grid.material.transparent = true;
+				grid.material.opacity = 0.5;
+				bakeVertexLight(grid, {"offset": new THREE.Vector3(50, 100, 50), "falloff": 1500});
+				grid.userData.oldScale = grid.scale.clone();
+				grid.scale.multiplyScalar(g_gridScale);
+				headCanvas.add(grid);
+				headCanvas.userData.grid = grid;
+
+				grid.traverse(function(child)
+				{
+					if( child instanceof THREE.Mesh )
+						this.userData.gridMesh = child;
+				}.bind(grid));
+
+				var gridThrobOptions = {
+					"rate": 0.1,
+					"maxScale": grid.scale.x,
+					"minScale": grid.scale.x - 0.1,
+					"direction": 1.0,
+					"axes": "xyz"
+				};
+				makeThrob.call(grid, gridThrobOptions);
+
+				g_headCanvas = headCanvas;
+				g_activeCanvas = headCanvas;
+
+				// TORSO CANVAS
+				var torsoCanvas = jumpStart.spawnInstance();
+				torsoCanvas.name = "torso_canvas";
+				torsoCanvas.position.copy(table.position);
+				torsoCanvas.quaternion.copy(table.quaternion);
+				torsoCanvas.scale.set(0.0001, 0.0001, 0.0001);
+
+				var torsoDummy = jumpStart.spawnInstance("models/torso_dummy");
+				torsoDummy.material.color.set("#99ddff");//.set("#ff5555");
+				torsoDummy.material.transparent = true;
+				torsoDummy.material.opacity = 0.5;
+				bakeVertexLight(torsoDummy, {"offset": new THREE.Vector3(50, 100, 50), "falloff": 1200});
+				torsoCanvas.add(torsoDummy);
+				torsoDummy.scale.set(g_gridScale, g_gridScale, g_gridScale);
+				torsoDummy.rotation.y = Math.PI;
+
+				var grid = jumpStart.spawnInstance("models/grid");
+				grid.userData.hidden = false;
+				grid.userData.oldScale = grid.scale.clone();
+				grid.scale.multiplyScalar(g_gridScale);
+				torsoCanvas.add(grid);
+				torsoCanvas.userData.grid = grid;
+
+				grid.traverse(function(child)
+				{
+					if( child instanceof THREE.Mesh )
+						this.userData.gridMesh = child;
+				}.bind(grid));
+
+				var gridThrobOptions = {
+					"rate": 0.1,
+					"maxScale": grid.scale.x,
+					"minScale": grid.scale.x - 0.1,
+					"direction": 1.0,
+					"axes": "xyz"
+				};
+				makeThrob.call(grid, gridThrobOptions);
+
+				g_torsoCanvas = torsoCanvas;
+
+				// LHAND CANVAS
+				var lhandCanvas = jumpStart.spawnInstance();
+				lhandCanvas.name = "lhand_canvas";
+				lhandCanvas.position.copy(table.position);
+				lhandCanvas.quaternion.copy(table.quaternion);
+				lhandCanvas.scale.set(0.0001, 0.0001, 0.0001);
+
+				var grid = jumpStart.spawnInstance("models/grid");
+				grid.userData.hidden = false;
+				grid.userData.oldScale = grid.scale.clone();
+				grid.scale.multiplyScalar(g_gridScale);
+				lhandCanvas.add(grid);
+				lhandCanvas.userData.grid = grid;
+
+				var lhandDummy = jumpStart.spawnInstance("models/hand_dummy");
+				lhandDummy.material.color.set("#99ddff");//.set("#ff5555");
+				lhandDummy.material.transparent = true;
+				lhandDummy.material.opacity = 0.5;
+				bakeVertexLight(lhandDummy, {"offset": new THREE.Vector3(50, 100, 50), "falloff": 1700});
+				lhandCanvas.add(lhandDummy);
+				lhandDummy.scale.set(g_gridScale, g_gridScale, g_gridScale);
+				lhandDummy.position.y += g_blockSize * 0.9;
+				lhandDummy.rotation.y = Math.PI;
+
+				grid.traverse(function(child)
+				{
+					if( child instanceof THREE.Mesh )
+						this.userData.gridMesh = child;
+				}.bind(grid));
+
+				var gridThrobOptions = {
+					"rate": 0.1,
+					"maxScale": grid.scale.x,
+					"minScale": grid.scale.x - 0.1,
+					"direction": 1.0,
+					"axes": "xyz"
+				};
+				makeThrob.call(grid, gridThrobOptions);
+
+				g_lhandCanvas = lhandCanvas;
+
+				// RHAND CANVAS
+				var rhandCanvas = jumpStart.spawnInstance();
+				rhandCanvas.name = "rhand_canvas";
+				rhandCanvas.position.copy(table.position);
+				rhandCanvas.quaternion.copy(table.quaternion);
+				rhandCanvas.scale.set(0.0001, 0.0001, 0.0001);
+
+				var rhandDummy = jumpStart.spawnInstance("models/hand_dummy");
+				rhandDummy.material.color.set("#99ddff");
+				rhandDummy.material.transparent = true;
+				rhandDummy.material.opacity = 0.5;
+				bakeVertexLight(rhandDummy, {"offset": new THREE.Vector3(50, 100, 50), "falloff": 1700});
+				rhandCanvas.add(rhandDummy);
+				rhandDummy.scale.set(g_gridScale, g_gridScale, g_gridScale);
+				rhandDummy.position.y += g_blockSize * 0.9;
+				rhandDummy.rotation.y = Math.PI;
+
+				var grid = jumpStart.spawnInstance("models/grid");
+				grid.userData.hidden = false;
+				grid.userData.oldScale = grid.scale.clone();
+				grid.scale.multiplyScalar(g_gridScale);
+				rhandCanvas.add(grid);
+				rhandCanvas.userData.grid = grid;
+
+				grid.traverse(function(child)
+				{
+					if( child instanceof THREE.Mesh )
+						this.userData.gridMesh = child;
+				}.bind(grid));
+
+				var gridThrobOptions = {
+					"rate": 0.1,
+					"maxScale": grid.scale.x,
+					"minScale": grid.scale.x - 0.1,
+					"direction": 1.0,
+					"axes": "xyz"
+				};
+				makeThrob.call(grid, gridThrobOptions);
+
+				g_rhandCanvas = rhandCanvas;
+
+				var heightLever = jumpStart.spawnInstance("models/zoom_lever");
+				table.add(heightLever);
+				heightLever.translateY(g_tableHeight + 5.0);
+				heightLever.rotation.y = g_heightMin;
+				heightLever.userData.gripped = null;
+
+				g_heightLever = heightLever;
+
+				var heightLabel = jumpStart.spawnInstance(null, {"object": buildImagePlane("label_height.png", true, 16, 8), "parent": heightLever});
+				heightLabel.position.z = -45.0;
+				heightLabel.position.x = 12.0;
+				heightLabel.rotation.y = Math.PI - 0.2;
+				heightLabel.scale.set(0.0001, 0.0001, 0.0001);
+
+				heightLever.userData.label = heightLabel;
+
+				heightLever.addEventListener("spawn", function()
+				{
+					var heightGripVisual = jumpStart.spawnInstance(null, {"parent": this});
+					heightGripVisual.translateZ(-70.0);
+
+					var heightGripTop = jumpStart.spawnInstance(null, {"parent": this});
+					heightGripTop.rotateY(0.2);
+					heightGripTop.translateZ(-70.0);
+
+					if( g_noHandsMode )
+					{
+						heightGripTop.userData.arrow = jumpStart.spawnInstance("models/arrow", {"parent": heightGripTop});
+						heightGripTop.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+
+						var clickCatcher = jumpStart.spawnInstance(null, {"object": g_arrowClickCatcherMesh.clone(), "parent": heightGripTop});
+						clickCatcher.userData.grip = heightGripTop;
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+
+						clickCatcher.userData.bestDirection = 1.0;
+						clickCatcher.addEventListener("cursordown", heightArrowClick);
+
+						clickCatcher.addEventListener("cursorenter", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(1, 1, 1);
+							g_heightLever.userData.label.scale.set(1, 1, 1);
+						});
+
+						clickCatcher.addEventListener("cursorexit", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+							g_heightLever.userData.label.scale.set(0.0001, 0.0001, 0.0001);
+						});
+					}
+
+					var heightGripBottom = jumpStart.spawnInstance(null, {"parent": this});
+					heightGripBottom.rotateY(-0.2);
+					heightGripBottom.translateZ(-70.0);
+
+					if( g_noHandsMode )
+					{
+						heightGripBottom.userData.arrow = jumpStart.spawnInstance("models/arrow", {"parent": heightGripBottom});
+						heightGripBottom.userData.arrow.rotation.y = Math.PI;
+						heightGripBottom.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+
+						var clickCatcher = jumpStart.spawnInstance(null, {"object": g_arrowClickCatcherMesh.clone(), "parent": heightGripBottom});
+						clickCatcher.userData.grip = heightGripBottom;
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+						
+						clickCatcher.userData.bestDirection = -1.0;
+						clickCatcher.addEventListener("cursordown", heightArrowClick);
+
+						clickCatcher.addEventListener("cursorenter", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(1, 1, 1);
+							g_heightLever.userData.label.scale.set(1, 1, 1);
+						});
+
+						clickCatcher.addEventListener("cursorexit", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+							g_heightLever.userData.label.scale.set(0.0001, 0.0001, 0.0001);
+						});
+					}
+
+					this.userData.grip = heightGripVisual;
+					this.userData.gripTop = heightGripTop;
+					this.userData.gripBottom = heightGripBottom;
+				});
+
+				if( !g_noHandsMode )
+				{
+					heightLever.addEventListener("tick", function()
+					{
+						if( !!this.userData.gripped )
+						{
+							var handSide = this.userData.gripped;
+							var hand = g_hands[handSide];
+
+							var handWorldPosition = hand.palmJoint.getWorldPosition();
+							var topDist = handWorldPosition.distanceTo(this.userData.gripTop.getWorldPosition());
+							var bottomDist = handWorldPosition.distanceTo(this.userData.gripBottom.getWorldPosition());
+
+							var deadZone = 6.0;
+							var bestDirection = -1.0;
+							if( Math.abs(topDist - bottomDist) < deadZone )
+								bestDirection = 0;
+							else if( topDist < bottomDist )
+								bestDirection = 1.0;
+
+							if( bestDirection !== 0 )
+							{
+								var speed = 0.05 * Math.abs(topDist - bottomDist);
+								this.rotation.y += speed * jumpStart.deltaTime * bestDirection;
+							}
+
+							if( this.rotation.y < g_heightMin )
+								this.rotation.y = g_heightMin;
+							else if( this.rotation.y > g_heightMax )
+								this.rotation.y = g_heightMax;
+
+							this.updateMatrixWorld();
+
+							var amount = this.rotation.y - g_heightMin;
+							var range = g_heightMax - g_heightMin;
+							var factor = amount / range;
+
+							var initialHeight = (g_tableHeight + 35.0);
+							var heightRange = 100.0;
+							g_activeCanvas.position.y = initialHeight + (heightRange * factor);
+						}
+					});
+				}
+
+				var zoomLever = jumpStart.spawnInstance("models/zoom_lever");
+				zoomLever.material.color.set("#cccccc");
+				bakeVertexLight(zoomLever, {"offset": new THREE.Vector3(-100, 80, 0), "falloff": 700});
+				table.add(zoomLever);
+				zoomLever.translateY(g_tableHeight + 5.0);
+				zoomLever.rotation.y = g_zoomInitial;
+				zoomLever.userData.gripped = null;
+
+				var zoomLabel = jumpStart.spawnInstance(null, {"object": buildImagePlane("label_zoom.png", true, 16, 8), "parent": zoomLever});
+				zoomLabel.position.z = -45.0;
+				zoomLabel.position.x = -12.0;
+				zoomLabel.rotation.y = Math.PI + 0.2;
+				zoomLabel.scale.set(0.0001, 0.0001, 0.0001);
+
+				zoomLever.userData.label = zoomLabel;
+
+				zoomLever.addEventListener("spawn", function()
+				{
+					var zoomGripVisual = jumpStart.spawnInstance(null, {"parent": this});
+					zoomGripVisual.translateZ(-70.0);
+
+					var zoomGripTop = jumpStart.spawnInstance(null, {"parent": this});
+					zoomGripTop.rotateY(0.2);
+					zoomGripTop.translateZ(-70.0);
+
+					if( g_noHandsMode )
+					{
+						zoomGripTop.userData.arrow = jumpStart.spawnInstance("models/arrow", {"parent": zoomGripTop});
+						zoomGripTop.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+
+						var clickCatcher = jumpStart.spawnInstance(null, {"object": g_arrowClickCatcherMesh.clone(), "parent": zoomGripTop});
+						clickCatcher.userData.grip = zoomGripTop;
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+
+						clickCatcher.userData.bestDirection = 1.0;
+						clickCatcher.addEventListener("cursordown", zoomArrowClick);
+
+						clickCatcher.addEventListener("cursorenter", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(1, 1, 1);
+							g_zoomLever.userData.label.scale.set(1, 1, 1);
+						});
+
+						clickCatcher.addEventListener("cursorexit", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+							g_zoomLever.userData.label.scale.set(0.0001, 0.0001, 0.0001);
+						});
+					}
+
+					var zoomGripBottom = jumpStart.spawnInstance(null, {"parent": this});
+					zoomGripBottom.rotateY(-0.2);
+					zoomGripBottom.translateZ(-70.0);
+
+					if( g_noHandsMode )
+					{
+						zoomGripBottom.userData.arrow = jumpStart.spawnInstance("models/arrow", {"parent": zoomGripBottom});
+						zoomGripBottom.userData.arrow.rotation.y = Math.PI;
+						zoomGripBottom.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+
+						var clickCatcher = jumpStart.spawnInstance(null, {"object": g_arrowClickCatcherMesh.clone(), "parent": zoomGripBottom});
+						clickCatcher.userData.grip = zoomGripBottom;
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+						
+						clickCatcher.userData.bestDirection = -1.0;
+						clickCatcher.addEventListener("cursordown", zoomArrowClick);
+
+						clickCatcher.addEventListener("cursorenter", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(1, 1, 1);
+							g_zoomLever.userData.label.scale.set(1, 1, 1);
+						});
+
+						clickCatcher.addEventListener("cursorexit", function()
+						{
+							this.userData.grip.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+							g_zoomLever.userData.label.scale.set(0.0001, 0.0001, 0.0001);
+						});
+					}
+
+					this.userData.grip = zoomGripVisual;
+					this.userData.gripTop = zoomGripTop;
+					this.userData.gripBottom = zoomGripBottom;
+				});
+
+				if( !g_noHandsMode )
+				{
+					zoomLever.addEventListener("tick", function()
+					{
+						if( !!this.userData.gripped )
+						{
+							var handSide = this.userData.gripped;
+							var hand = g_hands[handSide];
+
+							// compare the hand distance to each of the grips.
+							// slide in the direction of the nearest grip
+							// if the difference between the distances is small, don't slide anywhere.
+
+							var handWorldPosition = hand.palmJoint.getWorldPosition();
+							var topDist = handWorldPosition.distanceTo(this.userData.gripTop.getWorldPosition());
+							var bottomDist = handWorldPosition.distanceTo(this.userData.gripBottom.getWorldPosition());
+
+							var deadZone = 6.0;
+							var bestDirection = -1.0;
+							if( Math.abs(topDist - bottomDist) < deadZone )
+								bestDirection = 0;
+							else if( topDist < bottomDist )
+								bestDirection = 1.0;
+
+							if( bestDirection !== 0 )
+							{
+								var speed = 0.05 * Math.abs(topDist - bottomDist);
+								this.rotation.y += speed * jumpStart.deltaTime * bestDirection;
+							}
+
+							if( this.rotation.y < g_zoomMin )
+								this.rotation.y = g_zoomMin;
+							else if( this.rotation.y > g_zoomMax )
+								this.rotation.y = g_zoomMax;
+
+							this.updateMatrixWorld();
+
+							var amount = this.rotation.y - g_zoomMin;
+							var range = g_zoomMax - g_zoomMin;
+							var factor = amount / range;
+
+							var scale = 1.0 + factor;
+							g_activeCanvas.scale.set(scale, scale, scale);
+						}
+					});
+				}
+
+				g_zoomLever = zoomLever;
+
+				if( !g_noHandsMode )
+				{
+					var leverBase = jumpStart.spawnInstance("models/lever_base");
+					leverBase.material.color.set("#cccccc");
+					bakeVertexLight(leverBase, {"offset": new THREE.Vector3(60, 60, -60), "falloff": 600});
+					leverBase.position.copy(table.position);
+					leverBase.quaternion.copy(table.quaternion);
+					leverBase.translateX(100.0);
+				}
+
+				var wearPlane;
+
+				if( g_noHandsMode )
+				{
+					wearPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("wear.png", true, 16, 8)});
+					wearPlane.position.copy(g_table.position);
+					wearPlane.quaternion.copy(g_table.quaternion);
+
+					wearPlane.position.y += g_tableHeight + 13.0;
+					wearPlane.position.z += 35.0;
+					wearPlane.position.x -= 10.0;
+					wearPlane.rotation.x = -Math.PI / 2.0;
+
+					wearPlane.blocksLOS = true;
+					jumpStart.makeCollide(wearPlane);
+
+					g_wearButton = wearPlane;
+
+					wearPlane.addEventListener("cursordown", function()
+					{
+						if( jumpStart.clock.elapsedTime - g_lastPulled > 4.0 )
+						{
+							console.log("WEAR THE THING!");
+							g_lastPulled = jumpStart.clock.elapsedTime;
+
+							buildVoxelCluster(g_activeCanvas);
+						}
+					});
+				}
+				else
+				{
+					wearPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("wear.png", true, 16, 8), "parent": leverBase});
+					wearPlane.position.z = 39.0;
+					wearPlane.rotation.x = -Math.PI / 2.0;
+					wearPlane.scale.set(1.4, 1.0, 1.4);
+				}
+
+				var unwearPlane;
+
+				if( g_noHandsMode )
+				{
+					unwearPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("unwear.png", true, 16, 8)});
+					unwearPlane.position.copy(g_table.position);
+					unwearPlane.quaternion.copy(g_table.quaternion);
+
+					unwearPlane.position.y += g_tableHeight + 13.0;
+					unwearPlane.position.z += 35.0;
+					unwearPlane.position.x += 10.0;
+					unwearPlane.rotation.x = -Math.PI / 2.0;
+
+					unwearPlane.blocksLOS = true;
+					jumpStart.makeCollide(unwearPlane);
+
+					unwearPlane.addEventListener("cursordown", function()
+					{
+						var config = {};
+						if( g_activeCanvas.name === "head_canvas" )
+						{
+							config.part = "head";
+							config.side = "center";
+						}
+						else if( g_activeCanvas.name === "torso_canvas" )
+						{
+							config.part = "neck";
+							config.side = "center";
+						}
+						else if( g_activeCanvas.name === "rhand_canvas" )
+						{
+							config.part = "hand";
+							config.side = "right";
+						}
+						else if( g_activeCanvas.name === "lhand_canvas" )
+						{
+							config.part = "hand";
+							config.side = "left";
+						}
+
+						if( !!g_myClusters[config.part + config.side] )
+						{
+							console.log("UN-WEAR THE THING!");
+							g_lastPulled = jumpStart.clock.elapsedTime;
+							jumpStart.removeInstance(g_myClusters[config.part + config.side]);
+						}
+					});
+				}
+				else
+				{
+					unwearPlane = jumpStart.spawnInstance(null, {"object": buildImagePlane("unwear.png", true, 16, 8), "parent": leverBase});
+					unwearPlane.position.z = -39.0;
+					unwearPlane.rotation.x = -Math.PI / 2.0;
+					unwearPlane.scale.set(1.4, 1.0, 1.4);
+				}
+
+				if( !g_noHandsMode )
+				{
+					var wearLever = jumpStart.spawnInstance("models/lever");
+					wearLever.material.color.set("#cccccc");
+					bakeVertexLight(wearLever, {"offset": new THREE.Vector3(60, 60, 300), "falloff": 420});
+					wearLever.position.copy(leverBase.position);
+					wearLever.quaternion.copy(leverBase.quaternion);
+					wearLever.translateY(4.0);
+					wearLever.userData.gripped = null;
+
+					wearLever.addEventListener("spawn", function()
+					{
+						var leverGripVisual = jumpStart.spawnInstance(null, {"parent": this});
+						leverGripVisual.translateY(130.0);
+
+						var leverGripTop = jumpStart.spawnInstance(null, {"parent": this});
+						leverGripTop.rotateX(0.2);
+						leverGripTop.translateY(130.0);
+
+						if( g_noHandsMode )
+						{
+							leverGripTop.userData.arrow = jumpStart.spawnInstance("models/arrow", {"parent": leverGripTop});
+							leverGripTop.userData.arrow.rotation.y = Math.PI / 2.0;
+							leverGripTop.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+
+							var clickCatcher = jumpStart.spawnInstance(null, {"object": g_arrowClickCatcherMesh.clone(), "parent": leverGripTop});
+							clickCatcher.scale.z *= 2.7;
+							clickCatcher.scale.y *= 2.0;
+							clickCatcher.userData.grip = leverGripTop;
+							clickCatcher.blocksLOS = true;
+							jumpStart.makeCollide(clickCatcher);
+
+							clickCatcher.userData.bestDirection = 1.0;
+							clickCatcher.addEventListener("cursordown", wearArrowClick);
+
+							clickCatcher.addEventListener("cursorenter", function()
+							{
+								if( g_lastPulled === 0 || jumpStart.clock.elapsedTime - g_lastPulled > 4.0 )
+									this.userData.grip.userData.arrow.scale.set(2.5, 2.5, 2.5);
+							});
+
+							clickCatcher.addEventListener("cursorexit", function()
+							{
+								this.userData.grip.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+							});
+						}
+
+						var leverGripBottom = jumpStart.spawnInstance(null, {"parent": this});
+						leverGripBottom.rotateX(-0.2);
+						leverGripBottom.translateY(130.0);
+
+						if( g_noHandsMode )
+						{
+							leverGripBottom.userData.arrow = jumpStart.spawnInstance("models/arrow", {"parent": leverGripBottom});
+							leverGripBottom.userData.arrow.rotation.y = -Math.PI / 2.0;
+							leverGripBottom.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+
+							var clickCatcher = jumpStart.spawnInstance(null, {"object": g_arrowClickCatcherMesh.clone(), "parent": leverGripBottom});
+							clickCatcher.scale.z *= 2.7;
+							clickCatcher.scale.y *= 2.0;
+							clickCatcher.userData.grip = leverGripBottom;
+							clickCatcher.blocksLOS = true;
+							jumpStart.makeCollide(clickCatcher);
+
+							clickCatcher.userData.bestDirection = 1.0;
+							clickCatcher.addEventListener("cursordown", unwearArrowClick);
+
+							clickCatcher.addEventListener("cursorenter", function()
+							{
+								if( g_lastPulled === 0 || jumpStart.clock.elapsedTime - g_lastPulled > 4.0 )
+									this.userData.grip.userData.arrow.scale.set(2.5, 2.5, 2.5);
+							});
+
+							clickCatcher.addEventListener("cursorexit", function()
+							{
+								this.userData.grip.userData.arrow.scale.set(0.0001, 0.0001, 0.0001);
+							});
+						}
+
+						this.userData.grip = leverGripVisual;
+						this.userData.gripTop = leverGripTop;
+						this.userData.gripBottom = leverGripBottom;
+					});
+
+					wearLever.addEventListener("tick", function()
+					{
+						var leverInitial = 0;
+						var leverMin = leverInitial - 0.3;
+						var leverMax = leverInitial + 0.3;
+
+						if( !!this.userData.gripped )
+						{
+							var handSide = this.userData.gripped;
+							var hand = g_hands[handSide];
+
+							// compare the hand distance to each of the grips.
+							// slide in the direction of the nearest grip
+							// if the difference between the distances is small, don't slide anywhere.
+
+							var handWorldPosition = hand.palmJoint.getWorldPosition();
+							var topDist = handWorldPosition.distanceTo(this.userData.gripTop.getWorldPosition());
+							var bottomDist = handWorldPosition.distanceTo(this.userData.gripBottom.getWorldPosition());
+
+							var deadZone = 6.0;
+							var bestDirection = -1.0;
+							if( Math.abs(topDist - bottomDist) < deadZone )
+								bestDirection = 0;
+							else if( topDist < bottomDist )
+								bestDirection = 1.0;
+
+							if( bestDirection !== 0 )
+							{
+								var speed = 0.05 * Math.abs(topDist - bottomDist);
+								this.rotation.x += speed * jumpStart.deltaTime * bestDirection;
+							}
+
+							if( this.rotation.x < leverMin )
+								this.rotation.x = leverMin;
+							else if( this.rotation.x > leverMax )
+								this.rotation.x = leverMax;
+
+							this.updateMatrixWorld();
+
+							var amount = this.rotation.x - leverMin;
+							var range = leverMax - leverMin;
+							var factor = amount / range;
+
+							if( factor === 1.0 && jumpStart.clock.elapsedTime - g_lastPulled > 4.0 )
+							{
+								console.log("WEAR THE THING!");
+								g_lastPulled = jumpStart.clock.elapsedTime;
+
+								buildVoxelCluster(g_activeCanvas);
+							}
+							else
+							{
+								var config = {};
+								if( g_activeCanvas.name === "head_canvas" )
+								{
+									config.part = "head";
+									config.side = "center";
+								}
+								else if( g_activeCanvas.name === "torso_canvas" )
+								{
+									config.part = "neck";
+									config.side = "center";
+								}
+								else if( g_activeCanvas.name === "rhand_canvas" )
+								{
+									config.part = "hand";
+									config.side = "right";
+								}
+								else if( g_activeCanvas.name === "lhand_canvas" )
+								{
+									config.part = "hand";
+									config.side = "left";
+								}
+
+								if( !!g_myClusters[config.part + config.side] && factor === 0.0 && jumpStart.clock.elapsedTime - g_lastPulled > 4.0 )
+								{
+									console.log("UN-WEAR THE THING!");
+									g_lastPulled = jumpStart.clock.elapsedTime;
+									jumpStart.removeInstance(g_myClusters[config.part + config.side]);
+								}
+							}
+						}
+						else
+						{
+							// automatically go to un-pulled position when not gripped
+							var rotDeadZone = 0.1;
+							var speed = 0;
+							if( this.rotation.x < leverInitial - (rotDeadZone / 2.0) )
+								speed = 0.1;
+							else if( this.rotation.x > leverInitial + (rotDeadZone / 2.0) )
+								speed = -0.1;
+
+							if( speed !== 0 )
+								this.rotation.x += speed * jumpStart.deltaTime;
+						}
+					});
+
+					g_wearLever = wearLever;
+				}
+
+				var jointFrameGrip = spawnPuzzlePiece({"type": "grip"});
+				jointFrameGrip.userData.boardName = board.name;
+				jointFrameGrip.position.copy(table.position);
+				jointFrameGrip.quaternion.copy(table.quaternion);
+				jointFrameGrip.translateX(-60);
+				jointFrameGrip.translateY(g_tableHeight + 100.0 - (g_tableHeight / 2.0));
+				jointFrameGrip.translateY(-10.0);
+				jointFrameGrip.translateZ(-50.0);
+				jointFrameGrip.userData.menuItems = [];
+				//jointFrameGrip.userData.selectedIndex = -1;
+
+				if( g_noHandsMode )
+				{
+					jointFrameGrip.userData.offset = jointFrameGrip.position.clone().sub(g_table.position);
+					jointFrameGrip.addEventListener("tick", function()
+					{
+						this.position.copy(g_table.position);
+
+						var cameraPos;
+						if( jumpStart.isAltspace )
+						{
+							if( !!jumpStart.localUser.skeleton )
+							{
+								cameraPos = jumpStart.localUser.skeleton.getJoint("Eye").position;
+								jumpStart.world.worldToLocal(cameraPos);
+							}
+						}
+						else
+							cameraPos = jumpStart.camera.position.clone();
+
+						if( cameraPos )
+						{
+							cameraPos.y = this.position.y;
+
+							this.lookAt(cameraPos);
+							this.translateX(this.userData.offset.x);
+							this.translateY(this.userData.offset.y);
+							this.translateZ(this.userData.offset.z);
+						}
+					});
+				}
+
+				g_jointFrameGrip = jointFrameGrip;
+
+				var jointFrame = jumpStart.spawnInstance("models/joint_frame");
+				jointFrame.material.color.set("#cccccc");
+				bakeVertexLight(jointFrame, {"offset": new THREE.Vector3(60, 60, 300), "falloff": 650});
+				jointFrameGrip.add(jointFrame);
+				jointFrame.position.y = 10.0 + (g_jointFrameHeight / 2.0);
+
+				var jointSelector = jumpStart.spawnInstance("models/joint_selector");
+				jointSelector.material.color.set("#ffffff");
+				bakeVertexLight(jointSelector, {"offset": new THREE.Vector3(60, 60, 300), "falloff": 600});
+				jointFrameGrip.add(jointSelector);
+				jointSelector.translateY(10.0 + g_jointFrameHeight / 2.0);
+				jointSelector.translateX(g_jointFrameWidth / 2.0);
+				g_jointSelector = jointSelector;
+
+				var jointSelectorGrip = jumpStart.spawnInstance(null, {"parent": jointSelector});
+				jointSelectorGrip.userData.gripped = null;
+				//jointSelectorGrip.position.copy(jointSelector.position);
+				//jointSelectorGrip.quaternion.copy(jointSelector.quaternion);
+				jointSelectorGrip.translateX(10.0);
+				jointSelectorGrip.addEventListener("spawn", function()
+				{
+					//var mesh = new THREE.Mesh(g_gripGeo, g_gripMat);
+					//var jointGripVisual = jumpStart.spawnInstance(null, {"parent": this});
+
+					var jointGripTop = jumpStart.spawnInstance(null, {"parent": this});
+					jointGripTop.position.y = 10.0;
+
+					var jointGripBottom = jumpStart.spawnInstance(null, {"parent": this});
+					jointGripBottom.position.y = -10.0;
+
+					this.userData.gripTop = jointGripTop;
+					this.userData.gripBottom = jointGripBottom;
+				});
+
+				jointSelectorGrip.addEventListener("tick", function()
+				{
+					if( !!this.userData.gripped )
+					{
+						var handSide = this.userData.gripped;
+						var hand = g_hands[handSide];
+
+						// compare the hand distance to each of the grips.
+						// slide in the direction of the nearest grip
+						// if the difference between the distances is small, don't slide anywhere.
+
+						var handWorldPosition = hand.palmJoint.getWorldPosition();
+						//this.userData.gripTop.updateMatrixWorld();
+						var topDist = handWorldPosition.distanceTo(this.userData.gripTop.getWorldPosition());
+						//this.userData.gripBottom.updateMatrixWorld();
+						var bottomDist = handWorldPosition.distanceTo(this.userData.gripBottom.getWorldPosition());
+
+						var deadZone = 6.0;
+						var bestDirection = -1.0;
+						if( Math.abs(topDist - bottomDist) < deadZone )
+							bestDirection = 0;
+						else if( topDist < bottomDist )
+							bestDirection = 1.0;
+
+						//console.log(bestDirection);
+						//console.log(topDist + " vs " + bottomDist + " vs " + (topDist - bottomDist) + "vs " + bestDirection);
+
+						if( bestDirection !== 0 )
+						{
+							var speed = 2.0 * Math.abs(topDist - bottomDist);
+							g_jointSelector.translateY(speed * jumpStart.deltaTime * bestDirection);
+						}
+
+						var min = g_jointFrameGrip.userData.menuItems[g_jointFrameGrip.userData.menuItems.length-1].position.y;
+						var max = g_jointFrameGrip.userData.menuItems[0].position.y;
+						if( g_jointSelector.position.y < min )
+							g_jointSelector.position.y = min;
+						else if( g_jointSelector.position.y > max )
+							g_jointSelector.position.y = max;
+						//g_jointFrameGrip.updateMatrixWorld();
+					}
+				});
+
+				g_jointSelectorGrip = jointSelectorGrip;
+
+				var jointHandle = jumpStart.spawnInstance("models/joint_handle");
+				jointHandle.material.color.set("#cccccc");
+				bakeVertexLight(jointHandle, {"offset": new THREE.Vector3(60, 60, 300), "falloff": 500});
+				jointFrameGrip.add(jointHandle);
+				jointHandle.translateY(10.0);
+
+				var params = {
+					size: 6.0,
+					height: 1.0,
+					font: jumpStart.font,// "helvetiker",
+					curveSegments: (jumpStart.isGearVR) ? 1 : 2
+				};
+
+				var textPadding = 20.0;
+				var textHeight = 14.0;
+
+				var textCatcherWidth = 50;
+				var textCatcherHeight = 12;
+
+				var headText = spawn3DText("HEAD", "white", params);
+				headText.userData.canvasName = "head_canvas";
+				jointFrameGrip.userData.menuItems.push(headText);
+				jointFrameGrip.add(headText);
+				headText.translateY(10.0 + textPadding + (textHeight * 3.0));
+
+				if( g_noHandsMode )
+				{
+					var clickCatcher = jumpStart.spawnCursorPlane({"width": textCatcherWidth, "height": textCatcherHeight});
+					headText.add(clickCatcher);
+
+					clickCatcher.blocksLOS = true;
+					jumpStart.makeCollide(clickCatcher);
+					clickCatcher.addEventListener("cursordown", function()
+					{
+						if( g_activeCanvas !== g_headCanvas )
+						{
+							changeCanvas(g_headCanvas);
+							g_jointSelector.position.y = this.parent.position.y;
+							console.log("Canvas: Head");
+						}
+					});
+				}
+
+				var torsoText = spawn3DText("TORSO", "white", params);
+				torsoText.userData.canvasName = "torso_canvas";
+				jointFrameGrip.userData.menuItems.push(torsoText);
+				jointFrameGrip.add(torsoText);
+				torsoText.translateY(10.0 + textPadding + (textHeight * 2.0));
+
+				if( g_noHandsMode )
+				{
+					var clickCatcher = jumpStart.spawnCursorPlane({"width": textCatcherWidth, "height": textCatcherHeight});
+					torsoText.add(clickCatcher);
+
+					clickCatcher.blocksLOS = true;
+					jumpStart.makeCollide(clickCatcher);
+					clickCatcher.addEventListener("cursordown", function()
+					{
+						if( g_activeCanvas !== g_torsoCanvas )
+						{
+							changeCanvas(g_torsoCanvas);
+							g_jointSelector.position.y = this.parent.position.y;
+							console.log("Canvas: Torso");
+						}
+					});
+				}
+
+				if( !g_noHandsMode )
+				{
+					var lHandText = spawn3DText("L HAND", "white", params);
+					lHandText.userData.canvasName = "lhand_canvas";
+					jointFrameGrip.userData.menuItems.push(lHandText);
+					jointFrameGrip.add(lHandText);
+					lHandText.translateY(10.0 + textPadding + (textHeight * 1.0));
+
+					if( g_noHandsMode )
+					{
+						var clickCatcher = jumpStart.spawnCursorPlane({"width": textCatcherWidth, "height": textCatcherHeight});
+						lHandText.add(clickCatcher);
+
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+						clickCatcher.addEventListener("cursordown", function()
+						{
+							if( g_activeCanvas !== g_lhandCanvas )
+							{
+								changeCanvas(g_lhandCanvas);
+								g_jointSelector.position.y = this.parent.position.y;
+								console.log("Canvas: Left Hand");
+							}
+						});
+					}
+
+					var rHandText = spawn3DText("R HAND", "white", params);
+					rHandText.userData.canvasName = "rhand_canvas";
+					jointFrameGrip.userData.menuItems.push(rHandText);
+					jointFrameGrip.add(rHandText);
+					rHandText.translateY(10.0 + textPadding);
+
+					if( g_noHandsMode )
+					{
+						var clickCatcher = jumpStart.spawnCursorPlane({"width": textCatcherWidth, "height": textCatcherHeight});
+						rHandText.add(clickCatcher);
+
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+						clickCatcher.addEventListener("cursordown", function()
+						{
+							if( g_activeCanvas !== g_rhandCanvas )
+							{
+								changeCanvas(g_rhandCanvas);
+								g_jointSelector.position.y = this.parent.position.y;
+								console.log("Canvas: Right Hand");
+							}
+						});
+					}
+				}
+
+				//jointFrameGrip.userData.selectedIndex = 0;
+				jointSelector.position.y = headText.position.y;
+
+				var blockFrameGrip = spawnPuzzlePiece({"type": "grip"});
+				blockFrameGrip.userData.boardName = board.name;
+				blockFrameGrip.position.copy(table.position);
+				blockFrameGrip.quaternion.copy(table.quaternion);
+				blockFrameGrip.translateY(g_tableHeight + 100.0 - (g_tableHeight / 2.0));
+				blockFrameGrip.translateX(60);
+				blockFrameGrip.translateZ(-50.0);
+				g_blockFrameGrip = blockFrameGrip;
+
+				if( g_noHandsMode )
+				{
+					blockFrameGrip.userData.offset = blockFrameGrip.position.clone().sub(g_table.position);
+					blockFrameGrip.addEventListener("tick", function()
+					{
+						this.position.copy(g_table.position);
+
+						var cameraPos;
+						if( jumpStart.isAltspace )
+						{
+							if( !!jumpStart.localUser.skeleton )
+							{
+								cameraPos = jumpStart.localUser.skeleton.getJoint("Eye").position;
+								jumpStart.world.worldToLocal(cameraPos);
+							}
+						}
+						else
+							cameraPos = jumpStart.camera.position.clone();
+
+						if( cameraPos )
+						{
+							cameraPos.y = this.position.y;
+
+							this.lookAt(cameraPos);
+							this.translateX(this.userData.offset.x);
+							this.translateY(this.userData.offset.y);
+							this.translateZ(this.userData.offset.z);
+						}
+					});
+				}
+
+				var blockFrame = jumpStart.spawnInstance("models/block_frame");
+				blockFrame.material.color.set("#cccccc");
+				bakeVertexLight(blockFrame, {"offset": new THREE.Vector3(60, 60, 300), "falloff": 700});
+				blockFrameGrip.add(blockFrame);
+				blockFrame.translateY(10.0 + (g_blockFrameHeight / 2.0));
+
+				var blockHandle = jumpStart.spawnInstance("models/joint_handle");
+				blockHandle.material.color.set("#cccccc");
+				bakeVertexLight(blockHandle, {"offset": new THREE.Vector3(60, 60, 300), "falloff": 500});
+				blockFrameGrip.add(blockHandle);
+				blockHandle.translateY(10.0);
+
+				var blockPadding = 20.0;
+				var blockSizePadding = (g_blockSize / g_gridScale) + 4.0;
+
+				var blackBlock = jumpStart.spawnInstance(null, {"object": g_blackBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				blackBlock.userData.pieceType = "black";
+				g_paletteBlocks[blackBlock.uuid] = blackBlock;
+				blackBlock.position.y = blockPadding;
+				blackBlock.position.x -= g_blockSize / g_gridScale;
+
+				function fixHitBoxWithGhost(parentObject)
+				{
+					var ghostClone = new THREE.Mesh(g_blockGeo.clone(), g_ghostMat.clone());
+					var blockHit = jumpStart.spawnInstance(null, {"object": ghostClone, "parent": parentObject});
+					blockHit.scale.set(1.33, 1.33, 1.33);
+
+					if( parentObject.parent !== g_activeCanvas )
+						blockHit.scale.multiplyScalar(1 / g_gridScale);
+
+					blockHit.blocksLOS = true;
+					jumpStart.makeCollide(blockHit);
+					return blockHit;
+				}
+
+				var hitbox;
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(blackBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var whiteBlock = jumpStart.spawnInstance(null, {"object": g_whiteBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				whiteBlock.userData.pieceType = "white";
+				g_paletteBlocks[whiteBlock.uuid] = whiteBlock;
+				whiteBlock.position.y = blockPadding;
+				whiteBlock.position.x += g_blockSize / g_gridScale;
+
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(whiteBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var redBlock = jumpStart.spawnInstance(null, {"object": g_redBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				redBlock.userData.pieceType = "red";
+				g_paletteBlocks[redBlock.uuid] = redBlock;
+				redBlock.position.y = blockPadding + (blockSizePadding * 1.0);
+				redBlock.position.x -= g_blockSize / g_gridScale;
+
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(redBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var greenBlock = jumpStart.spawnInstance(null, {"object": g_greenBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				greenBlock.userData.pieceType = "green";
+				g_paletteBlocks[greenBlock.uuid] = greenBlock;
+				greenBlock.position.y = blockPadding + (blockSizePadding * 1.0);
+				greenBlock.position.x += g_blockSize / g_gridScale;
+
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(greenBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var blueBlock = jumpStart.spawnInstance(null, {"object": g_blueBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				blueBlock.userData.pieceType = "blue";
+				g_paletteBlocks[blueBlock.uuid] = blueBlock;
+				blueBlock.position.y = blockPadding + (blockSizePadding * 2.0);
+				blueBlock.position.x += g_blockSize / g_gridScale;
+
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(blueBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var cyanBlock = jumpStart.spawnInstance(null, {"object": g_cyanBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				cyanBlock.userData.pieceType = "cyan";
+				g_paletteBlocks[cyanBlock.uuid] = cyanBlock;
+				cyanBlock.position.y = blockPadding + (blockSizePadding * 2.0);
+				cyanBlock.position.x -= g_blockSize / g_gridScale;
+
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(cyanBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var magentaBlock = jumpStart.spawnInstance(null, {"object": g_magentaBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				magentaBlock.userData.pieceType = "magenta";
+				g_paletteBlocks[magentaBlock.uuid] = magentaBlock;
+				magentaBlock.position.y = blockPadding + (blockSizePadding * 3.0);
+				magentaBlock.position.x += g_blockSize / g_gridScale;
+
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(magentaBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var yellowBlock = jumpStart.spawnInstance(null, {"object": g_yellowBlockPaletteMesh.clone(), "parent": blockFrameGrip});
+				yellowBlock.userData.pieceType = "yellow";
+				g_paletteBlocks[yellowBlock.uuid] = yellowBlock;
+				yellowBlock.position.y = blockPadding + (blockSizePadding * 3.0);
+				yellowBlock.position.x -= g_blockSize / g_gridScale;
+
+				if( g_noHandsMode )
+				{
+					hitbox = fixHitBoxWithGhost(yellowBlock);
+					hitbox.addEventListener("cursorup", paletteBlockClicked);
+				}
+
+				var trashcan = jumpStart.spawnInstance("models/trashcan");
+				trashcan.material.transparent = true;
+				trashcan.material.opacity = 0.5;
+				blockFrameGrip.add(trashcan);
+				trashcan.position.y = 60.0;
+				trashcan.position.x = 25.0;
+
+
+				if( g_noHandsMode )
+				{
+					trashcan.addEventListener("spawn", function()
+					{
+						var paletteBlockSize = g_blockSize / g_gridScale;
+						var clickCatcher = jumpStart.spawnCursorPlane({"width": paletteBlockSize * 1.5, "height": paletteBlockSize * 1.5});
+						this.add(clickCatcher);
+
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+						clickCatcher.addEventListener("cursordown", function()
+						{
+							if( g_actionMode !== "Delete" )
+							{
+								g_actionMode = "Delete";
+								console.log("Mode: " + g_actionMode);
+
+								playSound("ui/toggle");
+							}
+						});
+					});
+				}
+
+				g_trashcan = trashcan;
+
+				if( g_noHandsMode )
+				{
+					var pushMove = jumpStart.spawnInstance("models/pull_mode");
+					pushMove.material.transparent = true;
+					pushMove.material.opacity = 0.5;
+					blockFrameGrip.add(pushMove);
+					pushMove.position.y = 50.0;
+					pushMove.position.x = 25.0;
+					pushMove.addEventListener("spawn", function()
+					{
+						var paletteBlockSize = g_blockSize / g_gridScale;
+						var clickCatcher = jumpStart.spawnCursorPlane({"width": paletteBlockSize * 1.5, "height": paletteBlockSize * 1.5});
+						this.add(clickCatcher);
+
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+						clickCatcher.addEventListener("cursordown", function()
+						{
+							var moveMode = "Push";
+
+							if( g_actionMode !== "Move" || g_moveMode !== moveMode )
+								playSound("ui/toggle");
+
+							if( g_actionMode !== "Move" )
+							{
+								g_actionMode = "Move";
+								console.log("Action Mode: " + g_actionMode);
+							}
+
+							if( g_moveMode !== moveMode )
+							{
+								g_moveMode = moveMode;
+								console.log("Move Mode: " + g_moveMode);
+							}
+						});
+					});
+				}
+
+
+				if( g_noHandsMode )
+				{
+					var pullMove = jumpStart.spawnInstance("models/push_mode");
+					pullMove.material.transparent = true;
+					pullMove.material.opacity = 0.5;
+					blockFrameGrip.add(pullMove);
+					pullMove.position.y = 40.0;
+					pullMove.position.x = 25.0;
+					pullMove.addEventListener("spawn", function()
+					{
+						var paletteBlockSize = g_blockSize / g_gridScale;
+						var clickCatcher = jumpStart.spawnCursorPlane({"width": paletteBlockSize * 1.5, "height": paletteBlockSize * 1.5});
+						this.add(clickCatcher);
+
+						clickCatcher.blocksLOS = true;
+						jumpStart.makeCollide(clickCatcher);
+						clickCatcher.addEventListener("cursordown", function()
+						{
+							var moveMode = "Pull";
+
+							if( g_actionMode !== "Move" || g_moveMode !== moveMode )
+								playSound("ui/toggle");
+
+							if( g_actionMode !== "Move" )
+							{
+								g_actionMode = "Move";
+								console.log("Action Mode: " + g_actionMode);
+							}
+
+							if( g_moveMode !== moveMode )
+							{
+								g_moveMode = moveMode;
+								console.log("Move Mode: " + g_moveMode);
+							}
+						});
+					});
+				}
+
+				if( g_noHandsMode )
+					confirmNoHandsCenterVoxel();
+			}
+
+			function spawnBlock(options)
+			{
+				//console.log("Spawn block");
+				if( !!!options )
+					options = {};
+
+				var mesh;
+				var block;
+				if( !!options.parent )
+				{
+					if( options.parent.userData.type === "black" )
+						mesh = g_blackBlockMesh.clone();
+					else if( options.parent.userData.type === "white" )
+						mesh = g_whiteBlockMesh.clone();
+					else if( options.parent.userData.type === "red" )
+						mesh = g_redBlockMesh.clone();
+					else if( options.parent.userData.type === "green" )
+						mesh = g_greenBlockMesh.clone();
+					else if( options.parent.userData.type === "blue" )
+						mesh = g_blueBlockMesh.clone();
+					else if( options.parent.userData.type === "cyan" )
+						mesh = g_cyanBlockMesh.clone();
+					else if( options.parent.userData.type === "magenta" )
+						mesh = g_magentaBlockMesh.clone();
+					else if( options.parent.userData.type === "yellow" )
+						mesh = g_yellowBlockMesh.clone();
+					else
+						mesh = g_blockMesh.clone();
+
+					if( options.parent.userData.type !== "grip")
+						block = jumpStart.spawnInstance(null, {"object": mesh, "parent": options.parent});
+					else
+						block = jumpStart.spawnInstance(null, {"parent": options.parent});
+
+					if( g_noHandsMode )
+					{
+						// NOTE: Just doing g_ghostMesh.clone() is no good because the material attributes do not get copied, so it loses the visible = false attribute.
+						// However, cloning the geo & the mat themselves works as expected.
+						var ghostClone = new THREE.Mesh(g_blockGeo.clone(), g_ghostMat.clone());
+						var blockHit = jumpStart.spawnInstance(null, {"object": ghostClone, "parent": block});
+						blockHit.scale.set(1.33, 1.33, 1.33);
+					}
+
+					if( !!!options.parent.userData.blocks )
+					{
+						options.parent.userData.blocks = {};
+						options.parent.userData.clonedBlocks = {};
+					}
+
+					options.parent.userData.blocks[block.uuid] = block;
+				}
+				else
+				{
+					// default
+					mesh = g_blockMesh.clone();
+					block = jumpStart.spawnInstance(null, {"object": mesh});
+				}
+
+				block.position.set((!!options.x) ? g_blockSize * options.x : 0, (!!options.y) ? g_blockSize * options.y : 0, (!!options.z) ? g_blockSize * options.z : 0);
+
+				block.userData.offset = {"x": (!!options.x) ? options.x : 0, "y": (!!options.y) ? options.y : 0, "z": (!!options.z) ? options.z : 0};
+
+				return block;
+			}
+
+			var pieceTypes = {
+				"grip": {"blocks": [{}, {"y": -1}, {"y": -2}, {"x": -1}, {"x": 1}, {"y": 1}, {"y": 1, "x": -1}, {"y": 1, "x": 1}]},
+				"default": {"blocks": [{}]},
+				"red": {"blocks": [{}]},
+				"blue": {"blocks": [{}]},
+				"green": {"blocks": [{}]},
+				"cyan": {"blocks": [{}]},
+				"magenta": {"blocks": [{}]},
+				"yellow": {"blocks": [{}]},
+				"black": {"blocks": [{}]},
+				"white": {"blocks": [{}]}
+				/*
+				"L": [{}, {"y": 1}, {"y": 2}, {"x":1}],
+				"T": [{"x": -1}, {}, {"y": 1}, {"x": 1}],
+				"l": [{}, {"y": 1}, {"y": 2}, {"y": 3}],
+				"o": [{}, {"y": 1}, {"x": 1}, {"x": 1, "y": 1}],
+				"s": [{"x": -1}, {}, {"y": 1}, {"x": 1, "y": 1}],
+				"y": [{"z": 1}, {}, {"y": 1}, {"x": 1}],
+				"z": [{"x": -1}, {}, {"y": 1}, {"y": 1, "z": -1}],
+				"N": [{}, {"y": 1}, {"y": 1, "z": -1}, {"x":1}]
+				*/
+			};
+
+			function deathSpiralTick()
+			{
+				var speed = 50.0;
+				this.translateZ(speed * jumpStart.deltaTime);
+				this.rotateZ(Math.PI * jumpStart.deltaTime);
+
+				if( !!!this.behaviors.shrinkRemove )
+				{
+					var destination = g_trashcan.getWorldPosition();
+					destination.y += 50.0 * jumpStart.options.sceneScale;
+
+					if( this.getWorldPosition().y < destination.y )
+					{
+						this.applyBehavior("shrinkRemove", {"speed": 4.0});
+					}
+				}
+			}
+
+			function cutClones(piece)
+			{
+				var clonedBlocksKeys = (!!piece.userData.clonedBlocks) ? Object.keys(piece.userData.clonedBlocks) : null;
+				var hiddenMeshesKeys = (!!piece.userData.hiddenMeshes) ? Object.keys(piece.userData.hiddenMeshes) : null;
+
+				if( !!clonedBlocksKeys && clonedBlocksKeys.length > 0 )
+				{
+					for( var i = 0; i < clonedBlocksKeys.length; i++ )
+						piece.userData.blocks[clonedBlocksKeys[i]].scale.set(1, 1, 1);
+
+					// do this NEXT tick, to avoid flicker
+					piece.addEventListener("tick", function()
+					{
+						var blocksKeys = Object.keys(piece.userData.blocks);
+						for( var j = 0; j < blocksKeys.length; j++ )
+						{
+							this.userData.clonedBlocks[blocksKeys[j]].remove();
+							delete this.userData.clonedBlocks[blocksKeys[j]];
+						}
+
+						this.removeEventListener("tick", arguments.callee);
+					});
+				}
+				else if( !!hiddenMeshesKeys && hiddenMeshesKeys.length > 0 )
+				{
+					for( var i = 0; i < hiddenMeshesKeys.length; i++ )
+						piece.userData.hiddenMeshes[hiddenMeshesKeys[i]].scale.set(1, 1, 1);
+
+					// var piece = this;
+					var clonedMeshesKeys = Object.keys(piece.userData.clonedMeshes);
+					for( var j = 0; j < clonedMeshesKeys.length; j++ )
+					{
+						piece.userData.clonedMeshes[clonedMeshesKeys[j]].remove();
+						delete piece.userData.clonedMeshes[clonedMeshesKeys[j]];
+					}
+				}
+			}
+
+			function showOrHideGrid()
+			{
+
+				var grid = g_activeCanvas.userData.grid;
+				var canvasWorldPos = g_activeCanvas.getWorldPosition();
+				var foundOne = false;
+				var pieceKeys = Object.keys(g_puzzlePieces);
+
+				var i, testPiece;
+				for( i = 0; i < pieceKeys.length; i++ )
+				{
+					testPiece = g_puzzlePieces[pieceKeys[i]];
+					if( testPiece.parent !== g_activeCanvas || testPiece.type === "grip" )
+						continue;
+
+					if( (testPiece.getWorldPosition().distanceTo(canvasWorldPos) / jumpStart.options.sceneScale) / g_activeCanvas.scale.x < (1.9 * g_blockSize) )
+					{
+						foundOne = true;
+						break;
+					}
+				}
+
+				if( !foundOne && grid.userData.hidden )
+				{
+					grid.scale.copy(grid.userData.oldScale);
+					grid.userData.hidden = false;
+				}
+				else if( foundOne && !grid.userData.hidden)
+				{
+					grid.userData.oldScale = grid.scale.clone();
+					grid.scale.set(0.0001, 0.0001, 0.0001);
+					grid.userData.hidden = true;
+				}
+					
+			}
+
+			var g_puzzlePieces = {};
+			function deletePiece(piece)
+			{
+				// remove us from local master list
+				delete g_puzzlePieces[piece.uuid];
+
+				if( g_noHandsMode )
+					confirmNoHandsCenterVoxel();
+
+				piece.applyBehavior("shrinkRemove", {"speed": 3.0, "localMode": true});
+				showOrHideGrid();
+				playSound("ui/error");
+			}
+
+			function dropPiece(piece)
+			{
+				cutClones(piece);
+
+				var shouldSnap = (piece.userData.type !== "grip");
+				if( shouldSnap )
+				{
+					piece.parent.updateMatrixWorld();
+
+					// if we dropped anywhere near the trash can, vortex the voxel in.
+					var trashcanWorldPos = g_trashcan.getWorldPosition();
+					var pieceWorldPos = piece.getWorldPosition();
+
+					if( pieceWorldPos.distanceTo(trashcanWorldPos) < (g_blockSize / g_gridScale) * jumpStart.options.sceneScale )
+					{
+						deletePiece(piece);
+						return;
+					}
+					else
+					{
+						//var magicDifference = 0;
+						var offset;
+						if( piece.parent !== g_activeCanvas )
+						{
+							// overkill?
+							g_activeCanvas.updateMatrixWorld();
+
+							THREE.SceneUtils.attach(piece, jumpStart.scene, g_activeCanvas);
+
+							// overkill?
+							piece.updateMatrixWorld();
+
+							piece.position.y -= -jumpStart.worldOffset.y / g_activeCanvas.scale.x;
+							piece.position.y += g_activeCanvas.position.y / g_activeCanvas.scale.x;
+							piece.scale.set(1, 1, 1);
+
+
+							// overkill?
+							piece.updateMatrixWorld();
+						}
+
+						// snap position
+						offset = piece.position.clone();
+						offset.y -= (g_activeCanvas.position.y / jumpStart.options.sceneScale) / g_activeCanvas.scale.x;
+
+						var adjustedBlockSize = g_blockSize / jumpStart.options.sceneScale;
+						offset.x = offset.x % adjustedBlockSize;
+						offset.y = offset.y % adjustedBlockSize;
+						offset.z = offset.z % adjustedBlockSize;
+
+						// IMPROVE THE ROUNDING OF THIS SNAP!!
+						function snapPosition(piece, offset)
+						{
+							var nudge = new THREE.Vector3();
+							var sign;
+
+							// x
+							sign = (offset.x > 0) ? 1.0 : -1.0;
+							if( Math.abs(offset.x) > adjustedBlockSize / 2.0 )
+								nudge.x = (adjustedBlockSize - Math.abs(offset.x)) * sign;
+							else
+								nudge.x = (-Math.abs(offset.x)) * sign;
+
+							// y
+							sign = (offset.y > 0) ? 1.0 : -1.0;
+							if( Math.abs(offset.y) > adjustedBlockSize / 2.0 )
+								nudge.y = (adjustedBlockSize - Math.abs(offset.y)) * sign;
+							else
+								nudge.y = (-Math.abs(offset.y)) * sign;
+
+							// z
+							sign = (offset.z > 0) ? 1.0 : -1.0;
+							if( Math.abs(offset.z) > adjustedBlockSize / 2.0 )
+								nudge.z = (adjustedBlockSize - Math.abs(offset.z)) * sign;
+							else
+								nudge.z = (-Math.abs(offset.z)) * sign;
+
+							piece.position.add(nudge);
+
+							piece.position.multiplyScalar(jumpStart.options.sceneScale);
+							piece.position.y -= g_activeCanvas.position.y / g_activeCanvas.scale.x;
+						}
+
+						snapPosition(piece, offset);
+
+						// snap rotation
+						// brute force by comparing to basic quaternions
+						piece.quaternion.copy(snapQuaternion(piece.quaternion));
+
+						// if the piece is close to the grid, hide the grid.
+						if( !g_noHandsMode )
+						{
+							piece.updateMatrixWorld();
+							while(checkPieceCollide(piece))
+							{
+								piece.position.y += g_blockSize;
+								piece.updateMatrixWorld();
+							}
+
+							showOrHideGrid();
+						}
+					}
+				}
+
+				piece.userData.heldByUser = "";
+				playSound("ui/select");
+			}
+
+			function checkSolved(board)
+			{
+				// FIXME: DO WORK
+				// ...
+			}
+
+			function checkPieceCollide(piece)
+			{
+				var scaledBlockSize = g_activeCanvas.scale.x * g_blockSize;
+
+				// cycle through every peice
+				var pieceKeys = Object.keys(g_puzzlePieces);
+				var i, testPiece, testBlockKeys, j, testBlock, blockKeys, k, block;//, displacement;
+				for( i = 0; i < pieceKeys.length; i++ )
+				{
+					testPiece = g_puzzlePieces[pieceKeys[i]];
+					//console.log(testPiece.userData.type);
+					if( testPiece === piece )//|| testPiece.userD)	// FIXME: Also make sure the piece isn't hald in-hand.
+						continue;
+
+
+					if( testPiece.parent !== g_activeCanvas )
+						continue;
+
+					// cycle through every one of the blocks of the testPiece
+					testBlockKeys = Object.keys(testPiece.userData.blocks);
+					for( j = 0; j < testBlockKeys.length; j++ )
+					{
+						testBlock = testPiece.userData.blocks[testBlockKeys[j]];
+
+						// cycle through every one of the block on the piece
+						blockKeys = Object.keys(piece.userData.blocks);
+						for( k = 0; k < blockKeys.length; k++ )
+						{
+							block = piece.userData.blocks[blockKeys[k]];
+							if( block.getWorldPosition().distanceTo(testBlock.getWorldPosition()) < (g_blockSize * g_activeCanvas.scale.x) - (0.1 * g_activeCanvas.scale.x) )
+								return true;
+
+							//displacement = block.getWorldPosition().sub(testBlock.getWorldPosition());
+							//if( displacement.length() < g_blockSize )
+							//	return displacement;
+						}
+					}
+				}
+
+				return false;
+			}
+
+			function makePieceBlocksInvisible(piece)
+			{
+				var i, block;
+				var blocksKeys = Object.keys(piece.userData.blocks);
+				for( i = 0; i < blocksKeys.length; i++ )
+				{
+					block = piece.userData.blocks[blockKeys[i]];
+					block.scale.set(0.0001, 0.0001, 0.0001);
+				}
+			}
+
+			function makePieceBlocksVisible(piece)
+			{
+				var i, block;
+				var blocksKeys = Object.keys(piece.userData.blocks);
+				for( i = 0; i < blocksKeys.length; i++ )
+				{
+					block = piece.userData.blocks[blockKeys[i]];
+					block.scale.set(1, 1, 1);
+				}
+			}
+
+			function clonePieceToNativeSkeletonParent(piece, config)
+			{
+				/*
+var clonedBlock = startLinkMesh.clone();
+					clonedBlock.position.set(0, 0, 0);
+
+					// * 100.0 cuz my estimation for native Unity scale was WRONG in JumpStart's scale.
+					var scaleValue = 1.0 / (jumpStart.options.sceneScale * 100.0);
+					clonedBlock.scale.set(scaleValue, scaleValue, scaleValue);
+
+					var config = {
+						part: 'hand',
+						side: 'right',
+						index: 0,
+						userId: jumpStart.localUser.userID
+					};
+
+					var nativeBlock = new NativeComponent('n-skeleton-parent', config, clonedBlock).addTo(jumpStart.scene);
+				*/
+				//'eye, 'head', 'neck', 'spine', 'hips', 'upper-leg', 'lower-leg', 'foot', 'toes', 'shoulder', 'upper-arm', 'lower-arm', 'hand', 'thumb', 'index', 'middle', 'ring' or 'pinky'.
+
+				// 1. Get the piece, the hand, its grip, and its gripTarget.
+				var skeletonHandSide = (config.side === "right") ? "Right" : "Left";
+				var hand = g_hands[skeletonHandSide];
+				var grip = hand.grip;
+				var gripTarget = hand.gripTarget;
+
+				// overkill?
+				grip.updateMatrix();
+				piece.updateMatrix();
+
+				//var oldGripMatrix = grip.matrix.clone();
+				//var oldPieceMatrix = piece.matrix.clone();
+				var oldGripPosition = grip.position.clone();
+				var oldGripQuaternion = grip.quaternion.clone();
+				var oldGripScale = grip.scale.clone();
+
+				var oldPiecePosition = piece.position.clone();
+				var oldPieceQuaternion = piece.quaternion.clone();
+				var oldPieceScale = piece.scale.clone();
+
+				// 2. Snap the grip to the WORLD origin.
+				grip.position.copy(jumpStart.world.worldToLocal(new THREE.Vector3()));
+				grip.quaternion.copy(new THREE.Quaternion());
+				grip.rotateY(Math.PI);
+
+				var scaleValue = 1.0 / (jumpStart.options.sceneScale * jumpStart.scene.scale.x * 100.0);
+				var scaleValue2 = 1.0 / (jumpStart.options.sceneScale * 100.0);
+				grip.scale.set(scaleValue, scaleValue, scaleValue);
+				//grip.scale.set(1, 1, 1);
+
+				// overkill?
+				grip.updateMatrixWorld();
+				gripTarget.updateMatrixWorld();
+
+				// 3. Snap the piece to the gripTarget.
+				piece.position.copy(gripTarget.position);
+				piece.quaternion.copy(gripTarget.quaternion);
+
+				// 4. Clone every block of the piece and attach to the user.
+				var mesh;
+				if( piece.userData.type === "red" )
+					mesh = g_redBlockMesh;
+				else if( piece.userData.type === "blue" )
+					mesh = g_blueBlockMesh;
+				else if( piece.userData.type === "green" )
+					mesh = g_greenBlockMesh;
+				else if( piece.userData.type === "cyan" )
+					mesh = g_cyanBlockMesh;
+				else if( piece.userData.type === "magenta" )
+					mesh = g_magentaBlockMesh;
+				else if( piece.userData.type === "yellow" )
+					mesh = g_yellowBlockMesh;
+				else if( piece.userData.type === "black" )
+					mesh = g_blackBlockMesh;
+				else if( piece.userData.type === "white" )
+					mesh = g_whiteBlockMesh;
+
+				var i, block, clonedBlock;
+				var blocksKeys = Object.keys(piece.userData.blocks);
+				for( i = 0; i < blocksKeys.length; i++ )
+				{
+					block = piece.userData.blocks[blocksKeys[i]];
+					//clonedBlock = new THREE.Mesh(g_blockGeo.clone(), g_greenBlockMat.clone());
+
+					//clonedBlock = g_redBlockMesh.clone();
+					clonedBlock = mesh.clone();
+					clonedBlock.quaternion.copy(block.quaternion);
+					clonedBlock.position.copy(block.position);
+					clonedBlock.scale.multiplyScalar(g_activeCanvas.scale.x);
+					//clonedBlock.scale.copy(block.scale);
+					//clonedBlock.scale.set(scaleValue2, scaleValue2, scaleValue2);
+					gripTarget.add(clonedBlock);
+
+					// overkill?
+					clonedBlock.updateMatrixWorld();
+
+					THREE.SceneUtils.detach(clonedBlock, clonedBlock.parent, jumpStart.scene);
+
+					// overkill?
+					clonedBlock.updateMatrixWorld();
+
+					//clonedBlock.position.multiplyScalar(-1.0);
+
+					//console.log(clonedBlock.position);
+					//console.log(clonedBlock.scale.x);
+
+					//piece.userData.clonedBlocks[block.uuid] = clonedBlock;
+					block.scale.set(0.0001, 0.0001, 0.0001);
+
+					var nativeBlock = new NativeComponent('n-skeleton-parent', config, clonedBlock).addTo(jumpStart.scene);
+
+					piece.userData.clonedBlocks[blocksKeys[i]] = nativeBlock;
+				}
+
+				// 5. Return the grip & the piece to their original position & quaternion.
+				grip.position.copy(oldGripPosition);
+				grip.quaternion.copy(oldGripQuaternion);
+				grip.scale.copy(oldGripScale);
+
+				piece.position.copy(oldPiecePosition);
+				piece.quaternion.copy(oldPieceQuaternion);
+				piece.scale.copy(oldPieceScale);
+				//grip.matrix.copy(oldGripMatrix);
+				//piece.matrix.copy(oldPieceMatrix);
+
+				// overkill?
+				grip.updateMatrix();
+				piece.updateMatrix();
+			}
+
+			function cloneObjectToNativeSkeletonParent(object, config)
+			{
+				// 1. Get the object, the hand, its grip, and its gripTarget.
+				var skeletonHandSide = (config.side === "right") ? "Right" : "Left";
+				var hand = g_hands[skeletonHandSide];
+				var grip = hand.grip;
+				var gripTarget = hand.gripTarget;
+
+				// overkill?
+				grip.updateMatrix();
+				object.updateMatrix();
+
+				// overkill?
+				grip.updateMatrixWorld();
+				object.updateMatrixWorld();
+				object.parent.updateMatrixWorld();
+
+				var oldGripPosition = grip.position.clone();
+				var oldGripQuaternion = grip.quaternion.clone();
+				var oldGripScale = grip.scale.clone();
+
+				var oldObjectPosition = object.position.clone();
+				var oldObjectQuaternion = object.quaternion.clone();
+				var oldObjectScale = object.scale.clone();
+
+				var scaleValue = 1.0 / (jumpStart.options.sceneScale * jumpStart.scene.scale.x * 100.0);
+				var scaleValue2 = 1.0 / (jumpStart.options.sceneScale * 100.0);
+
+				grip.rotateY(Math.PI);
+
+				// overkill?
+				grip.updateMatrixWorld();
+				gripTarget.updateMatrixWorld();
+
+				// 3. Snap the object to the gripTarget.
+				object.position.copy(gripTarget.position);
+				object.quaternion.copy(gripTarget.quaternion);
+
+				// 4. Clone every mesh child of the object and attach to the user.
+				object.userData.clonedMeshes = {};
+				object.userData.hiddenMeshes = {};
+
+				var clonedMesh;
+				object.traverse(function(child)
+				{
+					if( child instanceof THREE.Mesh )
+					{
+						clonedMesh = child.clone();
+
+						var position = jumpStart.world.worldToLocal(child.getWorldPosition());
+						position.y += jumpStart.worldOffset.y;
+
+						var quaternion = child.getWorldQuaternion();
+						var scale = child.getWorldScale();
+
+						clonedMesh.position.copy(position);
+						clonedMesh.position.multiplyScalar(jumpStart.scene.scale.x);
+						clonedMesh.quaternion.copy(quaternion);
+						clonedMesh.scale.copy(scale);
+
+						// overkill?
+						clonedMesh.updateMatrixWorld();
+
+						THREE.SceneUtils.attach(clonedMesh, jumpStart.scene, gripTarget);
+
+						this.userData.clonedMeshes[child.uuid] = clonedMesh;
+						this.userData.hiddenMeshes[child.uuid] = child;
+					}
+				}.bind(object));
+
+				grip.position.copy(jumpStart.world.worldToLocal(new THREE.Vector3()));
+
+				var val = jumpStart.worldOffset.y * scaleValue;
+
+				grip.quaternion.copy(new THREE.Quaternion());
+
+				// overkill?
+				grip.updateMatrixWorld();
+				
+
+				grip.scale.set(scaleValue, scaleValue, scaleValue);
+
+				// overkill?
+				grip.updateMatrixWorld();
+				gripTarget.updateMatrixWorld();
+
+				var clonedMeshesKeys = Object.keys(object.userData.clonedMeshes);
+				for( var i = 0; i < clonedMeshesKeys.length; i++ )
+				{
+					clonedMesh = object.userData.clonedMeshes[clonedMeshesKeys[i]];
+					child = object.userData.hiddenMeshes[clonedMeshesKeys[i]];
+
+					// overkill?
+					clonedMesh.updateMatrixWorld();
+
+					THREE.SceneUtils.detach(clonedMesh, clonedMesh.parent, jumpStart.scene);
+
+					// overkill?
+					clonedMesh.updateMatrixWorld();
+					
+					child.scale.set(0.0001, 0.0001, 0.0001);
+
+					var nativeBlock = new NativeComponent('n-skeleton-parent', config, clonedMesh).addTo(jumpStart.scene);
+
+					object.userData.clonedMeshes[child.uuid] = nativeBlock;
+				}
+
+				// 5. Return the grip & the piece to their original position & quaternion.
+				grip.position.copy(oldGripPosition);
+				grip.quaternion.copy(oldGripQuaternion);
+				grip.scale.copy(oldGripScale);
+
+				object.position.copy(oldObjectPosition);
+				object.quaternion.copy(oldObjectQuaternion);
+				object.scale.copy(oldObjectScale);
+
+				// overkill?
+				grip.updateMatrix();
+				object.updateMatrix();
+			}
+
+			function grabPiece(hand)
+			{
+				var piece = hand.grippedPiece;
+				var oldPos = piece.getWorldPosition();
+
+				var shouldScale = (piece.userData.type !== "grip");
+
+				if( shouldScale )
+				{
+					jumpStart.world.add(piece);
+					piece.position.copy(jumpStart.world.worldToLocal(oldPos));
+					piece.scale.copy(g_activeCanvas.scale);
+				}
+
+				//else
+					//piece.scale.copy(g_activeCanvas.scale);
+
+				var handPosition = jumpStart.world.worldToLocal(hand.handJoint.position.clone());
+
+				// Position & orient the helper objects at
+				// the player's wrist & at the object's origin.
+				hand.grip.position.copy(handPosition);
+				hand.grip.quaternion.copy(hand.handJoint.quaternion);
+				hand.grip.updateMatrixWorld();
+				//hand.gripTarget.updateMatrixWorld();
+
+				THREE.SceneUtils.detach(hand.gripTarget, hand.grip, jumpStart.scene);
+				//hand.gripTarget.scale.set(1, 1, 1);
+
+				//piece.updateMatrixWorld();
+				//if( !isPullingFromMenu )
+				//{
+					//hand.gripTarget.position.copy(g_activeCanvas.worldToLocal(oldPos));
+					//hand.gripTarget.position.copy(jumpStart.world.worldToLocal(oldPos));
+					//hand.gripTarget.position.copy(piece.getWorldPosition());
+					//hand.grip
+				//}
+				//else
+				//	
+				//piece.updateMatrixWorld();
+				hand.gripTarget.position.copy(piece.getWorldPosition());
+				//hand.gripTarget.position.y *= (1 / jumpStart.options.sceneScale);
+				hand.gripTarget.quaternion.copy(piece.getWorldQuaternion());
+
+				hand.gripTarget.updateMatrixWorld();
+				THREE.SceneUtils.attach(hand.gripTarget, jumpStart.scene, hand.grip);
+
+				//piece.applyBehavior("lerpSync");
+				//piece.applyBehavior("autoSync");
+				piece.userData.heldByUser = jumpStart.localUser.userID;
+
+				if( piece.userData.type !== "grip" && !!piece.userData.blocks && Object.keys(piece.userData.blocks).length > 0 )
+				{
+					var config = {
+						"part": "hand",
+						"side": (g_hands["Right"] === hand) ? "right" : "left",
+						"index": 0,
+						"userId": jumpStart.localUser.userID
+					};
+
+					//console.log(JSON.stringify(piece.userData.blocks));
+					clonePieceToNativeSkeletonParent(piece, config);
+					//makePieceBlocksInvisible(piece);
+				}
+				else if( piece.userData.type === "grip" )
+				{
+					var config = {
+						"part": "hand",
+						"side": (g_hands["Right"] === hand) ? "right" : "left",
+						"index": 0,
+						"userId": jumpStart.localUser.userID
+					};
+
+					cloneObjectToNativeSkeletonParent(piece, config);
+				}
+
+				playSound("ui/click");
+
+				//piece.sync();
+				//console.log("Grab piece end");
+				// now the hand's gripTarget is properly positioned & oriented for the piece to follow.
+			}
+
+			function updateGrips()
+			{
+				// make sure hands ( and are available
+				if( !handsReady() )
+					return;
+
+				function determineHandState(handSide)
+				{
+					var hand = g_hands[handSide];
+					var action = "Nothing";
+					var gripPiece;
+					var gripPieceRunnerUp;
+
+					// is the hand in the grip pose?
+					// (just check for Vive & Touch gamepads for now.)
+
+					// *****************************************************************
+					// TODO: Make the input & playspace schemes part of JumpStart itself.
+					// (info on trello)
+					// *****************************************************************
+
+					var inputScheme = "Fingers";
+					var playspaceScheme = "Standing";	// (but also "natrually" compatible w/ roomscale)
+
+					var gripActionState = false;
+					if( inputScheme === "Hands" )
+					{
+						// "Hands" have buttons on their "gamepad" devices
+						if( hand.gamepad.mapping === "touch" || hand.gamepad.mapping === "steamvr" )
+							gripActionState = (hand.gamepad.buttons[1].value > 0.5);
+						else
+							console.log("WARNING: Unsupported VR input gamepad on " + handSide + " hand!");
+					}
+					else if( inputScheme === "Fingers" )
+					{
+						// "Fingers" do NOT have buttons or gamepads, so detect poses!
+						// Result goes into gripActionState, a boolean.
+
+						// Middle finger near palm
+						var middleToHand = hand.middleFingerTipJoint.position.distanceTo(hand.handJoint.position);
+						var indexToThumb = hand.indexFingerTipJoint.position.distanceTo(hand.thumbTipJoint.position);
+
+						if( middleToHand < 15.0 * jumpStart.options.sceneScale )
+							gripActionState = true;
+						else if( indexToThumb < 5.0 * jumpStart.options.sceneScale )
+							gripActionState = true;
+						else
+							gripActionState = false;
+					}
+
+					if( !!g_jointSelectorGrip && g_jointSelectorGrip.userData.gripped === handSide && !gripActionState && !!g_jointSelectorGrip.userData.gripped )
+					{
+						// snap grip
+						var selectorWorldPosition = g_jointSelector.getWorldPosition();
+						var bestDist, bestIndex, dist;
+						for( var i = 0; i < g_jointFrameGrip.userData.menuItems.length; i++ )
+						{
+							dist = selectorWorldPosition.distanceTo(g_jointFrameGrip.userData.menuItems[i].getWorldPosition());
+							if( !!!bestDist || dist < bestDist )
+							{
+								bestDist = dist;
+								bestIndex = i;
+							}
+						}
+
+						g_jointSelector.position.y = g_jointFrameGrip.userData.menuItems[bestIndex].position.y;
+
+						changeCanvas(jumpStart.scene.getObjectByName(g_jointFrameGrip.userData.menuItems[bestIndex].userData.canvasName));
+
+						delete g_jointSelectorGrip.userData.gripped;
+					}
+					else if( !!g_zoomLever && g_zoomLever.userData.gripped === handSide && !gripActionState && !!g_zoomLever.userData.gripped )
+					{
+						g_zoomLever.userData.label.scale.set(0.0001, 0.0001, 0.0001);
+						delete g_zoomLever.userData.gripped;
+					}
+					else if( !!g_heightLever && g_heightLever.userData.gripped === handSide && !gripActionState && !!g_heightLever.userData.gripped )
+					{
+						g_heightLever.userData.label.scale.set(0.0001, 0.0001, 0.0001);
+						delete g_heightLever.userData.gripped;
+					}
+					else if( !!g_wearLever && g_wearLever.userData.gripped === handSide && !gripActionState && !!g_wearLever.userData.gripped )
+					{
+						delete g_wearLever.userData.gripped;
+					}
+
+					// player wants to grab/hold a piece w/ this hand
+					if( gripActionState )
+					{
+						// is this hand already holding a piece?
+						if( !!hand.grippedPiece )
+						{
+							// player is "gripping"
+							action = "Gripping";
+							gripPiece = hand.grippedPiece;
+						}
+						else
+						{
+							// player is trying to "grip"
+
+							// SPECIAL CASE:
+							// Find the nearest palette block.  If it's within range, it has priority.
+							var nearestPaletteBlock = null;
+							var nearestPaletteBlockDist = 1.0 * ((g_blockSize / g_gridScale) * jumpStart.options.sceneScale);
+							var paletteBlockDist;
+							var paletteBlocksKeys = Object.keys(g_paletteBlocks);
+							for( var i = 0; i < paletteBlocksKeys.length; i++ )
+							{
+								// do distance shinnit here
+								paletteBlockDist = hand.palmJoint.position.distanceTo(g_paletteBlocks[paletteBlocksKeys[i]].getWorldPosition());
+
+								if( paletteBlockDist < nearestPaletteBlockDist )
+								{
+									nearestPaletteBlock = g_paletteBlocks[paletteBlocksKeys[i]];
+									nearestPaletteBlockDist = paletteBlockDist;
+								}
+							}
+
+							// SPECIAL CASE II:
+							// Check the distance to the joint selector grip
+							var jointSelectorGripDistance = g_jointSelectorGrip.getWorldPosition().distanceTo(hand.palmJoint.getWorldPosition()) * jumpStart.options.sceneScale;
+
+							// SPECIAL CASE III:
+							// Check the distance to the zoom selector grip
+							var zoomGripDistance = 999999.9;
+							if( !!g_zoomLever && !!g_zoomLever.userData.grip)
+								zoomGripDistance = g_zoomLever.userData.grip.getWorldPosition().distanceTo(hand.palmJoint.getWorldPosition()) * jumpStart.options.sceneScale;
+
+							// SPECIAL CASE IV:
+							// Check the distance to the zoom selector grip
+							var heightGripDistance = 999999.9;
+							if( !!g_heightLever && !!g_heightLever.userData.grip)
+								heightGripDistance = g_heightLever.userData.grip.getWorldPosition().distanceTo(hand.palmJoint.getWorldPosition()) * jumpStart.options.sceneScale;
+
+							// SPECIAL CASE V:
+							// Check the distance to the wear selector grip
+							var wearGripDistance = 999999.9;
+							if( !!g_wearLever && !!g_wearLever.userData.grip)
+								wearGripDistance = g_wearLever.userData.grip.getWorldPosition().distanceTo(hand.palmJoint.getWorldPosition()) * jumpStart.options.sceneScale;
+
+							if( !!nearestPaletteBlock )
+							{
+								//console.log("Here type is: " + nearestPaletteBlock.userData.pieceType);
+								var babyPiece = spawnPuzzlePiece({"type": nearestPaletteBlock.userData.pieceType, "parent": g_activeCanvas});
+								var babyPosition = jumpStart.world.worldToLocal(nearestPaletteBlock.getWorldPosition());
+								babyPiece.position.copy(babyPosition);
+								babyPiece.quaternion.copy(nearestPaletteBlock.getWorldQuaternion());
+								babyPiece.userData.boardName = g_boardName;
+
+								action = "Grip";
+								gripPiece = babyPiece;
+							}
+							else if( !!g_jointSelectorGrip && g_jointSelectorGrip.userData.gripped === handSide )
+							{
+								// do nothing.
+							}
+							else if( !!g_zoomLever && g_zoomLever.userData.gripped === handSide )
+							{
+								// do nothing.
+							}
+							else if( !!g_heightLever && g_heightLever.userData.gripped === handSide )
+							{
+								// do nothing.
+							}
+							else if( !!g_wearLever && g_wearLever.userData.gripped === handSide )
+							{
+								// do nothing.
+							}
+							else if( jointSelectorGripDistance < 20.0 * jumpStart.options.sceneScale )
+							{
+								//console.log("GRIP THE SELECTOR");
+								g_jointSelectorGrip.userData.gripped = handSide;
+								//jumpStart.removeInstance(jointSelectorGrip);
+							}
+							else if( zoomGripDistance < 20.0 * jumpStart.options.sceneScale )
+							{
+								g_zoomLever.userData.gripped = handSide;
+								g_zoomLever.userData.label.scale.set(1, 1, 1);
+							}
+							else if( heightGripDistance < 20.0 * jumpStart.options.sceneScale )
+							{
+								g_heightLever.userData.gripped = handSide;
+								g_heightLever.userData.label.scale.set(1, 1, 1);
+							}
+							else if( wearGripDistance < 20.0 * jumpStart.options.sceneScale )
+							{
+								g_wearLever.userData.gripped = handSide;
+							}
+							else
+							{
+								// determine the nearest 2 pieces to grip
+								var bestPiece;
+								var bestDist = 9999999.0;
+
+								var secondBestPiece;
+								var secondBestDist = 9999999.1;
+
+								var pieces = g_puzzlePieces;
+								var piecesKeys = Object.keys(pieces);
+								var piece, blocksKeys, j, block, blockDist;
+								for( var i = 0; i < piecesKeys.length; i++ )
+								{
+									piece = g_puzzlePieces[piecesKeys[i]];
+
+									if( piece.parent !== g_activeCanvas && piece.userData.type !== "grip")
+										continue;
+
+									if( piece.userData.heldByUser !== "" && piece.userData.heldByUser !== jumpStart.localUser.userID )
+										continue;
+
+									blocksKeys = Object.keys(piece.userData.blocks);
+									for( j = 0; j < blocksKeys.length; j++ )
+									{
+										block = piece.userData.blocks[blocksKeys[j]];
+										blockDist = hand.palmJoint.position.distanceTo(block.getWorldPosition());	// TODO: Find a more reliable way to adjust for parent "world" object scale w/o translating BOTH positions before distance calculation.
+
+										// (OBSOLETE?) need to adjust blockSize to be in absolute world-space scale
+										//if( blockDist < 1.0 * (g_blockSize * jumpStart.options.sceneScale) )
+										if( blockDist < 2.0 * (g_blockSize * jumpStart.options.sceneScale) )
+										{
+											// This block puts this piece within distance to the hand.
+											// However, that doesn't mean it's the best or even the
+											// second best piece to grip.
+
+											if( blockDist < bestDist )
+											{
+												if( !!bestPiece && bestPiece !== piece )
+												{
+													secondBestPiece = bestPiece;
+													secondBestDist = bestDist;
+												}
+
+												bestPiece = piece;
+												bestDist = blockDist;
+											}
+											else if( blockDist < secondBestDist )
+											{
+												secondBestPiece = piece;
+												secondBestDist = blockDist;
+											}
+										}
+									}
+								}
+
+								gripPiece = bestPiece;
+								gripPieceRunnerUp = secondBestPiece;
+
+								if( !!gripPiece )
+									action = "Grip";
+							}
+						}
+					}
+					else
+					{
+						// is this hand currently holding a piece?
+						if( !!hand.grippedPiece )
+						{
+							// player is "dropping"
+							action = "Drop";
+							gripPiece = hand.grippedPiece;
+						}
+						else
+						{
+							// otherwise the player is not talking to us.
+							// action is "Nothing" by default
+							// gripPieces are undefined by default
+						}
+					}
+
+					return {"handSide": handSide, "action": action, "gripPiece": gripPiece, "gripPieceRunnerUp": gripPieceRunnerUp};
+				}
+
+				// determine potential hand states for each hand
+				stateLeft = determineHandState("Left");
+				stateRight = determineHandState("Right");
+
+				// PRIORITY: Handoff (BOTH), Drop (BOTH), Grip (FIFO), Nothing
+				// NOTE: "Handoff" action can *only* be detected after BOTH hands have
+				// independently determined their best potential states.
+
+				// determine if a piece is being handed from one hand to the other
+				if( stateLeft.gripPiece === stateRight.gripPiece && stateLeft.action === "Grip" && stateRight.action === "Drop" )
+				{
+					// Handoff FROM right TO left
+					g_hands["Left"].action = "Grip";
+					g_hands["Left"].grippedPiece = stateLeft.gripPiece;
+
+					cutClones(stateLeft.gripPiece);
+
+					g_hands["Right"].action = "Nothing";
+					g_hands["Right"].grippedPiece = null;
+
+					grabPiece(g_hands["Left"]);
+				}
+				else if( stateLeft.gripPiece === stateRight.gripPiece && stateRight.action === "Grip" && stateLeft.action === "Drop" )
+				{
+					// Handoff FROM left TO right
+					g_hands["Right"].action = "Grip";
+					g_hands["Right"].grippedPiece = stateLeft.gripPiece;
+
+					cutClones(stateLeft.gripPiece);
+
+					g_hands["Left"].action = "Nothing";
+					g_hands["Left"].grippedPiece = null;
+
+					grabPiece(g_hands["Right"]);
+				}
+				else
+				{
+					function easyGripDropGripping(state, otherState)	// :)
+					{
+						var handSide = state.handSide;
+						var hand = g_hands[handSide];
+
+						if( state.action === "Drop" )
+						{
+							// let stuff go
+							hand.action = "Nothing";
+							hand.grippedPiece = null;
+							dropPiece(state.gripPiece);
+						}
+						else if( state.action === "Grip" )
+						{
+							// (try to) grab stuff
+							var otherHandSide = (handSide === "Left") ? "Right" : "Left";
+							var otherHand = g_hands[otherHandSide];
+
+							if( otherHand.grippedPiece !== state.gripPiece && (otherState.action !== "Grab" || otherState.gripPiece !== state.gripPiece) )
+							{
+								hand.action = "Grip";
+								hand.grippedPiece = state.gripPiece;
+								grabPiece(hand);
+							}
+							else if( !!state.gripPieceRunnerUp && (otherState.action !== "Grab" || otherState.gripPiece !== state.gripPieceRunnerUp) )
+							{
+								hand.action = "Grip";
+								hand.grippedPiece = state.gripPieceRunnerUp;
+								grabPiece(hand);
+							}
+							// else everything within range is already held by other hand!! :(
+						}
+						else if( state.action === "Gripping" )
+						{
+							// update the position of the piece
+							var piece = state.gripPiece;
+
+							var handPosition = jumpStart.world.worldToLocal(hand.handJoint.position.clone());
+
+							hand.grip.updateMatrixWorld();
+							hand.grip.position.copy(handPosition);
+							hand.grip.quaternion.copy(hand.handJoint.quaternion);
+
+							var dest = jumpStart.world.worldToLocal(hand.gripTarget.getWorldPosition());
+
+							piece.position.copy(dest);
+							piece.quaternion.copy(hand.gripTarget.getWorldQuaternion());
+						}
+					}
+
+					easyGripDropGripping(stateLeft, stateRight);
+					easyGripDropGripping(stateRight, stateLeft);
+				}
+
+			//	updateHand("Left");
+			//	updateHand("Right");
+			}
+
+			function puzzlePieceSpawn()
+			{
+				//this.userData.oldHeldByUser = this.userData.heldByUser;
+//console.log(this.userData.type);
+				var pieceType = pieceTypes[this.userData.type];
+
+				var numBlocks = pieceType.blocks.length;
+				var i, blockOffset, block;
+				for( i = 0; i < numBlocks; i++ )
+				{
+					blockOffset = pieceType.blocks[i];
+					block = spawnBlock({"parent": this, "x": blockOffset.x, "y": blockOffset.y, "z": blockOffset.z});
+
+					if( g_noHandsMode )
+					{
+						block.blocksLOS = true;
+						jumpStart.makeCollide(block);
+						block.addEventListener("cursordown", onBlockClicked);
+					}
+				}
+
+				//if( this.userData.heldByUser === "" )
+				//	updateBlockOrientations(this);
+
+				g_puzzlePieces[this.uuid] = this;
+
+				// native skeleton attach, if needed.
+				if( handsReady() )
+				{
+					var piece = this;
+					var pieceInHand = "";
+					if( g_hands["Right"].grippedPiece === piece )
+						pieceInHand = "Right";
+					else if(g_hands["Left"].grippedPiece === piece)
+						pieceInHand = "Left";
+
+					if( pieceInHand !== "" && piece.userData.type !== "grip" )
+					{
+						var config = {
+							"part": "hand",
+							"side": (pieceInHand === "Right") ? "right" : "left",
+							"index": 0,
+							"userId": jumpStart.localUser.userID
+						};
+
+						//console.log(JSON.stringify(piece.userData.blocks));
+						clonePieceToNativeSkeletonParent(piece, config);
+						//makePieceBlocksInvisible(piece);
+					}
+				}
+
+				if( g_noHandsMode )
+				{
+					this.updateMatrixWorld();
+					while(checkPieceCollide(this))
+					{
+						this.position.y += g_blockSize;
+						this.updateMatrixWorld();
+					}
+
+					showOrHideGrid();
+				}
+			}
+
+			function puzzlePieceRemove()
+			{
+				if( !!!g_puzzlePieces[this.uuid] )
+					return;
+
+				// drop us if we are being held
+				if( handsReady() )
+				{
+					if( g_hands["Left"].grippedPiece === this )
+						g_hands["Left"].grippedPiece = null;
+
+					if( g_hands["Right"].grippedPiece === this )
+						g_hands["Right"].grippedPiece = null;
+				}
+
+				//console.log(g_puzzlePieces[piece.uuid]);
+				//delete g_puzzlePieces[piece.uuid];
+
+				/*
+				// remove us from local master list
+				delete g_puzzlePieces[this.uuid];
+
+				if( g_noHandsMode )
+					confirmNoHandsCenterVoxel();
+				*/
+			}
+
+			function puzzlePieceTick()
+			{
+				if( !!!g_puzzlePieces[this.uuid] )
+					return;
+
+				if( this.userData.oldHeldByUser !== this.userData.heldByUser )
+				{
+					this.userData.oldHeldByUser = this.userData.heldByUser;
+					if( this.userData.heldByUser === "" )
+					{
+						// re-orient blocks
+						updateBlockOrientations(this);
+					}
+				}
+			}
+
+			function spawnPuzzlePiece(options)
+			{
+				//var pieceType = pieceTypes[options.type];
+
+				// spawn a puzzle piece
+				var piece;
+				//if( !!options.parent )
+				//	peice = jumpStart.spawnInstance({"parent": options.parent});
+				//else
+					piece = jumpStart.spawnInstance();
+
+				piece.addEventListener("spawn", puzzlePieceSpawn);
+				piece.addEventListener("remove", puzzlePieceRemove);
+				piece.addEventListener("tick", puzzlePieceTick);
+				piece.userData.type = options.type;
+				piece.userData.heldByUser = "";
+
+				return piece;
+			}
+
+			// make both hands are accessible (create them otherwise)
+			function handsReady()
+			{	
+				// check if both hands are already setup
+				if( g_hands["Left"].ready && g_hands["Right"].ready )
+					return true;
+
+				// make sure a skeleton exists
+				if( !!!jumpStart.localUser.skeleton )
+					return false;
+
+				// *****************************************************************
+				// TODO: Make the "otherGamepad" part of JumpStart itself.
+				// *****************************************************************
+
+				// abort if there's not enough gamepads to possibly work.
+				var gamepads = jumpStart.gamepads;
+				if( gamepads.length >= 2 )
+				{
+					// abort if the player hasn't pressed a button on their gamepad yet
+					var gamepad = jumpStart.gamepad;
+					if( !!gamepad )
+					{
+						// abort if the other gamepad can't be detected
+						var otherGamepad;
+						for( var i = 0; i < gamepads.length; i++ )
+						{
+							if( gamepads[i] !== gamepad &&
+								gamepads[i].mapping === gamepad.mapping )
+							{
+								otherGamepad = gamepads[i];
+								break;
+							}
+						}
+					}
+				}
+
+				// helper function to resolve the hands (if needed)
+				function resolveHand(handSide)
+				{
+					// get the joints
+					var handJoint = jumpStart.localUser.skeleton.getJoint("Hand", handSide);
+					if( !!!handJoint )
+						return false;
+
+					var palmJoint = jumpStart.localUser.skeleton.getJoint("Middle", handSide, 1);
+					if( !!!palmJoint )
+						return false;
+
+					var middleFingerTipJoint = jumpStart.localUser.skeleton.getJoint("Middle", handSide, 3);
+					if( !!!middleFingerTipJoint )
+						return false;
+
+					var indexFingerTipJoint = jumpStart.localUser.skeleton.getJoint("Index", handSide, 3);
+					if( !!!indexFingerTipJoint )
+						return false;
+
+					var thumbTipJoint = jumpStart.localUser.skeleton.getJoint("Thumb", handSide, 3);
+					if( !!!thumbTipJoint )
+						return false;
+
+					// create the helper objects
+					var grip = jumpStart.spawnInstance(null);
+					var gripTarget = jumpStart.spawnInstance(null, {"parent": grip});
+
+					// update the hand with all of our awesome new stuff
+					var hand = g_hands[handSide];
+					hand.handJoint = handJoint;
+					hand.palmJoint = palmJoint;
+					hand.middleFingerTipJoint = middleFingerTipJoint;
+					hand.indexFingerTipJoint = indexFingerTipJoint;
+					hand.thumbTipJoint = thumbTipJoint;
+					hand.grip = grip;
+					hand.gripTarget = gripTarget;
+
+					if( gamepad && otherGamepad )
+					{
+						hand.gamepad = (handSide === "Left") ? otherGamepad : gamepad;
+						hand.otherGamepad = (handSide === "Left") ? gamepad : otherGamepad;
+					}
+
+					hand.ready = true;
+
+					// however, do not update it's action yet.
+					// just return success.
+					return true;
+				}
+
+				// resolve the hands (or fail)
+				if( !g_hands["Left"].ready && !resolveHand("Left") )
+					return false;
+
+				if( !g_hands["Right"].ready && !resolveHand("Right") )
+					return false;
+
+				// otherwise, the hands are ready to go!
+				return true;
+			}
+
+			// TODO: *EVERYTHING* should be based off of g_handStates,
+			// instead of ever using any other global scope variables.
+			var g_hands = {
+				"Left":
+				{
+					"ready": false,	// true when the skeleton & bones are resolved
+					"action": "Nothing",	// "Grip", "Nothing"
+					"grip": null,	// helper object
+					"gripTarget": null,	// helper object
+					"handJoint": null,
+					"palmJoint": null,
+					"grippedPiece": null
+					//"firstChoice": null,	// piece
+					//"secondChoice": null	// piece
+				},
+				"Right":
+				{
+					"ready": false,	// true when the skeleton & bones are resolved
+					"action": "Nothing",	// "Grip", "Nothing"
+					"grip": null,	// helper object
+					"gripTarget": null,	// helper object
+					"handJoint": null,
+					"palmJoint": null,
+					"grippedPiece": null
+					//"firstChoice": null,	// piece
+					//"secondChoice": null	// piece
+				}
+			};
+
+			function snapQuaternion(quaternion)
+			{
+				var bestIndex = 0;
+				var bestValue = 0;
+				var max = basicQuaternions.length;
+				var i, val;
+				for( i = 0; i < max; i++ )
+				{
+					val = Math.abs(quaternion.dot(basicQuaternions[i]));
+					if( val > bestValue )
+					{
+						bestValue = val;
+						bestIndex = i;
+					}
+				}
+
+				return basicQuaternions[bestIndex];
+			}
+
+			function updateBlockOrientations(piece)
+			{
+				if( piece.userData.type === "grip" )
+					return;
+
+				// update the blocks of this piece
+				var blocks = piece.userData.blocks;
+				var blockKeys = Object.keys(blocks);
+
+				var numBlocks = blockKeys.length;
+				var i, block;
+				var quaternion;
+				for( i = 0; i < numBlocks; i++ )
+				{
+					block = blocks[blockKeys[i]];
+					piece.updateMatrixWorld();
+					THREE.SceneUtils.detach(block, piece, jumpStart.scene);
+					block.rotation.set(0, 0, 0);
+					block.updateMatrixWorld();
+					THREE.SceneUtils.attach(block, jumpStart.scene, piece);
+				}
+			}
+
+			var g_ghostMesh;
+			var g_blockMat;
+			var g_blockMesh;
+			var g_deleteMat;
+			var g_deleteMesh;
+			var g_boardName = "singleton";
+			var g_tableHeight = 80.0;
+			var g_jointFrameWidth = 43.0;
+			var g_jointFrameHeight = 80.0;
+			var g_blockFrameHeight = 53.5;
+			jumpStart.addEventListener("ready", function()
+			{
+				g_gripGeo = new THREE.BoxGeometry(4.0, 4.0, 4.0);
+				g_gripMat = new THREE.MeshBasicMaterial({"color": "#00ff00"});
+
+				var paletteBlockSize = g_blockSize / g_gridScale;
+
+				g_blockGeo = new THREE.BoxGeometry(g_blockSize, g_blockSize, g_blockSize);
+				g_paletteBlockGeo = new THREE.BoxGeometry(g_blockSize / g_gridScale, g_blockSize / g_gridScale, g_blockSize / g_gridScale);
+
+				//g_blockMat = new THREE.MeshBasicMaterial({"color": "rgb(100, 255, 100)", "vertexColors": THREE.VertexColors});
+				g_blockMat = new THREE.MeshBasicMaterial({"color": "#99ddff", "vertexColors": THREE.VertexColors});
+				g_blockMesh = new THREE.Mesh(g_blockGeo, g_blockMat);
+				bakeVertexLight(g_blockMesh, {"offset": new THREE.Vector3(3 * g_blockSize, 3 * g_blockSize, 3 * g_blockSize), "falloff": 5 * g_blockSize});
+
+				g_ghostMat = new THREE.MeshBasicMaterial({"color": "#005500", "visible": false});
+				g_ghostMesh = new THREE.Mesh(g_blockGeo, g_ghostMat);
+
+				g_deleteMat = new THREE.MeshBasicMaterial({"color": "#ffaaaa", "vertexColors": THREE.VertexColors, "transparent": true, "opacity": 0.5});
+				g_deleteMesh = new THREE.Mesh(g_blockGeo, g_deleteMat);
+				bakeVertexLight(g_deleteMesh, {"offset": new THREE.Vector3(3 * g_blockSize, 3 * g_blockSize, 3 * g_blockSize), "falloff": 5 * g_blockSize});
+
+				g_paletteBlockMesh = new THREE.Mesh(g_paletteBlockGeo, g_blockMat);
+				bakeVertexLight(g_paletteBlockMesh, {"offset": new THREE.Vector3(3 * paletteBlockSize, 3 * paletteBlockSize, 3 * paletteBlockSize), "falloff": 5 * paletteBlockSize});
+
+				g_blackBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(10, 10, 10)", "vertexColors": THREE.VertexColors});
+				g_blackBlockMesh = new THREE.Mesh(g_blockGeo, g_blackBlockMat);
+				g_blackBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_blackBlockMat);
+
+				g_whiteBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(255, 255, 255)", "vertexColors": THREE.VertexColors});
+				g_whiteBlockMesh = new THREE.Mesh(g_blockGeo, g_whiteBlockMat);
+				g_whiteBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_whiteBlockMat);
+
+				g_redBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(150, 10, 10)", "vertexColors": THREE.VertexColors});
+				g_redBlockMesh = new THREE.Mesh(g_blockGeo, g_redBlockMat);
+				g_redBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_redBlockMat);
+
+				g_blueBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(10, 10, 150)", "vertexColors": THREE.VertexColors});
+				g_blueBlockMesh = new THREE.Mesh(g_blockGeo, g_blueBlockMat);
+				g_blueBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_blueBlockMat);
+
+				g_greenBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(10, 150, 10)", "vertexColors": THREE.VertexColors});
+				g_greenBlockMesh = new THREE.Mesh(g_blockGeo, g_greenBlockMat);
+				g_greenBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_greenBlockMat);
+
+				g_cyanBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(10, 150, 150)", "vertexColors": THREE.VertexColors});
+				g_cyanBlockMesh = new THREE.Mesh(g_blockGeo, g_cyanBlockMat);
+				g_cyanBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_cyanBlockMat);
+
+				g_magentaBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(150, 10, 150)", "vertexColors": THREE.VertexColors});
+				g_magentaBlockMesh = new THREE.Mesh(g_blockGeo, g_magentaBlockMat);
+				g_magentaBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_magentaBlockMat);
+
+				g_yellowBlockMat = new THREE.MeshBasicMaterial({"color": "rgb(150, 150, 10)", "vertexColors": THREE.VertexColors});
+				g_yellowBlockMesh = new THREE.Mesh(g_blockGeo, g_yellowBlockMat);
+				g_yellowBlockPaletteMesh = new THREE.Mesh(g_paletteBlockGeo, g_yellowBlockMat);
+
+				var startLink = jumpStart.spawnInstance(null);
+				startLink.position.y = 0;
+				startLink.addEventListener("spawn", startLinkSpawn);
+				startLink.addEventListener("tick", function()
+				{
+					var cameraPos;
+					if( jumpStart.isAltspace )
+					{
+						if( !!jumpStart.localUser.skeleton )
+						{
+							cameraPos = jumpStart.localUser.skeleton.getJoint("Eye").position;
+							jumpStart.world.worldToLocal(cameraPos);
+						}
+					}
+					else
+						cameraPos = jumpStart.camera.position.clone();
+
+					if( cameraPos )
+					{
+						cameraPos.y = this.position.y;
+						this.lookAt(cameraPos);
+					}
+				});
+
+				//jumpStart.addEventListener("tick", updateGrips);
+
+				function createSound(res)
+				{
+					// get the sounds ready
+					var config = {
+						autoplay: false,
+						loop: false,
+						res: res,
+						volume: 1.0,
+						minDistance: 50,
+						maxDistance: 200
+					};
+
+					return new NativeComponent('n-sound', config).addTo(jumpStart.scene);
+				}
+
+				g_sounds["ui/select"] = createSound("ui/select");
+				g_sounds["ui/toggle"] = createSound("ui/toggle");
+				g_sounds["ui/notify"] = createSound("ui/notify");
+				g_sounds["ui/error"] = createSound("ui/error");
+				g_sounds["ui/complete"] = createSound("ui/complete");
+				g_sounds["ui/succeed"] = createSound("ui/succeed");
+				g_sounds["ui/over"] = createSound("ui/over");
+				g_sounds["ui/join"] = createSound("ui/join");
+				g_sounds["ui/click"] = createSound("ui/click");
+				
+				// true	: SYNCHRONOUS
+				// false: ASYNCHRONOUS (must call JumpStart.run)
+				return true;
+			});
+
+			function bakeVertexLight(object, options)
+			{
+				var options = {
+					"offset": (!!options.offset) ? options.offset : new THREE.Vector3(),
+					"falloff": (!!options.falloff) ? options.falloff : 400.0
+				};
+
+				//options.offset.multiplyScalar(jumpStart.options.sceneScale);
+				options.falloff *= jumpStart.options.sceneScale;
+
+				function getLightValue(dot, dist)
+				{
+					var falloff = options.falloff;
+					var dist = dist / falloff;
+					var intensity = 1 / (dist * dist);
+
+					var midLight = 255 / 2.0;
+					var maxLight = 255 - midLight;
+					var colorNumber = parseInt((midLight + (maxLight * dot)) * intensity);
+
+					if( colorNumber > 255 )
+						colorNumber = 255;
+					else if( colorNumber < 0 )
+						colorNumber = 0;
+
+					return colorNumber / 255.0;
+				}
+
+				if( !!!object.geometry )
+				{
+					object.traverse(function(child)
+					{
+						if( !!child.geometry )
+							object = child;
+					});
+
+					if( !!!object.geometry )
+						return;
+				}
+
+				if( !!object.parent )
+					object.parent.updateMatrixWorld();
+
+				var count = (!!!object.geometry.attributes) ? object.geometry.faces.length : object.geometry.attributes.position.count;
+
+				var keyLetters = ["a", "b", "c"];	// for structured geometry
+				var displacement = new THREE.Vector3();	// for array geometry
+				var vertexPosition = new THREE.Vector3();
+				var vertexNormal = new THREE.Vector3();
+				var normalLook = new THREE.Vector3();
+				var lightLook = new THREE.Vector3();
+
+				var normals = (!!object.geometry.attributes) ? object.geometry.attributes.normal.array : undefined;
+				
+				var positions = (!!object.geometry.attributes) ? object.geometry.attributes.position.array : undefined;
+
+				var i, face, j, dot, value;
+				for( i = 0; i < count; i++ )
+				{
+					if( !!!object.geometry.attributes )
+						face = object.geometry.faces[i];
+
+					for( j = 0; j < 3 || !!object.geometry.attributes; j++ )
+					{
+						// get vertexPosition
+						if(!!!object.geometry.attributes)
+							vertexPosition.copy(object.geometry.vertices[face[keyLetters[j]]]);
+						else
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+						vertexPosition.applyMatrix4(object.matrixWorld);
+
+						if( !!object.parent && object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexPosition);
+
+						var dist = vertexPosition.distanceTo(options.offset);
+						dist *= jumpStart.options.sceneScale;
+
+						// get vertexNormal
+						if( !!!object.geometry.attributes )
+						{
+							vertexNormal.copy(object.geometry.vertices[face[keyLetters[j]]]);
+							vertexNormal.add(face.vertexNormals[j]);
+						}
+						else
+						{
+							displacement.set(normals[(3*i) + 0], normals[(3*i) + 1], normals[(3*i) + 2]);
+							vertexPosition.set(positions[(3*i) + 0], positions[(3*i) + 1], positions[(3*i) + 2]);
+							vertexNormal.add(displacement);
+						}
+
+						vertexNormal.applyMatrix4(object.matrixWorld);
+
+						if( !!object.parent && object.parent !== jumpStart.world )
+							jumpStart.world.worldToLocal(vertexNormal);
+
+						// get vertexNormalLook
+						normalLook.copy(vertexPosition);
+						normalLook.sub(vertexNormal);
+						normalLook.normalize();
+
+						// get vertexLightLook
+						lightLook.copy(vertexPosition);
+						lightLook.sub(options.offset);
+						lightLook.normalize();
+
+						// get dot
+						dot = normalLook.dot(lightLook);
+						value = getLightValue(dot, dist);	// a light value between 0.0 and 1.0
+
+						if( !!!object.geometry.attributes )
+						{
+							value = parseInt(255 * value);
+							value = "rgb(" + value + ", " + value + ", " + value + ")";
+
+							if( !!face.vertexColors[j] )
+							{
+								face.vertexColors[j].set(value);
+							}
+							else
+								face.vertexColors[j] = new THREE.Color(value);
+
+							object.geometry.colorsNeedUpdate = true;
+						}
+						else
+						{
+							object.geometry.attributes.color.array[(3*i) + 0] = value;
+							object.geometry.attributes.color.array[(3*i) + 1] = value;
+							object.geometry.attributes.color.array[(3*i) + 2] = value;
+							object.geometry.attributes.color.needsUpdate = true;
+							break;
+						}
+					}
+				}
+			}
+		</script>
+	</head>
+
+	<body style="background-color: transparent;">
+		<script>
+			if( !jumpStart.isAltspace )
+				document.body.style.background = "url('https://images6.alphacoders.com/429/429148.png')";
+		</script>
+	</body>
+</html>
